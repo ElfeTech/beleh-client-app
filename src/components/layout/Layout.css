@@ -559,16 +559,32 @@
     flex-direction: column;
 }
 
-.welcome-section h2 {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--gray-900);
-    margin-bottom: var(--spacing-xs);
+.welcome-section {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
 }
 
-.welcome-section p {
-    font-size: 0.875rem;
+.header-logo {
+    width: 144px;
+    height: 144px;
+    border-radius: var(--radius-lg);
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+.welcome-text h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--gray-900);
+    margin-bottom: 2px;
+    line-height: 1.2;
+}
+
+.welcome-text p {
+    font-size: 0.8125rem;
     color: var(--gray-500);
+    margin: 0;
 }
 
 .header-actions {
