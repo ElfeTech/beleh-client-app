@@ -158,6 +158,59 @@ src/
 | `bun run preview` | Preview production build locally |
 | `bun run lint` | Run ESLint for code quality |
 
+## Docker Deployment
+
+### Build the Docker Image
+
+```bash
+docker build \
+  --build-arg VITE_FIREBASE_API_KEY=your_api_key \
+  --build-arg VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com \
+  --build-arg VITE_FIREBASE_PROJECT_ID=your_project_id \
+  --build-arg VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com \
+  --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id \
+  --build-arg VITE_FIREBASE_APP_ID=your_app_id \
+  --build-arg VITE_API_BASE_URL=https://api.yourdomain.com \
+  -t ai-bi-frontend:latest .
+```
+
+### Run the Container
+
+```bash
+docker run -d -p 3000:80 --name ai-bi-frontend ai-bi-frontend:latest
+```
+
+The app will be available at `http://localhost:3000`
+
+### Docker Compose (Optional)
+
+Create a `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: .
+      args:
+        VITE_FIREBASE_API_KEY: ${VITE_FIREBASE_API_KEY}
+        VITE_FIREBASE_AUTH_DOMAIN: ${VITE_FIREBASE_AUTH_DOMAIN}
+        VITE_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID}
+        VITE_FIREBASE_STORAGE_BUCKET: ${VITE_FIREBASE_STORAGE_BUCKET}
+        VITE_FIREBASE_MESSAGING_SENDER_ID: ${VITE_FIREBASE_MESSAGING_SENDER_ID}
+        VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID}
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    ports:
+      - "3000:80"
+    restart: unless-stopped
+```
+
+Then run:
+```bash
+docker-compose up -d
+```
+
 ## Key Features Explained
 
 ### AI Chat Interface

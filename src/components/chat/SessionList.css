@@ -1,0 +1,195 @@
+.session-list-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 70px);
+    width: 280px;
+    background: #f9fafb;
+    border-right: 1px solid #e5e7eb;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+
+.session-list-header {
+    padding: 16px;
+    border-bottom: 1px solid #e5e7eb;
+    background: white;
+}
+
+.session-list-header h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.new-session-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 16px;
+    background: #3b82f6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.new-session-btn:hover:not(:disabled) {
+    background: #2563eb;
+}
+
+.new-session-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.new-session-btn svg {
+    width: 16px;
+    height: 16px;
+}
+
+.session-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+}
+
+.session-list-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+    text-align: center;
+    color: #6b7280;
+}
+
+.session-list-empty p {
+    margin: 0;
+    font-size: 14px;
+}
+
+.session-list-empty-hint {
+    font-size: 12px;
+    margin-top: 4px !important;
+    opacity: 0.7;
+}
+
+.session-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px;
+    margin-bottom: 4px;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.session-item:hover {
+    background: #f9fafb;
+    border-color: #d1d5db;
+}
+
+.session-item.active {
+    background: #eff6ff;
+    border-color: #3b82f6;
+}
+
+.session-item-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+    min-width: 0;
+}
+
+.session-item-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.session-item-icon svg {
+    width: 20px;
+    height: 20px;
+    color: white;
+}
+
+.session-item-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+}
+
+.session-item-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: #1f2937;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.session-item-time {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.session-item-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #6b7280;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.session-item-delete:hover:not(:disabled) {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.session-item-delete:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+}
+
+.session-item-delete svg {
+    width: 16px;
+    height: 16px;
+}
+
+.session-item-delete .spinner {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}

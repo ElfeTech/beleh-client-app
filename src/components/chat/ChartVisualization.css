@@ -1,0 +1,171 @@
+.chart-response {
+    margin-top: 1rem;
+    background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    border-radius: 12px;
+    padding: 1.5rem;
+    border: 1px solid #e2e8f0;
+}
+
+.chart-response.error {
+    background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+    border-color: #fecaca;
+}
+
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    color: #dc2626;
+}
+
+.error-message svg {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.error-message p {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.chart-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #1e293b;
+    margin: 0 0 0.5rem 0;
+}
+
+.chart-description {
+    font-size: 0.9rem;
+    color: #64748b;
+    margin: 0 0 1rem 0;
+}
+
+.chart-container {
+    width: 100%;
+}
+
+.explanation-section {
+    width: 100%;
+    margin-top: 1.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid #e2e8f0;
+}
+
+.explanation-title {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #475569;
+    margin: 0 0 0.75rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.explanation-title::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    border-radius: 2px;
+}
+
+.explanation-text {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #475569;
+    margin: 0 0 1rem 0;
+}
+
+.insight-list {
+    margin: 1rem 0;
+    padding-left: 1.5rem;
+    list-style-type: disc;
+}
+
+.insight-list li {
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: #475569;
+    margin-bottom: 0.5rem;
+}
+
+.insight-limitations {
+    font-size: 0.85rem;
+    color: #64748b;
+    background: #f8fafc;
+    padding: 0.75rem;
+    border-radius: 6px;
+    margin: 1rem 0 0.5rem 0;
+    border-left: 3px solid #fbbf24;
+}
+
+.insight-confidence {
+    font-size: 0.85rem;
+    color: #475569;
+    margin-top: 0.75rem;
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    background: linear-gradient(135deg, #dbeafe 0%, #e0e7ff 100%);
+    border-radius: 20px;
+}
+
+.data-summary {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #e2e8f0;
+    font-size: 0.85rem;
+    color: #64748b;
+}
+
+.summary-item strong {
+    color: #1e293b;
+    font-weight: 600;
+}
+
+.chart-note {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #64748b;
+    margin-top: 0.75rem;
+    font-style: italic;
+}
+
+/* Mobile optimizations for wider chart display */
+@media (max-width: 768px) {
+    .chart-response {
+        padding: 0.75rem;
+        margin-left: -0.5rem;
+        margin-right: -0.5rem;
+        border-radius: 8px;
+    }
+
+    .chart-title {
+        font-size: 1rem;
+    }
+
+    .chart-description {
+        font-size: 0.85rem;
+    }
+
+    .explanation-section {
+        margin-top: 1rem;
+        padding-top: 1rem;
+    }
+
+    .explanation-text {
+        font-size: 0.85rem;
+    }
+
+    .insight-list {
+        padding-left: 1.25rem;
+    }
+
+    .insight-list li {
+        font-size: 0.85rem;
+    }
+}

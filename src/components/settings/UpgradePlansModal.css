@@ -1,0 +1,430 @@
+/* Upgrade Plans Modal */
+.upgrade-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+  z-index: 10001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-lg);
+  animation: fadeIn 0.2s ease-out;
+}
+
+.upgrade-modal-container {
+  background: white;
+  border-radius: 20px;
+  max-width: 1200px;
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Header */
+.upgrade-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.upgrade-modal-title-section h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.upgrade-modal-title-section p {
+  font-size: 16px;
+  color: var(--gray-600);
+  margin: 0;
+}
+
+.upgrade-modal-close {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: var(--gray-100);
+  color: var(--gray-600);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.upgrade-modal-close:hover {
+  background: var(--gray-200);
+  color: var(--gray-900);
+}
+
+.upgrade-modal-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Billing Cycle Toggle */
+.billing-cycle-toggle {
+  display: flex;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--gray-50);
+  border-bottom: 1px solid var(--gray-200);
+  justify-content: center;
+}
+
+.toggle-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 12px 24px;
+  border: 2px solid var(--gray-300);
+  background: white;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--gray-600);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-option:hover {
+  border-color: var(--primary-400);
+}
+
+.toggle-option.active {
+  border-color: var(--primary-600);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(147, 51, 234, 0.1) 100%);
+  color: var(--primary-700);
+}
+
+.toggle-badge {
+  padding: 4px 8px;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+/* Content */
+.upgrade-modal-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-xl);
+}
+
+/* Loading State */
+.upgrade-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xxl);
+  gap: var(--spacing-md);
+}
+
+.upgrade-loading .spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid var(--gray-200);
+  border-top-color: var(--primary-600);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.upgrade-loading p {
+  font-size: 16px;
+  color: var(--gray-600);
+  margin: 0;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Error State */
+.upgrade-error {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-xxl);
+  text-align: center;
+}
+
+.upgrade-error svg {
+  width: 64px;
+  height: 64px;
+  color: var(--red-500);
+  margin-bottom: var(--spacing-md);
+}
+
+.upgrade-error p {
+  font-size: 16px;
+  color: var(--gray-700);
+  margin: 0 0 var(--spacing-lg) 0;
+}
+
+.retry-btn {
+  padding: 12px 24px;
+  background: var(--primary-600);
+  color: white;
+  border: none;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-btn:hover {
+  background: var(--primary-700);
+}
+
+/* Plans Grid */
+.plans-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+/* Plan Card */
+.plan-card {
+  position: relative;
+  background: white;
+  border: 2px solid var(--gray-200);
+  border-radius: 16px;
+  padding: var(--spacing-xl);
+  display: flex;
+  flex-direction: column;
+  transition: all 0.2s ease;
+}
+
+.plan-card:hover {
+  border-color: var(--primary-400);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  transform: translateY(-4px);
+}
+
+.plan-card.current-plan {
+  border-color: var(--gray-300);
+  background: var(--gray-50);
+  opacity: 0.7;
+  box-shadow: none;
+  pointer-events: none;
+}
+
+.plan-card.current-plan:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Plan Badge */
+.plan-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 6px 12px;
+  background: var(--primary-600);
+  color: white;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Plan Header */
+.plan-card-header {
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.plan-name {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--gray-900);
+  margin: 0 0 var(--spacing-xs) 0;
+}
+
+.plan-description {
+  font-size: 14px;
+  color: var(--gray-600);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Price Section */
+.plan-price-section {
+  margin-bottom: var(--spacing-xl);
+  padding-bottom: var(--spacing-lg);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.price-currency {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--gray-600);
+}
+
+.price-value {
+  font-size: 48px;
+  font-weight: 800;
+  color: var(--gray-900);
+  line-height: 1;
+}
+
+.price-period {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--gray-500);
+}
+
+/* Features */
+.plan-features {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-xl);
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: 14px;
+  color: var(--gray-700);
+}
+
+.feature-item svg {
+  width: 20px;
+  height: 20px;
+  color: var(--primary-600);
+  flex-shrink: 0;
+}
+
+/* CTA Button */
+.plan-cta {
+  width: 100%;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, #3b82f6 0%, #9333ea 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.plan-cta:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+}
+
+.plan-cta:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.plan-cta:disabled {
+  background: var(--gray-200);
+  color: var(--gray-500);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.plan-cta.current {
+  background: var(--gray-100);
+  color: var(--gray-600);
+  border: 2px solid var(--primary-600);
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .upgrade-modal-backdrop {
+    padding: 0;
+    align-items: flex-end;
+  }
+
+  .upgrade-modal-container {
+    max-height: 95vh;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .upgrade-modal-header {
+    padding: var(--spacing-lg);
+  }
+
+  .upgrade-modal-title-section h2 {
+    font-size: 24px;
+  }
+
+  .billing-cycle-toggle {
+    padding: var(--spacing-md) var(--spacing-lg);
+  }
+
+  .upgrade-modal-content {
+    padding: var(--spacing-lg);
+  }
+
+  .plans-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-card {
+    padding: var(--spacing-lg);
+  }
+
+  .price-value {
+    font-size: 40px;
+  }
+}
+
+/* Tablet */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .plans-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

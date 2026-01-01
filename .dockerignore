@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs (we rebuild in Docker)
+dist/
+dist-ssr/
+build/
+
+# Git
+.git/
+.gitignore
+
+# Environment files (pass via build args)
+.env
+.env.*
+*.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Testing
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+.playwright-mcp/
+
+# Documentation
+*.md
+!README.md
+
+# Misc
+.turbo/
+.vercel/
+.firebase/
+

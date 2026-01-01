@@ -1,0 +1,312 @@
+.bottom-sheet-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 10000;
+  display: flex;
+  align-items: flex-end;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.bottom-sheet-container {
+  width: 100%;
+  background: white;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.bottom-sheet-header {
+  position: relative;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-bottom: 1px solid var(--gray-200);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.bottom-sheet-handle {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 4px;
+  background: var(--gray-300);
+  border-radius: 2px;
+}
+
+.bottom-sheet-header h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--gray-900);
+  margin: 0;
+  margin-top: var(--spacing-sm);
+}
+
+.bottom-sheet-close {
+  position: absolute;
+  right: var(--spacing-md);
+  top: 50%;
+  transform: translateY(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-sheet-close:active {
+  background: var(--gray-100);
+  transform: translateY(-50%) scale(0.95);
+}
+
+.bottom-sheet-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.bottom-sheet-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-md);
+  -webkit-overflow-scrolling: touch;
+}
+
+.workspace-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+/* Create Workspace Button Styling */
+.create-workspace-btn {
+  border: 2px dashed var(--primary-400) !important;
+  background: rgba(59, 130, 246, 0.03) !important;
+}
+
+.create-workspace-btn:hover {
+  background: rgba(59, 130, 246, 0.08) !important;
+  border-color: var(--primary-500) !important;
+}
+
+.create-workspace-btn:active {
+  transform: scale(0.98);
+  background: rgba(59, 130, 246, 0.12) !important;
+}
+
+.create-workspace-btn .workspace-name {
+  color: var(--primary-700);
+  font-weight: 600;
+}
+
+.create-workspace-btn .create-icon {
+  background: var(--primary-600);
+}
+
+/* Divider */
+.workspace-list-divider {
+  height: 1px;
+  background: var(--gray-200);
+  margin: var(--spacing-sm) 0;
+}
+
+.workspace-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-md);
+  background: white;
+  border: 2px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+  min-height: 64px;
+}
+
+.workspace-list-item:active {
+  transform: scale(0.98);
+}
+
+.workspace-list-item.active {
+  border-color: var(--primary-600);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+.workspace-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #1e3a8a, #1e40af);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.workspace-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.workspace-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.workspace-name {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--gray-900);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-list-item .default-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 4px 8px;
+  background: var(--gray-100);
+  border: 1px solid var(--gray-300);
+  border-radius: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--gray-600);
+}
+
+.check-icon {
+  width: 24px;
+  height: 24px;
+  color: var(--primary-600);
+  flex-shrink: 0;
+}
+
+/* Workspace List Item Wrapper */
+.workspace-list-item-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.workspace-list-item-wrapper .workspace-list-item {
+  flex: 1;
+}
+
+.workspace-more-btn {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border: none;
+  background: transparent;
+  color: var(--gray-500);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.workspace-more-btn:hover {
+  background: var(--gray-100);
+  color: var(--gray-700);
+}
+
+.workspace-more-btn:active {
+  transform: scale(0.95);
+  background: var(--gray-200);
+}
+
+.workspace-more-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+/* Mobile - always show workspace more button */
+@media (max-width: 768px) {
+  .workspace-more-btn {
+    opacity: 1;
+  }
+}
+
+/* Desktop - convert to modal */
+@media (min-width: 769px) {
+  .bottom-sheet-backdrop {
+    align-items: center;
+    justify-content: center;
+  }
+
+  .bottom-sheet-container {
+    width: 100%;
+    max-width: 480px;
+    max-height: 600px;
+    border-radius: var(--radius-lg);
+    animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  .bottom-sheet-handle {
+    display: none;
+  }
+
+  .workspace-more-btn {
+    opacity: 0;
+  }
+
+  .workspace-list-item-wrapper:hover .workspace-more-btn {
+    opacity: 1;
+  }
+}

@@ -1,0 +1,160 @@
+/* Action Sheet Styles - Mobile Bottom Sheet */
+.action-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 10000;
+  animation: fadeIn 0.2s ease-out;
+  display: none;
+}
+
+.action-sheet-container {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: white;
+  border-radius: 20px 20px 0 0;
+  padding: 8px 16px 24px;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: slideUpSheet 0.3s ease-out;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.action-sheet-handle {
+  width: 36px;
+  height: 5px;
+  background: #d1d5db;
+  border-radius: 3px;
+  margin: 8px auto 16px;
+}
+
+.action-sheet-header {
+  padding: 12px 8px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 8px;
+}
+
+.action-sheet-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+  text-align: center;
+}
+
+.action-sheet-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.action-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 16px 12px;
+  border: none;
+  background: transparent;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  text-align: left;
+}
+
+.action-sheet-item:active:not(:disabled) {
+  background: #f3f4f6;
+}
+
+.action-sheet-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.action-sheet-item.default {
+  color: #374151;
+}
+
+.action-sheet-item.danger {
+  color: #dc2626;
+}
+
+.action-sheet-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+}
+
+.action-sheet-icon svg {
+  width: 24px;
+  height: 24px;
+  stroke-width: 2;
+}
+
+.action-sheet-label {
+  flex: 1;
+}
+
+.action-sheet-cancel {
+  width: 100%;
+  padding: 16px;
+  border: none;
+  background: #f3f4f6;
+  border-radius: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.action-sheet-cancel:active {
+  background: #e5e7eb;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUpSheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Show action sheet only on mobile */
+@media (max-width: 768px) {
+  .action-sheet-backdrop {
+    display: block;
+  }
+}
+
+/* Desktop - hide action sheet */
+@media (min-width: 769px) {
+  .action-sheet-backdrop {
+    display: none;
+  }
+}
+
+/* Safe area insets for iPhone notch/home indicator */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .action-sheet-container {
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  }
+}
