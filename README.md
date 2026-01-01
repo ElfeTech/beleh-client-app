@@ -1,6 +1,8 @@
-# AI BI Analytics - Frontend Client
+# Beleh (ብልህ) - Frontend Client
 
 A modern, AI-powered Business Intelligence analytics platform built with React and TypeScript. Transform your data into actionable insights through natural language conversations.
+
+> **Beleh** (ብልህ) means "intelligent" or "wise" in Amharic.
 
 ![React](https://img.shields.io/badge/React-19-61DAFB?logo=react)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178C6?logo=typescript)
@@ -171,13 +173,13 @@ docker build \
   --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id \
   --build-arg VITE_FIREBASE_APP_ID=your_app_id \
   --build-arg VITE_API_BASE_URL=https://api.yourdomain.com \
-  -t ai-bi-frontend:latest .
+  -t beleh-frontend:latest .
 ```
 
 ### Run the Container
 
 ```bash
-docker run -d -p 3000:80 --name ai-bi-frontend ai-bi-frontend:latest
+docker run -d -p 3000:80 --name beleh-frontend beleh-frontend:latest
 ```
 
 The app will be available at `http://localhost:3000`

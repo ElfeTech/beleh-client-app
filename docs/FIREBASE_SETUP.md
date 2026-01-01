@@ -28,7 +28,7 @@ This guide will help you set up Firebase Authentication for the application.
 1. In the Firebase Console, go to **Project Settings** (gear icon)
 2. Scroll down to "Your apps" section
 3. Click the **Web** icon (`</>`)
-4. Register your app with a nickname (e.g., "AI-BI Frontend")
+4. Register your app with a nickname (e.g., "Beleh Frontend")
 5. Copy the Firebase configuration object
 
 ### 4. Configure Environment Variables

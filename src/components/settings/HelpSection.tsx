@@ -242,7 +242,7 @@ export function HelpSection() {
           </div>
           <div className="method-content">
             <h4>Email</h4>
-            <p>support@aibi.com</p>
+            <p>support@beleh.ai</p>
           </div>
         </div>
 
@@ -254,7 +254,7 @@ export function HelpSection() {
           </div>
           <div className="method-content">
             <h4>Twitter / X</h4>
-            <p>@aibi_support</p>
+            <p>@beleh_support</p>
           </div>
         </div>
 
