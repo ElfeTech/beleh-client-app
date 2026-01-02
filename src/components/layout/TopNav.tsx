@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import logoImage from '../../assets/logo.png';
+import logoImage from '../../assets/logo.webp';
 
 export function TopNav() {
     const { user, signOut } = useAuth();
@@ -38,10 +38,7 @@ export function TopNav() {
         <header className="top-header">
             <div className="welcome-section">
                 <img src={logoImage} alt="Beleh" className="header-logo" />
-                <div className="welcome-text">
-                    <h2>Beleh AI (ብልህ)</h2>
-                    <p>AI-powered insights from your data</p>
-                </div>
+                
             </div>
             <div className="header-actions">
                 <button className="notification-btn" aria-label="Notifications">

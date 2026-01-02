@@ -566,7 +566,7 @@
 }
 
 .header-logo {
-    width: 144px;
+    width: 200px;
     height: 144px;
     border-radius: var(--radius-lg);
     object-fit: contain;
