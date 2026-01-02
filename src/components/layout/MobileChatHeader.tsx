@@ -11,9 +11,13 @@ interface MobileChatHeaderProps {
 
 const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
   onWorkspaceClick,
-  onDatasetClick,
-  showDatasetSelector = true,
+  onDatasetClick: _onDatasetClick,
+  showDatasetSelector: _showDatasetSelector = true,
 }) => {
+  // Reserved for future dataset selector feature
+  void _onDatasetClick;
+  void _showDatasetSelector;
+
   const context = useContext(WorkspaceContext);
   const datasourceContext = useContext(DatasourceContext);
 
@@ -24,7 +28,9 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
   const { currentWorkspace, datasources } = context;
   const { selectedDatasourceId } = datasourceContext;
 
-  const selectedDataset = datasources.find((ds) => ds.id === selectedDatasourceId);
+  // Reserved for future use when dataset selector is shown in header
+  const _selectedDataset = datasources.find((ds) => ds.id === selectedDatasourceId);
+  void _selectedDataset;
 
   return (
     <div className="mobile-chat-header">

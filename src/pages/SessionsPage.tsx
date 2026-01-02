@@ -176,10 +176,10 @@ const SessionsPage: React.FC = () => {
     }
   };
 
-  const handleRename = (sessionId: string) => {
+  const handleRename = (_sessionId: string) => {
     const newName = prompt('Enter new session name:');
     if (newName) {
-      // TODO: Implement rename functionality in context
+      // TODO: Implement rename functionality in context using _sessionId
     }
     setLongPressSession(null);
   };
