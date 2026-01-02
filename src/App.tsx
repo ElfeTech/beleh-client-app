@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { WorkspaceProvider } from './context/WorkspaceContext';
 import { ChatSessionProvider } from './context/ChatSessionContext';
 import { UsageProvider } from './context/UsageContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
+import LandingPage from './pages/LandingPage';
 import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { Workspace } from './pages/Workspace';
@@ -20,7 +21,7 @@ function App() {
           <WorkspaceProvider>
             <ChatSessionProvider>
               <Routes>
-                <Route path="/" element={<Navigate to="/workspace/1" replace />} />
+                <Route path="/" element={<LandingPage />} />
                 <Route path="/signin" element={<SignIn />} />
                 <Route path="/signup" element={<SignUp />} />
                 <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>

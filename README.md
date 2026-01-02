@@ -370,4 +370,3 @@ flowchart TB
     CloudRun --> Gemini
 
 ```
-

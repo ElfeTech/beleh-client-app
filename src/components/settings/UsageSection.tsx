@@ -108,7 +108,7 @@ export function UsageSection() {
                 <span className="price-period">per month</span>
               </div>
             </div>
-            <button className="upgrade-btn-header" onClick={() => setShowUpgradeModal(true)}>
+            <button className="upgrade-btn-header" disabled /* onClick={() => setShowUpgradeModal(true)}*/>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
               </svg>
