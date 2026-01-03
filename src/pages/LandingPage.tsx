@@ -239,6 +239,7 @@ export default function LandingPage() {
         <div className="nav-container-v2">
           <div className="nav-logo-v2" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
             <img src={logo} alt="Beleh" className="logo-image" />
+            <span className="alpha-badge">Alpha</span>
           </div>
           
           <div className={`nav-menu-v2 ${mobileMenuOpen ? 'menu-open' : ''}`}>
@@ -323,6 +324,7 @@ export default function LandingPage() {
               <span className="title-dark">Turn data into</span>
               <span className="title-dark">decisions with</span>
               <span className="title-gradient-light">AI Intelligence</span>
+              <span className="alpha-badge-hero">Alpha Version</span>
             </h1>
             
             <p className="hero-light-subtitle">

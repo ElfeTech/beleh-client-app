@@ -149,10 +149,50 @@
   gap: 0.75rem;
   cursor: pointer;
   transition: transform 0.3s ease;
+  position: relative;
 }
 
 .nav-logo-v2:hover {
   transform: scale(1.02);
+}
+
+.alpha-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-accent-light) 100%);
+  color: white;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  text-transform: uppercase;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  animation: pulse-alpha 2s ease-in-out infinite;
+}
+
+@keyframes pulse-alpha {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+  }
+  50% {
+    box-shadow: 0 2px 12px rgba(16, 185, 129, 0.5);
+  }
+}
+
+.alpha-badge-hero {
+  display: inline-block;
+  background: linear-gradient(135deg, var(--brand-accent) 0%, var(--brand-accent-light) 100%);
+  color: white;
+  font-size: 0.875rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  text-transform: uppercase;
+  margin-left: 1.5rem;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+  animation: pulse-alpha 2s ease-in-out infinite;
+  vertical-align: middle;
 }
 
 .logo-image {
@@ -2095,6 +2135,15 @@
     font-size: 2rem;
   }
 
+  .alpha-badge-hero {
+    display: block;
+    margin-left: 0;
+    margin-top: 1rem;
+    font-size: 0.75rem;
+    padding: 0.375rem 0.75rem;
+    width: fit-content;
+  }
+
   .hero-light-subtitle {
     font-size: 0.9375rem;
   }
@@ -2247,6 +2296,16 @@
 @media (max-width: 480px) {
   .hero-title-v2 {
     font-size: 1.875rem;
+  }
+
+  .alpha-badge {
+    font-size: 0.5625rem;
+    padding: 0.1875rem 0.375rem;
+  }
+
+  .alpha-badge-hero {
+    font-size: 0.6875rem;
+    padding: 0.3125rem 0.625rem;
   }
 
   .mockup-window-v2 {
