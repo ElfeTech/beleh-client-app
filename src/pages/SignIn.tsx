@@ -47,7 +47,10 @@ export function SignIn() {
             {/* Left Panel - Branded */}
             <div className="auth-brand-panel">
                 <div className="brand-content">
-                    <img src={logo} alt="Beleh" className="brand-logo" />
+                    <div className="brand-logo-wrapper">
+                        <img src={logo} alt="Beleh" className="brand-logo" />
+                        <span className="auth-alpha-badge">Alpha</span>
+                    </div>
                     <h1 className="brand-title">Welcome Back to Beleh</h1>
                     <p className="brand-subtitle">
                         Continue transforming your data into insights.<br />
@@ -90,6 +93,7 @@ export function SignIn() {
                     <div className="mobile-brand-header">
                         <div className="mobile-brand-bg">
                             <img src={logo} alt="Beleh" className="mobile-logo" />
+                            <span className="auth-alpha-badge mobile">Alpha</span>
                         </div>
                     </div>
 
