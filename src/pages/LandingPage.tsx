@@ -253,7 +253,7 @@ export default function LandingPage() {
               Testimonials
             </button>
             <button onClick={() => scrollToSection('pricing')} className="nav-link-v2">
-              Pricing
+              Why Us?
             </button>
           </div>
 

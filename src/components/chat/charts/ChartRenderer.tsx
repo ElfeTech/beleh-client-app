@@ -1,4 +1,6 @@
 import { useState, useRef } from 'react';
+import { useFeedback } from '../../../context/FeedbackContext';
+import { FEEDBACK_TRIGGERS } from '../../../types/feedback';
 import { BarChart } from './BarChart';
 import { LineChart } from './LineChart';
 import { PieChart } from './PieChart';
@@ -17,9 +19,16 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
     const [isExpanded, setIsExpanded] = useState(false);
     const [showDataTable, setShowDataTable] = useState(false);
     const chartRef = useRef<HTMLDivElement>(null);
+    const { trackVisualizationInteraction, showFeedback } = useFeedback();
 
     const handleExpand = () => {
         setIsExpanded(true);
+        // Track visualization interaction for feedback
+        trackVisualizationInteraction();
+        // Show UX feedback after chart interaction (longer delay for user to view chart)
+        setTimeout(() => {
+            showFeedback(FEEDBACK_TRIGGERS.UX);
+        }, 5000); // 5 seconds - give user time to explore the chart
     };
 
     const handleClose = () => {

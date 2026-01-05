@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/useAuth';
+import { useFeedback } from '../../context/FeedbackContext';
 import { apiClient } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import type { DataSourceResponse } from '../../types/api';
@@ -16,6 +17,7 @@ type UploadStatus = 'IDLE' | 'UPLOADING' | 'PENDING' | 'PROCESSING' | 'READY' | 
 
 export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProps) {
     const { user } = useAuth();
+    const { trackDatasetUpload } = useFeedback();
     const [file, setFile] = useState<File | null>(null);
     const [name, setName] = useState('');
     const [uploadStatus, setUploadStatus] = useState<UploadStatus>('IDLE');
@@ -61,6 +63,8 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
                 if (pollIntervalRef.current) {
                     clearInterval(pollIntervalRef.current);
                 }
+                // Track dataset upload for feedback
+                trackDatasetUpload();
                 // Wait a bit to show the success state, then refresh and close
                 setTimeout(() => {
                     onSuccess();

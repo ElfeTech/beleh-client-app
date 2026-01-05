@@ -1,0 +1,231 @@
+.feedback-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--spacing-md, 1rem);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.feedback-modal-content {
+  background: white;
+  border-radius: var(--radius-lg, 12px);
+  box-shadow: var(--shadow-2xl, 0 25px 50px -12px rgba(0, 0, 0, 0.25));
+  max-width: 480px;
+  width: 100%;
+  padding: var(--spacing-xl, 1.5rem);
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.feedback-header {
+  margin-bottom: var(--spacing-lg, 1.25rem);
+}
+
+.feedback-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--gray-900, #111827);
+  margin: 0 0 var(--spacing-xs, 0.5rem) 0;
+  line-height: 1.3;
+}
+
+.feedback-subtitle {
+  font-size: 0.875rem;
+  color: var(--gray-500, #6b7280);
+  margin: 0;
+}
+
+.feedback-body {
+  margin-bottom: var(--spacing-lg, 1.25rem);
+}
+
+.feedback-rating {
+  margin-bottom: var(--spacing-lg, 1.25rem);
+}
+
+.feedback-stars {
+  display: flex;
+  gap: var(--spacing-xs, 0.5rem);
+  justify-content: center;
+}
+
+.feedback-star {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: var(--gray-300, #d1d5db);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.feedback-star:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.feedback-star:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.feedback-star-filled {
+  color: var(--warning, #f59e0b);
+}
+
+.feedback-textarea {
+  width: 100%;
+  padding: var(--spacing-sm, 0.75rem);
+  border: 1px solid var(--gray-300, #d1d5db);
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.875rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color 0.2s ease;
+}
+
+.feedback-textarea:focus {
+  outline: none;
+  border-color: var(--primary-500, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.feedback-textarea:disabled {
+  background-color: var(--gray-50, #f9fafb);
+  cursor: not-allowed;
+}
+
+.feedback-char-count {
+  font-size: 0.75rem;
+  color: var(--gray-500, #6b7280);
+  text-align: right;
+  margin-top: var(--spacing-xs, 0.25rem);
+}
+
+.feedback-footer {
+  display: flex;
+  gap: var(--spacing-sm, 0.75rem);
+  justify-content: flex-end;
+}
+
+.feedback-button {
+  padding: var(--spacing-sm, 0.75rem) var(--spacing-lg, 1.25rem);
+  border-radius: var(--radius-md, 8px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  min-width: 100px;
+}
+
+.feedback-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.feedback-button-secondary {
+  background: white;
+  color: var(--gray-700, #374151);
+  border: 1px solid var(--gray-300, #d1d5db);
+}
+
+.feedback-button-secondary:hover:not(:disabled) {
+  background: var(--gray-50, #f9fafb);
+}
+
+.feedback-button-primary {
+  background: var(--primary-500, #3b82f6);
+  color: white;
+}
+
+.feedback-button-primary:hover:not(:disabled) {
+  background: var(--primary-600, #2563eb);
+}
+
+.feedback-success {
+  text-align: center;
+  padding: var(--spacing-xl, 1.5rem) 0;
+}
+
+.feedback-success-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--spacing-md, 1rem);
+  background: var(--success, #10b981);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: bold;
+  animation: scaleIn 0.3s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.feedback-success-message {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--gray-900, #111827);
+  margin: 0;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .feedback-modal-content {
+    padding: var(--spacing-lg, 1.25rem);
+    max-width: 100%;
+  }
+
+  .feedback-title {
+    font-size: 1.125rem;
+  }
+
+  .feedback-star {
+    font-size: 1.75rem;
+  }
+
+  .feedback-footer {
+    flex-direction: column-reverse;
+  }
+
+  .feedback-button {
+    width: 100%;
+  }
+}

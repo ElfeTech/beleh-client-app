@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { useDatasource } from '../context/DatasourceContext';
 import { useChatSession } from '../context/ChatSessionContext';
 import { useUsage } from '../context/UsageContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
 import type { ChatWorkflowResponse, ChatMessageRead } from '../types/api';
@@ -16,6 +17,7 @@ import WorkspaceSwitcher from '../components/layout/WorkspaceSwitcher';
 import { WorkspaceModal } from '../components/layout/WorkspaceModal';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { FEEDBACK_TRIGGERS } from '../types/feedback';
 import './Workspace.css';
 
 interface Message {
@@ -34,6 +36,7 @@ export function Workspace() {
     const { setSessions, activeSessionId, setActiveSessionId, addSession, removeSession } = useChatSession();
     const { refreshUsage } = useUsage();
     const workspaceContext = useWorkspace();
+    const { trackChatQuery, trackComplexQuery, showFeedback } = useFeedback();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -65,8 +68,8 @@ export function Workspace() {
         return "Ask a question about your data...";
     };
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const scrollToBottom = (instant = false) => {
+        messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
     };
 
     // Track mobile viewport changes
@@ -78,6 +81,15 @@ export function Workspace() {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Check if we should show returning user feedback
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            showFeedback(FEEDBACK_TRIGGERS.RETURNING_USER);
+        }, 2000); // Show after 2 seconds of being on the page
+
+        return () => clearTimeout(timer);
+    }, [showFeedback]);
 
     const loadSessions = useCallback(async () => {
         if (!selectedDatasourceId) {
@@ -153,6 +165,9 @@ export function Workspace() {
             });
 
             setMessages(uiMessages);
+
+            // Scroll to bottom instantly after loading messages
+            setTimeout(() => scrollToBottom(true), 100);
         } catch (err) {
             console.error('Failed to load session messages:', err);
             // Check if it's a 404 (session doesn't exist on server yet - new session)
@@ -251,6 +266,13 @@ export function Workspace() {
     useEffect(() => {
         scrollToBottom();
     }, [messages]);
+
+    // Scroll to bottom on initial page load
+    useEffect(() => {
+        // Delay to ensure DOM is ready
+        const timer = setTimeout(() => scrollToBottom(true), 200);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Persist active session in localStorage
     useEffect(() => {
@@ -377,6 +399,35 @@ export function Workspace() {
             };
 
             setMessages(prev => [...prev, aiMessage]);
+
+            // Track chat query for feedback
+            trackChatQuery();
+
+            // Check if this was a complex query (GROUP BY, FILTER, RANK, aggregations, etc.)
+            const isComplexQuery =
+                question.toLowerCase().includes('group') ||
+                question.toLowerCase().includes('filter') ||
+                question.toLowerCase().includes('rank') ||
+                question.toLowerCase().includes('top') ||
+                question.toLowerCase().includes('bottom') ||
+                question.toLowerCase().includes('average') ||
+                question.toLowerCase().includes('sum') ||
+                question.toLowerCase().includes('count') ||
+                (response.execution?.visualization_hint &&
+                 ['bar', 'line', 'pie'].includes(response.execution.visualization_hint));
+
+            if (isComplexQuery) {
+                trackComplexQuery();
+                // Show accuracy feedback after complex query (longer delay so user can review)
+                setTimeout(() => {
+                    showFeedback(FEEDBACK_TRIGGERS.ACCURACY);
+                }, 8000); // 8 seconds - give user time to review results
+            } else {
+                // Show data understanding feedback after dataset upload + 3 queries
+                setTimeout(() => {
+                    showFeedback(FEEDBACK_TRIGGERS.DATA_UNDERSTANDING);
+                }, 5000); // 5 seconds - give user time to see results
+            }
 
             // Refresh usage and datasources after successful query
             refreshUsage();

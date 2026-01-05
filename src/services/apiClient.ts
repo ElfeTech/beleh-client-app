@@ -24,6 +24,7 @@ import type {
   PlanListResponse,
   PlanResponse
 } from '../types/usage';
+import type { FeedbackSubmission } from '../types/feedback';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -482,6 +483,20 @@ class APIClient {
         'Authorization': `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
+    });
+  }
+
+  // Feedback Methods
+  async submitFeedback(
+    authToken: string,
+    feedback: FeedbackSubmission
+  ): Promise<void> {
+    return this.request<void>('/api/feedback', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(feedback),
     });
   }
 }

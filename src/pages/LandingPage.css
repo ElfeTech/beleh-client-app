@@ -2085,6 +2085,41 @@
 }
 
 @media (max-width: 768px) {
+  /* Hide alpha badge in header on mobile */
+  .alpha-badge {
+    display: none;
+  }
+
+  /* Fix nav container padding on mobile */
+  .nav-container-v2 {
+    padding: 0 1rem;
+    overflow: hidden;
+  }
+
+  /* Reduce logo size on mobile */
+  .nav-logo-v2 {
+    gap: 0.5rem;
+    flex-shrink: 0;
+    max-width: 60%;
+  }
+
+  .logo-image {
+    width: 140px;
+    height: 32px;
+  }
+
+  /* Ensure nav actions don't overflow */
+  .nav-actions-v2 {
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .nav-actions-v2 .btn-primary-v2 {
+    padding: 0.5rem 0.875rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
   .nav-menu-v2 {
     position: fixed;
     top: 0;
@@ -2114,7 +2149,7 @@
   .mobile-menu-toggle {
     display: block;
     z-index: 1001;
-  }
+}
 
   .nav-actions-v2 .btn-ghost-v2 {
     display: none;
@@ -2137,8 +2172,7 @@
 
   .alpha-badge-hero {
     display: block;
-    margin-left: 0;
-    margin-top: 1rem;
+    margin: 1rem auto 0;
     font-size: 0.75rem;
     padding: 0.375rem 0.75rem;
     width: fit-content;
