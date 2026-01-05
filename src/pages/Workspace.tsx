@@ -34,7 +34,7 @@ export function Workspace() {
     const { id: workspaceId } = useParams<{ id: string }>();
     const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
     const { setSessions, activeSessionId, setActiveSessionId, addSession, removeSession } = useChatSession();
-    const { refreshUsage } = useUsage();
+    const { decrementQueryCount, refreshUsageAfterAction } = useUsage();
     const workspaceContext = useWorkspace();
     const { trackChatQuery, trackComplexQuery, showFeedback } = useFeedback();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -429,8 +429,9 @@ export function Workspace() {
                 }, 5000); // 5 seconds - give user time to see results
             }
 
-            // Refresh usage and datasources after successful query
-            refreshUsage();
+            // Update usage immediately with optimistic update, then force refresh for accurate data
+            decrementQueryCount(); // Instant UI feedback
+            refreshUsageAfterAction(); // Force refresh to get real usage data
             workspaceContext.refreshDatasources();
         } catch (err) {
             console.error('Failed to send message:', err);
@@ -596,8 +597,15 @@ export function Workspace() {
                                     className="send-btn"
                                     onClick={handleSendMessage}
                                     disabled={isLoading || !inputValue.trim() || !selectedDatasourceId}
+                                    aria-label={isLoading ? 'Sending message' : 'Send message'}
                                 >
-                                    {isLoading ? 'Sending...' : 'Send'}
+                                    {isMobile ? (
+                                        <svg className="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                        </svg>
+                                    ) : (
+                                        isLoading ? 'Sending...' : 'Send'
+                                    )}
                                 </button>
                             </div>
                         </div>

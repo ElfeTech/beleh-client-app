@@ -722,10 +722,18 @@
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .send-btn:hover {
     background: var(--primary-700);
+}
+
+.send-icon {
+    width: 20px;
+    height: 20px;
 }
 
 /* Responsive */
@@ -843,8 +851,16 @@
     }
 
     .send-btn {
-        padding: var(--spacing-sm) var(--spacing-md);
-        font-size: 15px;
+        padding: 10px;
+        width: 42px;
+        height: 42px;
+        min-width: 42px;
+        border-radius: 50%;
+    }
+
+    .send-icon {
+        width: 22px;
+        height: 22px;
     }
 
     /* Mobile empty state */

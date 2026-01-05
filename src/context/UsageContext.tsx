@@ -38,7 +38,7 @@ export function UsageProvider({ children }: { children: ReactNode }) {
   }, [lastFetched]);
 
   // Fetch all usage data
-  const refreshUsage = useCallback(async () => {
+  const refreshUsage = useCallback(async (force = false) => {
     if (!user) {
       setCurrentUsage(null);
       setSummary(null);
@@ -53,8 +53,8 @@ export function UsageProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Use cache if valid
-    if (isCacheValid()) {
+    // Use cache if valid (unless force refresh)
+    if (!force && isCacheValid()) {
       return;
     }
 
@@ -150,6 +150,39 @@ export function UsageProvider({ children }: { children: ReactNode }) {
     }
   }, [user, isCacheValid]);
 
+  // Optimistic update - immediately decrement query count for instant UI feedback
+  const decrementQueryCount = useCallback(() => {
+    if (currentUsage) {
+      const updatedUsage = {
+        ...currentUsage,
+        metrics: {
+          ...currentUsage.metrics,
+          queries_used: currentUsage.metrics.queries_used + 1,
+          queries_remaining: Math.max(0, currentUsage.metrics.queries_remaining - 1),
+        },
+      };
+      setCurrentUsage(updatedUsage);
+
+      // Update remaining
+      const queriesRemaining = updatedUsage.metrics.queries_remaining;
+      if (remaining) {
+        setRemaining({
+          ...remaining,
+          queries_remaining: queriesRemaining,
+          queries_used: updatedUsage.metrics.queries_used,
+          percentage_used: (updatedUsage.metrics.queries_used / updatedUsage.metrics.queries_limit) * 100,
+          can_execute_query: queriesRemaining > 0,
+        });
+      }
+    }
+  }, [currentUsage, remaining]);
+
+  // Immediate refresh after user action (bypasses cache) - call this after chat/upload
+  const refreshUsageAfterAction = useCallback(async () => {
+    // Force refresh to bypass cache
+    await refreshUsage(true);
+  }, [refreshUsage]);
+
   // Check quota for specific operation
   const checkQuota = useCallback(
     async (operation: 'query' | 'datasource' | 'member'): Promise<QuotaCheckResponse> => {
@@ -243,6 +276,8 @@ export function UsageProvider({ children }: { children: ReactNode }) {
         checkQuota,
         hasWarning,
         canExecuteQuery,
+        decrementQueryCount,
+        refreshUsageAfterAction,
       }}
     >
       {children}
