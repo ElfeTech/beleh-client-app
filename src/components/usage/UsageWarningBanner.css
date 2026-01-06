@@ -143,3 +143,34 @@
     text-align: center;
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .usage-warning-banner {
+  background-color: var(--card-background);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme='dark'] .usage-warning-banner.info {
+  background-color: rgba(59, 130, 246, 0.15);
+}
+
+html[data-theme='dark'] .usage-warning-banner.warning {
+  background-color: rgba(251, 191, 36, 0.15);
+}
+
+html[data-theme='dark'] .usage-warning-banner.critical {
+  background-color: rgba(239, 68, 68, 0.15);
+}
+
+html[data-theme='dark'] .warning-message {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .dismiss-btn {
+  color: var(--text-muted);
+}
+
+html[data-theme='dark'] .dismiss-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--text-primary);
+}

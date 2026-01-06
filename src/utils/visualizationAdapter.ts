@@ -65,12 +65,16 @@ export function adaptVisualizationData(
   const xSampleValues = rawData.map(row => row[xField]).filter(v => v != null);
   const ySampleValues = rawData.map(row => row[yField]).filter(v => v != null);
 
+  // Extract time grain from backend if available (check both direct property and advanced_spec)
+  const timeGrain = visualization.time_grain || (visualization as any).advanced_spec?.time_grain;
+
   // Create format configurations
   const xFormat = createFormatConfig(
     xField,
     xEncoding.type,
     xSampleValues,
-    xEncoding.format
+    xEncoding.format,
+    timeGrain
   );
 
   const yFormat = createFormatConfig(
@@ -350,4 +354,199 @@ export const COLOR_PALETTES = {
 
 export function getColorPalette(type: 'default' | 'monochrome' | 'warm' | 'cool' = 'default'): string[] {
   return COLOR_PALETTES[type];
+}
+
+/**
+ * Multi-dimensional visualization adapters
+ */
+
+export interface MultiDimensionalChartData {
+  xField: string;
+  yField: string;
+  xLabel: string;
+  yLabel: string;
+  xFormat: FormatConfig;
+  yFormat: FormatConfig;
+  data: Record<string, any>[];
+
+  // Additional dimension fields
+  seriesField?: string;
+  seriesLabel?: string;
+  colorField?: string;
+  colorLabel?: string;
+  sizeField?: string;
+  sizeLabel?: string;
+  facetField?: string;
+  facetLabel?: string;
+
+  // Time grain from backend
+  timeGrain?: string;
+
+  dimensionCount: number;
+}
+
+/**
+ * Adapt data for multi-dimensional charts (multi-line, grouped bars, etc.)
+ */
+export function adaptMultiDimensionalData(
+  visualization: VisualizationRecommendation,
+  rawData: Record<string, any>[]
+): MultiDimensionalChartData {
+  const { encoding } = visualization;
+
+  if (!encoding?.x) {
+    throw new Error('Missing required x encoding configuration');
+  }
+
+  if (rawData.length === 0) {
+    throw new Error('No data available');
+  }
+
+  const xField = encoding.x.field;
+
+  // If y field is not explicitly provided, infer it from the data
+  let yField: string;
+  let yLabel: string;
+  let yType: 'categorical' | 'quantitative' | 'temporal' = 'quantitative';
+
+  if (encoding?.y) {
+    yField = encoding.y.field;
+    yLabel = encoding.y.label || yField;
+    yType = encoding.y.type;
+  } else {
+    // Infer y field from data - find the first numeric column that's not x or series/color/size/facet
+    const excludeFields = new Set([
+      xField,
+      encoding.series?.field,
+      encoding.color?.field,
+      encoding.size?.field,
+      encoding.facet?.field,
+    ].filter(Boolean));
+
+    const numericColumns = Object.keys(rawData[0]).filter(col => {
+      if (excludeFields.has(col)) return false;
+      const value = rawData[0][col];
+      return typeof value === 'number' || !isNaN(Number(value));
+    });
+
+    if (numericColumns.length === 0) {
+      throw new Error('No numeric field found for y-axis');
+    }
+
+    yField = numericColumns[0];
+    yLabel = yField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  }
+
+  // Extract dimension fields
+  const seriesField = encoding.series?.field;
+  const colorField = encoding.color?.field;
+  const sizeField = encoding.size?.field;
+  const facetField = encoding.facet?.field;
+
+  // Calculate dimension count
+  let dimensionCount = 2; // x and y are always present
+  if (seriesField) dimensionCount++;
+  if (colorField) dimensionCount++;
+  if (sizeField) dimensionCount++;
+  if (facetField) dimensionCount++;
+
+  // Create format configurations
+  const xSampleValues = rawData.map(row => row[xField]).filter(v => v != null);
+  const ySampleValues = rawData.map(row => row[yField]).filter(v => v != null);
+
+  const xFormat = createFormatConfig(
+    xField,
+    encoding.x.type,
+    xSampleValues,
+    encoding.x.format
+  );
+
+  const yFormat = createFormatConfig(
+    yField,
+    yType,
+    ySampleValues,
+    encoding.y?.format
+  );
+
+  // Extract time grain from visualization metadata (check both direct property and advanced_spec)
+  const timeGrain = visualization.time_grain || (visualization as any).advanced_spec?.time_grain;
+
+  return {
+    xField,
+    yField,
+    xLabel: encoding.x.label || xField,
+    yLabel,
+    xFormat,
+    yFormat,
+    data: rawData,
+    seriesField,
+    seriesLabel: encoding.series?.label || seriesField,
+    colorField,
+    colorLabel: encoding.color?.label || colorField,
+    sizeField,
+    sizeLabel: encoding.size?.label || sizeField,
+    facetField,
+    facetLabel: encoding.facet?.label || facetField,
+    timeGrain,
+    dimensionCount,
+  };
+}
+
+/**
+ * Check if visualization has too many dimensions
+ */
+export function checkDimensionOverload(
+  visualization: VisualizationRecommendation,
+  maxDimensions: number = 5
+): { overloaded: boolean; dimensionCount: number; message?: string } {
+  const { encoding } = visualization;
+
+  let dimensionCount = 0;
+  if (encoding?.x) dimensionCount++;
+  if (encoding?.y) dimensionCount++;
+  if (encoding?.series) dimensionCount++;
+  if (encoding?.color) dimensionCount++;
+  if (encoding?.size) dimensionCount++;
+  if (encoding?.facet) dimensionCount++;
+
+  const overloaded = dimensionCount > maxDimensions;
+
+  return {
+    overloaded,
+    dimensionCount,
+    message: overloaded
+      ? `Too many dimensions (${dimensionCount}). Maximum recommended is ${maxDimensions}. Consider using faceting or filtering your data.`
+      : undefined,
+  };
+}
+
+/**
+ * Get unique values for a categorical field
+ */
+export function getUniqueValues(
+  data: Record<string, any>[],
+  field: string
+): any[] {
+  return Array.from(new Set(data.map(row => row[field])));
+}
+
+/**
+ * Check cardinality of categorical fields
+ */
+export function checkFieldCardinality(
+  data: Record<string, any>[],
+  field: string,
+  maxCardinality: number = 20
+): { valid: boolean; cardinality: number; message?: string } {
+  const uniqueValues = getUniqueValues(data, field);
+  const cardinality = uniqueValues.length;
+  const valid = cardinality <= maxCardinality;
+
+  return {
+    valid,
+    cardinality,
+    message: valid
+      ? undefined
+      : `Too many unique values in '${field}' (${cardinality}). Maximum recommended is ${maxCardinality}.`,
+  };
 }

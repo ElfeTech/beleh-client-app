@@ -1,5 +1,5 @@
 /* ===============================================
-   AUTH PAGES - SPLIT LAYOUT DESIGN
+   AUTH PAGES - SPLIT LAYOUT DESIGN WITH THEME SUPPORT
    Brand Colors:
    - Primary: #3B82F6 (blue)
    - Secondary: #1F2937 (dark)
@@ -10,8 +10,9 @@
 .auth-split-page {
   min-height: 100vh;
   display: flex;
-  background: #ffffff;
+  background: var(--bg-primary);
   overflow: hidden;
+  transition: background-color 0.3s ease;
 }
 
 /* ===============================================
@@ -38,7 +39,7 @@
   top: 0;
   width: 120px;
   height: 100%;
-  color: #ffffff;
+  color: var(--bg-primary);
   z-index: 10;
   border-radius: 100px;
 }
@@ -218,8 +219,9 @@
   align-items: center;
   justify-content: center;
   padding: 3rem;
-  background: #ffffff;
+  background: var(--bg-primary);
   position: relative;
+  transition: background-color 0.3s ease;
 }
 
 /* Inverted border radius - Top Right Corner */
@@ -240,10 +242,11 @@
   right: 0;
   width: 340px;
   height: 440px;
-  background: #ffffff;
+  background: var(--bg-primary);
   border-top-right-radius: 0;
   border-radius: 0 400px 0 0;
   z-index: 1;
+  transition: background-color 0.3s ease;
 }
 
 .form-content {
@@ -265,7 +268,7 @@
 .form-title {
   font-size: 2rem;
   font-weight: 400;
-  color: #1F2937;
+  color: var(--text-primary);
   margin-bottom: 0.5rem;
 }
 
@@ -276,30 +279,30 @@
 
 .form-subtitle {
   font-size: 0.9375rem;
-  color: #6B7280;
+  color: var(--text-tertiary);
 }
 
 /* Google Button */
 .auth-google-btn {
   width: 100%;
   padding: 1rem 1.5rem;
-  background: #ffffff;
-  border: 1px solid #E5E7EB;
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: 50px;
   font-size: 0.9375rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.75rem;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--shadow-sm);
 }
 
 .auth-google-btn:hover {
-  border-color: #3B82F6;
+  border-color: var(--border-focus);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
 }
 
@@ -318,7 +321,7 @@
 .signup-benefits {
   margin-top: 2rem;
   padding-top: 1.5rem;
-  border-top: 1px solid #F3F4F6;
+  border-top: 1px solid var(--border-primary);
 }
 
 .benefit-item {
@@ -326,21 +329,21 @@
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem 0;
-  color: #6B7280;
+  color: var(--text-tertiary);
   font-size: 0.875rem;
 }
 
 .benefit-item svg {
   width: 18px;
   height: 18px;
-  color: #10B981;
+  color: var(--success);
   flex-shrink: 0;
 }
 
 /* Error Message */
 .auth-error-message {
-  background: #FEF2F2;
-  border: 1px solid #FECACA;
+  background: var(--error-light);
+  border: 1px solid var(--error);
   border-radius: 12px;
   padding: 1rem;
   margin-bottom: 1.5rem;
@@ -352,13 +355,13 @@
 .auth-error-message svg {
   width: 20px;
   height: 20px;
-  color: #EF4444;
+  color: var(--error);
   flex-shrink: 0;
   margin-top: 1px;
 }
 
 .auth-error-message p {
-  color: #991B1B;
+  color: var(--error);
   font-size: 0.875rem;
   margin: 0;
   line-height: 1.5;
@@ -372,18 +375,18 @@
 
 .form-footer p {
   font-size: 0.9375rem;
-  color: #6B7280;
+  color: var(--text-tertiary);
 }
 
 .form-footer a {
-  color: #3B82F6;
+  color: var(--text-link);
   font-weight: 500;
   text-decoration: none;
   transition: color 0.2s ease;
 }
 
 .form-footer a:hover {
-  color: #2563EB;
+  color: var(--text-link-hover);
   text-decoration: underline;
 }
 

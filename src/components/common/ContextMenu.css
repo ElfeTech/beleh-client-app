@@ -87,3 +87,22 @@
     display: none;
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .context-menu {
+  background: var(--card-background);
+  border-color: var(--border-color);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme='dark'] .context-menu-item:hover:not(:disabled) {
+  background: #374151;
+}
+
+html[data-theme='dark'] .context-menu-item.default {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .context-menu-item.danger:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+}

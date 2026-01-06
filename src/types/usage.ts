@@ -144,4 +144,6 @@ export interface UsageContextValue extends UsageState {
   checkQuota: (operation: 'query' | 'datasource' | 'member') => Promise<QuotaCheckResponse>;
   hasWarning: (level: 'warning' | 'critical') => boolean;
   canExecuteQuery: boolean;
+  decrementQueryCount: () => void;
+  refreshUsageAfterAction: () => Promise<void>;
 }

@@ -1,8 +1,8 @@
-/* Confirm Dialog Styles */
+/* Confirm Dialog with Theme Support */
 .confirm-dialog-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
+  background-color: var(--bg-overlay);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -13,13 +13,15 @@
 }
 
 .confirm-dialog-container {
-  background: white;
+  background: var(--bg-modal);
   border-radius: 16px;
   padding: 32px;
   max-width: 420px;
   width: 100%;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: var(--shadow-2xl);
   animation: slideUp 0.3s ease-out;
+  border: 1px solid var(--border-primary);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .confirm-dialog-icon {
@@ -38,18 +40,42 @@
 }
 
 .confirm-dialog-icon.danger {
+  background: var(--error-light);
+  color: var(--error);
+}
+
+[data-theme="light"] .confirm-dialog-icon.danger {
   background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-  color: #dc2626;
+}
+
+[data-theme="dark"] .confirm-dialog-icon.danger {
+  background: rgba(239, 68, 68, 0.15);
 }
 
 .confirm-dialog-icon.warning {
+  background: var(--warning-light);
+  color: var(--warning);
+}
+
+[data-theme="light"] .confirm-dialog-icon.warning {
   background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
-  color: #d97706;
+}
+
+[data-theme="dark"] .confirm-dialog-icon.warning {
+  background: rgba(245, 158, 11, 0.15);
 }
 
 .confirm-dialog-icon.info {
+  background: var(--info-light);
+  color: var(--primary-500);
+}
+
+[data-theme="light"] .confirm-dialog-icon.info {
   background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
-  color: #2563eb;
+}
+
+[data-theme="dark"] .confirm-dialog-icon.info {
+  background: rgba(59, 130, 246, 0.15);
 }
 
 .confirm-dialog-content {
@@ -60,14 +86,14 @@
 .confirm-dialog-title {
   font-size: 20px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0 0 12px 0;
   line-height: 1.4;
 }
 
 .confirm-dialog-message {
   font-size: 14px;
-  color: #6b7280;
+  color: var(--text-tertiary);
   margin: 0;
   line-height: 1.6;
 }
@@ -94,12 +120,12 @@
 }
 
 .cancel-btn {
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
 }
 
 .cancel-btn:hover:not(:disabled) {
-  background: #e5e7eb;
+  background: var(--bg-card-hover);
 }
 
 .cancel-btn:active:not(:disabled) {

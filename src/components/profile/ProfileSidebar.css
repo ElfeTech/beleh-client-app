@@ -157,3 +157,65 @@
     display: none;
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .profile-sidebar-container {
+  background: var(--background-color);
+  border-right-color: var(--border-color);
+}
+
+html[data-theme='dark'] .profile-sidebar-header {
+  background: var(--card-background);
+  border-bottom-color: var(--border-color);
+}
+
+html[data-theme='dark'] .profile-sidebar-header h3 {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .profile-sidebar-section-title {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .profile-sidebar-item {
+  background: var(--card-background);
+  border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .profile-sidebar-item:hover {
+  background: #374151;
+  border-color: #4b5563;
+}
+
+html[data-theme='dark'] .profile-sidebar-item.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: #3b82f6;
+}
+
+html[data-theme='dark'] .profile-sidebar-item.active .sidebar-item-title {
+  color: #60a5fa;
+}
+
+html[data-theme='dark'] .sidebar-item-icon {
+  background: #374151;
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .sidebar-item-title {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .sidebar-item-subtitle {
+  color: var(--text-muted);
+}
+
+html[data-theme='dark'] .profile-sidebar-signout {
+  background: var(--card-background);
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+html[data-theme='dark'] .profile-sidebar-signout:hover {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: #f87171;
+}

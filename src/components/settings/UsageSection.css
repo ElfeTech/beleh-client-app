@@ -741,3 +741,94 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .plan-overview-card {
+  background: linear-gradient(135deg, var(--card-background) 0%, #1a202c 100%);
+  border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .plan-title {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .price-amount {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .price-period {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .stat-card {
+  background: var(--card-background);
+  border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .stat-card:hover {
+  border-color: var(--border-color);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='dark'] .stat-header-text h3 {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .stat-header-text p {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .stat-value {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .stat-limit {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .progress-track {
+  background: #374151;
+}
+
+html[data-theme='dark'] .progress-remaining {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .section-title {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .section-title svg {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .feature-card {
+  background: var(--card-background);
+  border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .feature-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.25);
+}
+
+html[data-theme='dark'] .feature-value {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .feature-label {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .spinner {
+  border-color: #374151;
+  border-top-color: #3b82f6;
+}
+
+html[data-theme='dark'] .error-state h3 {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .error-state p {
+  color: var(--text-secondary);
+}

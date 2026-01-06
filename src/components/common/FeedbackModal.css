@@ -1,0 +1,240 @@
+/* FeedbackModal with Theme Support */
+.feedback-modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-overlay);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: var(--spacing-md);
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.feedback-modal-content {
+  background: var(--bg-modal);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-2xl);
+  max-width: 480px;
+  width: 100%;
+  padding: var(--spacing-xl);
+  animation: slideUp 0.3s ease-out;
+  border: 1px solid var(--border-primary);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.feedback-header {
+  margin-bottom: var(--spacing-lg);
+}
+
+.feedback-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 var(--spacing-xs) 0;
+  line-height: 1.3;
+}
+
+.feedback-subtitle {
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  margin: 0;
+}
+
+.feedback-body {
+  margin-bottom: var(--spacing-lg);
+}
+
+.feedback-rating {
+  margin-bottom: var(--spacing-lg);
+}
+
+.feedback-stars {
+  display: flex;
+  gap: var(--spacing-xs);
+  justify-content: center;
+}
+
+.feedback-star {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+  transition: all 0.2s ease;
+  line-height: 1;
+}
+
+.feedback-star:hover:not(:disabled) {
+  transform: scale(1.1);
+}
+
+.feedback-star:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.feedback-star-filled {
+  color: var(--warning);
+}
+
+.feedback-textarea {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 80px;
+  background: var(--bg-input);
+  color: var(--text-primary);
+  transition: border-color 0.2s ease, background-color 0.3s ease;
+}
+
+.feedback-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.feedback-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.feedback-textarea:disabled {
+  background-color: var(--bg-tertiary);
+  cursor: not-allowed;
+}
+
+.feedback-char-count {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: right;
+  margin-top: var(--spacing-xs);
+}
+
+.feedback-footer {
+  display: flex;
+  gap: var(--spacing-sm);
+  justify-content: flex-end;
+}
+
+.feedback-button {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  min-width: 100px;
+}
+
+.feedback-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.feedback-button-secondary {
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  border: 1px solid var(--btn-secondary-border);
+}
+
+.feedback-button-secondary:hover:not(:disabled) {
+  background: var(--btn-secondary-hover);
+}
+
+.feedback-button-primary {
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
+}
+
+.feedback-button-primary:hover:not(:disabled) {
+  background: var(--btn-primary-hover);
+}
+
+.feedback-success {
+  text-align: center;
+  padding: var(--spacing-xl) 0;
+}
+
+.feedback-success-icon {
+  width: 64px;
+  height: 64px;
+  margin: 0 auto var(--spacing-md);
+  background: var(--success);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: bold;
+  animation: scaleIn 0.3s ease-out;
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0);
+  }
+  to {
+    transform: scale(1);
+  }
+}
+
+.feedback-success-message {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .feedback-modal-content {
+    padding: var(--spacing-lg);
+    max-width: 100%;
+  }
+
+  .feedback-title {
+    font-size: 1.125rem;
+  }
+
+  .feedback-star {
+    font-size: 1.75rem;
+  }
+
+  .feedback-footer {
+    flex-direction: column-reverse;
+  }
+
+  .feedback-button {
+    width: 100%;
+  }
+}

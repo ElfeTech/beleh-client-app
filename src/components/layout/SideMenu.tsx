@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { CommonMenu } from './CommonMenu';
 import { WorkspaceMenu } from './WorkspaceMenu';
@@ -6,7 +6,12 @@ import { DatasourceModal } from './DatasourceModal';
 import { WorkspaceModal } from './WorkspaceModal';
 import { useWorkspace } from '../../context/WorkspaceContext';
 
-export function SideMenu() {
+interface SideMenuProps {
+    isCollapsed?: boolean;
+    onToggleCollapse?: () => void;
+}
+
+export function SideMenu({ isCollapsed = false, onToggleCollapse }: SideMenuProps) {
     const navigate = useNavigate();
     const location = useLocation();
     const workspaceContext = useWorkspace();
@@ -15,6 +20,13 @@ export function SideMenu() {
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
     const [isWorkspaceModalOpen, setIsWorkspaceModalOpen] = useState(false);
+
+    // Close dropdown when sidebar collapses
+    useEffect(() => {
+        if (isCollapsed) {
+            setIsDropdownOpen(false);
+        }
+    }, [isCollapsed]);
 
     // Use data from WorkspaceContext
     const workspaces = workspaceContext.workspaces;
@@ -62,7 +74,19 @@ export function SideMenu() {
     }
 
     return (
-        <aside className="sidebar">
+        <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
+            {/* Collapse Toggle Button */}
+            <button
+                className="sidebar-collapse-btn"
+                onClick={onToggleCollapse}
+                aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="15 18 9 12 15 6" />
+                </svg>
+            </button>
+
             <div className="sidebar-header">
                 <div className={`workspace-selector ${isDropdownOpen ? 'open' : ''}`}>
                     <button className="workspace-trigger" onClick={toggleDropdown} disabled={workspaces.length === 0}>

@@ -141,3 +141,40 @@
     opacity: 0.5;
     cursor: not-allowed;
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .upload-progress-container {
+    background: var(--card-background);
+    border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .progress-percentage {
+    color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .progress-bar {
+    background: #374151;
+}
+
+html[data-theme='dark'] .progress-stages::before {
+    background: #374151;
+}
+
+html[data-theme='dark'] .stage span {
+    color: var(--text-muted);
+}
+
+html[data-theme='dark'] .stage.completed span {
+    color: #60a5fa;
+}
+
+html[data-theme='dark'] .stage-dot {
+    background: var(--card-background);
+    border-color: #4b5563;
+}
+
+html[data-theme='dark'] .form-error {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+}

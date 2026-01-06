@@ -223,3 +223,51 @@
     cursor: grabbing;
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .chart-modal-container {
+  background: var(--card-background);
+}
+
+html[data-theme='dark'] .chart-modal-header {
+  background: var(--card-background);
+  border-bottom-color: var(--border-color);
+}
+
+html[data-theme='dark'] .chart-modal-header h2 {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .chart-modal-close {
+  background: #374151;
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .chart-modal-close:hover,
+html[data-theme='dark'] .chart-modal-close:active {
+  background: #4b5563;
+}
+
+html[data-theme='dark'] .chart-modal-controls {
+  background: var(--background-color);
+  border-bottom-color: var(--border-color);
+}
+
+html[data-theme='dark'] .chart-modal-controls button {
+  background: var(--card-background);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .chart-modal-controls button:hover:not(:disabled),
+html[data-theme='dark'] .chart-modal-controls button:active:not(:disabled) {
+  background: #374151;
+}
+
+html[data-theme='dark'] .zoom-level {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .chart-modal-content {
+  background: var(--card-background);
+}

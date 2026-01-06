@@ -4,11 +4,11 @@ import { useAuth } from '../context/AuthContext';
 import { useDatasource } from '../context/DatasourceContext';
 import { useChatSession } from '../context/ChatSessionContext';
 import { useUsage } from '../context/UsageContext';
+import { useFeedback } from '../context/FeedbackContext';
 import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
 import type { ChatWorkflowResponse, ChatMessageRead } from '../types/api';
 import { ChatMessage } from '../components/chat/ChatMessage';
-import { SessionList } from '../components/chat/SessionList';
 import { EmptyStateDashboard } from '../components/workspace/EmptyStateDashboard';
 import { UploadModal } from '../components/layout/UploadModal';
 import MobileChatHeader from '../components/layout/MobileChatHeader';
@@ -16,6 +16,7 @@ import WorkspaceSwitcher from '../components/layout/WorkspaceSwitcher';
 import { WorkspaceModal } from '../components/layout/WorkspaceModal';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { FEEDBACK_TRIGGERS } from '../types/feedback';
 import './Workspace.css';
 
 interface Message {
@@ -31,9 +32,10 @@ export function Workspace() {
     const navigate = useNavigate();
     const { id: workspaceId } = useParams<{ id: string }>();
     const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
-    const { setSessions, activeSessionId, setActiveSessionId, addSession, removeSession } = useChatSession();
-    const { refreshUsage } = useUsage();
+    const { setSessions, activeSessionId, setActiveSessionId, addSession } = useChatSession();
+    const { decrementQueryCount, refreshUsageAfterAction } = useUsage();
     const workspaceContext = useWorkspace();
+    const { trackChatQuery, trackComplexQuery, showFeedback } = useFeedback();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -44,13 +46,27 @@ export function Workspace() {
     const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+    const messagesTopRef = useRef<HTMLDivElement>(null);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const chatMessagesContainerRef = useRef<HTMLDivElement>(null);
 
     // Refs to track if we've already loaded sessions/messages for current datasource/session
     const loadedDatasourceRef = useRef<string | null>(null);
     const loadedSessionRef = useRef<string | null>(null);
 
+    // Ref to track if initial messages have been loaded (for scroll on page refresh)
+    const initialScrollDoneRef = useRef<boolean>(false);
+
     // AbortController for workspace switching to prevent race conditions
     const workspaceSwitchAbortController = useRef<AbortController | null>(null);
+
+    // Pagination state for messages
+    const [currentPage, setCurrentPage] = useState(1);
+    const [hasMoreMessages, setHasMoreMessages] = useState(false);
+    const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+    const previousScrollHeightRef = useRef<number>(0);
+    const previousScrollTopRef = useRef<number>(0);
+    const isLoadingOlderMessagesRef = useRef<boolean>(false);
 
     // Use datasources from WorkspaceContext instead of local state
     const dataSources = workspaceContext.datasources;
@@ -65,8 +81,24 @@ export function Workspace() {
         return "Ask a question about your data...";
     };
 
-    const scrollToBottom = () => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const scrollToBottom = (instant = false) => {
+        messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
+    };
+
+    // Auto-resize textarea based on content
+    const adjustTextareaHeight = () => {
+        const textarea = textareaRef.current;
+        if (!textarea) return;
+
+        // Reset height to auto to get the correct scrollHeight
+        textarea.style.height = 'auto';
+
+        // Calculate new height (limited to 3 lines)
+        const lineHeight = 24; // Approximate line height in pixels
+        const maxHeight = lineHeight * 3; // 3 lines
+        const newHeight = Math.min(textarea.scrollHeight, maxHeight);
+
+        textarea.style.height = `${newHeight}px`;
     };
 
     // Track mobile viewport changes
@@ -79,6 +111,15 @@ export function Workspace() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    // Check if we should show returning user feedback
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            showFeedback(FEEDBACK_TRIGGERS.RETURNING_USER);
+        }, 2000); // Show after 2 seconds of being on the page
+
+        return () => clearTimeout(timer);
+    }, [showFeedback]);
+
     const loadSessions = useCallback(async () => {
         if (!selectedDatasourceId) {
             return;
@@ -90,7 +131,8 @@ export function Workspace() {
                 return;
             }
 
-            const sessionList = await apiClient.listChatSessions(token, selectedDatasourceId);
+            const response = await apiClient.listChatSessions(token, selectedDatasourceId);
+            const sessionList = response.items;
             setSessions(sessionList);
 
             // Try to restore the last active session from workspace state or localStorage
@@ -124,20 +166,37 @@ export function Workspace() {
         }
     }, [selectedDatasourceId, workspaceId, workspaceContext, setSessions, setActiveSessionId]);
 
-    const loadSessionMessages = useCallback(async (sessionId: string) => {
+    const loadSessionMessages = useCallback(async (sessionId: string, page: number = 1) => {
         try {
             const token = authService.getAuthToken();
             if (!token) return;
 
-            const messagesData = await apiClient.getSessionMessages(token, sessionId);
+            const response = await apiClient.getSessionMessagesPaginated(token, sessionId, { page, page_size: 20 });
+            const messagesData = response.items;
 
             // Convert API messages to UI messages
             const uiMessages: Message[] = messagesData.map((msg: ChatMessageRead) => {
+                // Determine message content, with validation for failed queries
+                let messageContent = msg.content;
+
+                // For AI messages, check if execution failed and override content if needed
+                if (msg.role === 'assistant' && msg.message_metadata) {
+                    const execution = msg.message_metadata.execution;
+                    const insight = msg.message_metadata.insight;
+
+                    // If query failed with no results, show the error message
+                    if (execution?.status === 'FAILED' && execution?.row_count === 0) {
+                        messageContent = execution?.message || 'Query execution failed. Please try rephrasing your question.';
+                    } else if (!messageContent || messageContent === 'Here are the results:') {
+                        // Fallback to insight summary if content is generic or empty
+                        messageContent = insight?.summary || messageContent;
+                    }
+                }
 
                 const uiMessage: Message = {
                     id: msg.id,
                     type: msg.role === 'user' ? 'user' : 'ai',
-                    content: msg.content,
+                    content: messageContent,
                     response: msg.role === 'assistant' && msg.message_metadata ? {
                         intent: msg.message_metadata.intent,
                         execution: msg.message_metadata.execution,
@@ -152,7 +211,32 @@ export function Workspace() {
                 return uiMessage;
             });
 
-            setMessages(uiMessages);
+            // API returns messages in DESC order (newest first)
+            // We need to reverse them for display (oldest first, newest at bottom)
+            const reversedMessages = [...uiMessages].reverse();
+
+            if (page === 1) {
+                // Initial load - replace all messages
+                setMessages(reversedMessages);
+                setCurrentPage(1);
+                setHasMoreMessages(response.has_next);
+
+                // Scroll to bottom after messages are loaded (important for page refresh)
+                // Use multiple timeouts to ensure DOM is fully rendered
+                if (reversedMessages.length > 0) {
+                    // Immediate scroll attempt
+                    setTimeout(() => scrollToBottom(true), 50);
+                    // Delayed scroll to ensure all content (charts, etc.) is rendered
+                    setTimeout(() => scrollToBottom(true), 300);
+                    // Mark initial scroll as done
+                    initialScrollDoneRef.current = true;
+                }
+            } else {
+                // Loading older messages - prepend to existing messages
+                setMessages(prev => [...reversedMessages, ...prev]);
+                setCurrentPage(page);
+                setHasMoreMessages(response.has_next);
+            }
         } catch (err) {
             console.error('Failed to load session messages:', err);
             // Check if it's a 404 (session doesn't exist on server yet - new session)
@@ -160,15 +244,66 @@ export function Workspace() {
             if (error?.response?.status === 404 || error?.status === 404) {
                 // New session that doesn't exist on server yet - start with empty messages
                 setMessages([]);
+                setCurrentPage(1);
+                setHasMoreMessages(false);
                 setError(null); // Clear any previous errors
             } else {
                 // Actual error loading messages
                 console.error('Error loading messages:', error);
                 setMessages([]);
+                setCurrentPage(1);
+                setHasMoreMessages(false);
                 // Don't show error for new sessions, only for actual failures
             }
         }
     }, []);
+
+    // Load more (older) messages when scrolling to top
+    const loadMoreMessages = useCallback(async () => {
+        if (!activeSessionId || isLoadingMoreMessages || !hasMoreMessages) return;
+
+        setIsLoadingMoreMessages(true);
+        isLoadingOlderMessagesRef.current = true;
+
+        // Save current scroll position before loading
+        const container = chatMessagesContainerRef.current;
+        if (container) {
+            previousScrollHeightRef.current = container.scrollHeight;
+            previousScrollTopRef.current = container.scrollTop;
+        }
+
+        try {
+            await loadSessionMessages(activeSessionId, currentPage + 1);
+        } finally {
+            setIsLoadingMoreMessages(false);
+        }
+    }, [activeSessionId, currentPage, hasMoreMessages, isLoadingMoreMessages, loadSessionMessages]);
+
+    // Maintain scroll position after loading older messages
+    useEffect(() => {
+        // Only adjust scroll if we just loaded older messages
+        if (!isLoadingOlderMessagesRef.current) return;
+
+        const container = chatMessagesContainerRef.current;
+        if (!container || previousScrollHeightRef.current === 0) return;
+
+        // Use requestAnimationFrame to ensure DOM has updated
+        requestAnimationFrame(() => {
+            // Calculate the difference in scroll height and adjust scroll position
+            const newScrollHeight = container.scrollHeight;
+            const scrollDiff = newScrollHeight - previousScrollHeightRef.current;
+
+            if (scrollDiff > 0) {
+                // Restore the scroll position by adding the height of new content
+                container.scrollTop = previousScrollTopRef.current + scrollDiff;
+            }
+
+            // Reset the saved values and flag
+            previousScrollHeightRef.current = 0;
+            previousScrollTopRef.current = 0;
+            isLoadingOlderMessagesRef.current = false;
+        });
+    }, [messages]);
 
     // Load workspace preferences when workspace changes
     useEffect(() => {
@@ -238,18 +373,25 @@ export function Workspace() {
             // Only load if we haven't already loaded for this session
             if (loadedSessionRef.current !== activeSessionId) {
                 loadedSessionRef.current = activeSessionId;
+                // Reset scroll flag when loading new session
+                initialScrollDoneRef.current = false;
                 loadSessionMessages(activeSessionId);
             }
         } else {
             loadedSessionRef.current = null;
+            initialScrollDoneRef.current = false;
             setMessages([]);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeSessionId]);
 
-    // Auto-scroll to bottom when messages change
+    // Auto-scroll to bottom when messages change (for new messages during chat)
     useEffect(() => {
-        scrollToBottom();
+        // Only smooth scroll for new messages added during chat session
+        // Initial load scrolling is handled in loadSessionMessages
+        if (initialScrollDoneRef.current && messages.length > 0) {
+            scrollToBottom();
+        }
     }, [messages]);
 
     // Persist active session in localStorage
@@ -270,6 +412,32 @@ export function Workspace() {
             activeSessionId
         );
     }, [workspaceId, selectedDatasourceId, activeSessionId, workspaceContext]);
+
+    // IntersectionObserver for lazy loading older messages when scrolling to top
+    useEffect(() => {
+        const topSentinel = messagesTopRef.current;
+        if (!topSentinel || !hasMoreMessages || isLoadingMoreMessages) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                // When the top sentinel is visible, load more messages
+                if (entries[0].isIntersecting && hasMoreMessages && !isLoadingMoreMessages) {
+                    loadMoreMessages();
+                }
+            },
+            {
+                // Trigger when element is 200px before entering viewport
+                rootMargin: '200px 0px 0px 0px',
+                threshold: 0.1
+            }
+        );
+
+        observer.observe(topSentinel);
+
+        return () => {
+            observer.disconnect();
+        };
+    }, [hasMoreMessages, isLoadingMoreMessages, loadMoreMessages]);
 
     const handleNewSession = async () => {
         if (!selectedDatasourceId || isCreatingSession) return null;
@@ -294,25 +462,10 @@ export function Workspace() {
             return newSession.id;
         } catch (err) {
             console.error('[Workspace] Failed to create session:', err);
-            setError('Failed to create new session');
+            setError('Failed to create new chat');
             return null;
         } finally {
             setIsCreatingSession(false);
-        }
-    };
-
-    const handleDeleteSession = async (sessionId: string) => {
-        try {
-            const token = authService.getAuthToken();
-            if (!token) {
-                throw new Error('Authentication token not found');
-            }
-
-            await apiClient.deleteChatSession(token, sessionId);
-            removeSession(sessionId);
-        } catch (err) {
-            console.error('Failed to delete session:', err);
-            setError('Failed to delete session');
         }
     };
 
@@ -333,14 +486,19 @@ export function Workspace() {
         if (!sessionIdToUse) {
             const newSessionId = await handleNewSession();
             if (!newSessionId) {
-                setError('Failed to create session. Please try again.');
+                setError('Failed to create chat. Please try again.');
                 return;
             }
             sessionIdToUse = newSessionId;
-        } 
+        }
 
         setInputValue('');
         setError(null);
+
+        // Reset textarea height after sending
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto';
+        }
 
         // Add user message immediately
         const userMessage: Message = {
@@ -367,19 +525,60 @@ export function Workspace() {
             );
 
 
+            // Determine AI message content based on execution status
+            let aiMessageContent: string;
+
+            if (response.execution?.status === 'FAILED' && response.execution?.row_count === 0) {
+                // Show the error message from execution when query fails
+                aiMessageContent = response.execution?.message || 'Query execution failed. Please try rephrasing your question.';
+            } else {
+                // Show the insight summary or default message
+                aiMessageContent = response.insight?.summary || 'Here are the results:';
+            }
+
             // Add AI response
             const aiMessage: Message = {
                 id: (Date.now() + 1).toString(),
                 type: 'ai',
-                content: response.insight?.summary || 'Here are the results:',
+                content: aiMessageContent,
                 response: response,
                 timestamp: new Date(),
             };
 
             setMessages(prev => [...prev, aiMessage]);
 
-            // Refresh usage and datasources after successful query
-            refreshUsage();
+            // Track chat query for feedback
+            trackChatQuery();
+
+            // Check if this was a complex query (GROUP BY, FILTER, RANK, aggregations, etc.)
+            const isComplexQuery =
+                question.toLowerCase().includes('group') ||
+                question.toLowerCase().includes('filter') ||
+                question.toLowerCase().includes('rank') ||
+                question.toLowerCase().includes('top') ||
+                question.toLowerCase().includes('bottom') ||
+                question.toLowerCase().includes('average') ||
+                question.toLowerCase().includes('sum') ||
+                question.toLowerCase().includes('count') ||
+                (response.execution?.visualization_hint &&
+                 ['bar', 'line', 'pie'].includes(response.execution.visualization_hint));
+
+            if (isComplexQuery) {
+                trackComplexQuery();
+                // Show accuracy feedback after complex query (longer delay so user can review)
+                setTimeout(() => {
+                    showFeedback(FEEDBACK_TRIGGERS.ACCURACY);
+                }, 8000); // 8 seconds - give user time to review results
+            } else {
+                // Show data understanding feedback after dataset upload + 3 queries
+                setTimeout(() => {
+                    showFeedback(FEEDBACK_TRIGGERS.DATA_UNDERSTANDING);
+                }, 5000); // 5 seconds - give user time to see results
+            }
+
+            // Update usage immediately with optimistic update, then force refresh for accurate data
+            decrementQueryCount(); // Instant UI feedback
+            refreshUsageAfterAction(); // Force refresh to get real usage data
             workspaceContext.refreshDatasources();
         } catch (err) {
             console.error('Failed to send message:', err);
@@ -410,11 +609,16 @@ export function Workspace() {
         }
     };
 
-    const handleKeyPress = (e: React.KeyboardEvent) => {
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSendMessage();
         }
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+        setInputValue(e.target.value);
+        adjustTextareaHeight();
     };
 
     const handleAddDataset = () => {
@@ -450,14 +654,7 @@ export function Workspace() {
 
     return (
         <div className="workspace-with-sessions">
-            {/* Desktop: Show session list sidebar */}
-            {!isMobile && (
-                <SessionList
-                    onNewSession={handleNewSession}
-                    onDeleteSession={handleDeleteSession}
-                    isCreatingSession={isCreatingSession}
-                />
-            )}
+            {/* Sessions are now managed in the left sidebar WorkspaceMenu */}
 
             <div className={`content-area ${isMobile ? 'mobile' : ''}`}>
                 {/* Mobile: Show sticky header with selectors */}
@@ -482,7 +679,7 @@ export function Workspace() {
 
                 {/* Chat Section */}
                 <div className="chat-section">
-                    <div className="chat-messages">
+                    <div className="chat-messages" ref={chatMessagesContainerRef}>
                         {messages.length === 0 ? (
                             <div className="chat-empty-state">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -493,11 +690,51 @@ export function Workspace() {
                                 {!selectedDatasourceId ? (
                                     <p className="warning-text">⚠️ Please select a datasource to get started</p>
                                 ) : !activeSessionId ? (
-                                    <p className="warning-text">Click "New Chat" to start a session</p>
+                                    <p className="warning-text">Click "New Chat" to start</p>
                                 ) : null}
                             </div>
                         ) : (
                             <>
+                                {/* Sentinel element for loading older messages at the top */}
+                                {hasMoreMessages && (
+                                    <div ref={messagesTopRef} style={{ height: '20px', margin: '10px 0' }}>
+                                        {isLoadingMoreMessages && (
+                                            <div className="loading-more-indicator" style={{
+                                                textAlign: 'center',
+                                                padding: '10px',
+                                                color: '#666',
+                                                fontSize: '14px'
+                                            }}>
+                                                <div className="typing-indicator" style={{ display: 'inline-flex', gap: '4px' }}>
+                                                    <span style={{
+                                                        width: '8px',
+                                                        height: '8px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: '#666',
+                                                        animation: 'pulse 1.4s infinite ease-in-out both',
+                                                        animationDelay: '-0.32s'
+                                                    }}></span>
+                                                    <span style={{
+                                                        width: '8px',
+                                                        height: '8px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: '#666',
+                                                        animation: 'pulse 1.4s infinite ease-in-out both',
+                                                        animationDelay: '-0.16s'
+                                                    }}></span>
+                                                    <span style={{
+                                                        width: '8px',
+                                                        height: '8px',
+                                                        borderRadius: '50%',
+                                                        backgroundColor: '#666',
+                                                        animation: 'pulse 1.4s infinite ease-in-out both'
+                                                    }}></span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {messages.map(message => (
                                     <ErrorBoundary key={message.id}>
                                         <ChatMessage
@@ -532,21 +769,29 @@ export function Workspace() {
                     {/* Chat Input */}
                     <div className="chat-input-container">
                         <div className="chat-input-wrapper">
-                            <input
-                                type="text"
+                            <textarea
+                                ref={textareaRef}
                                 placeholder={getInputPlaceholder()}
                                 value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyPress={handleKeyPress}
+                                onChange={handleInputChange}
+                                onKeyDown={handleKeyDown}
                                 disabled={isLoading || !selectedDatasourceId}
+                                rows={1}
                             />
                             <div className="input-actions">
                                 <button
                                     className="send-btn"
                                     onClick={handleSendMessage}
                                     disabled={isLoading || !inputValue.trim() || !selectedDatasourceId}
+                                    aria-label={isLoading ? 'Sending message' : 'Send message'}
                                 >
-                                    {isLoading ? 'Sending...' : 'Send'}
+                                    {isMobile ? (
+                                        <svg className="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                        </svg>
+                                    ) : (
+                                        isLoading ? 'Sending...' : 'Send'
+                                    )}
                                 </button>
                             </div>
                         </div>

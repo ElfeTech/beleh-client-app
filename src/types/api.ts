@@ -135,17 +135,43 @@ export interface SortingConfig {
 }
 
 export interface VisualizationRecommendation {
-  visualization_type: 'BAR_CHART' | 'LINE_CHART' | 'PIE_CHART' | 'SCATTER_PLOT' | 'TABLE' | 'NONE';
+  // New backend format uses 'type', old format uses 'visualization_type'
+  type?:
+    | 'line' | 'multiline' | 'bar' | 'stacked_bar' | 'heatmap' | 'scatter' | 'pie' | 'table' | 'auto';
+  visualization_type?:
+    // Backend format (lowercase with underscores)
+    | 'line' | 'multiline' | 'bar' | 'stacked_bar' | 'heatmap' | 'scatter' | 'pie' | 'table' | 'auto'
+    // Legacy frontend format (uppercase with underscores) - for backward compatibility
+    | 'BAR_CHART' | 'LINE_CHART' | 'PIE_CHART' | 'SCATTER_PLOT' | 'TABLE' | 'HEATMAP'
+    | 'MULTI_LINE_CHART' | 'GROUPED_BAR_CHART' | 'STACKED_BAR_CHART' | 'NONE';
   title: string;
   description: string;
-  encoding: {
+  // New backend format uses 'dimensions', old format uses 'encoding'
+  dimensions?: {
+    x?: string;
+    y?: string;
+    color?: string;
+    size?: string;
+    series?: string;
+    facet?: string;
+  };
+  encoding?: {
     x?: FieldEncoding;
     y?: FieldEncoding;
+    color?: FieldEncoding;
+    size?: FieldEncoding;
+    series?: FieldEncoding;
+    facet?: FieldEncoding;
   };
   sorting?: SortingConfig;
-  data_preview: Record<string, any>[];
-  render_fallback: string;
-  fallback_reason: string | null;
+  data_preview?: Record<string, any>[];
+  render_fallback?: string;
+  fallback_reason?: string | null;
+  fallback_type?: string;
+  dimension_count?: number;
+  use_fallback?: boolean;
+  time_grain?: string;
+  confidence?: number;
 }
 
 export interface SupportingFact {
@@ -181,6 +207,7 @@ export interface IntentMetadata {
   entities: any;
   visualization: string;
   clarification_needed: boolean;
+  clarification_message?: string;
 }
 
 export interface ExecutionMetadata {
@@ -231,4 +258,20 @@ export interface WorkspaceContextResponse {
 export interface UpdateWorkspaceStateRequest {
   last_active_session_id?: string | null;
   last_active_dataset_id?: string | null;
+}
+
+// Pagination Types
+export interface PaginatedResponse<T> {
+  items: T[];
+  page: number;
+  page_size: number;
+  total_items: number;
+  total_pages: number;
+  has_next: boolean;
+  has_previous: boolean;
+}
+
+export interface PaginationParams {
+  page?: number;
+  page_size?: number;
 }

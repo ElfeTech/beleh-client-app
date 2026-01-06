@@ -1,22 +1,25 @@
+/* SessionsPage with Theme Support */
 .sessions-page {
   height: 100%;
   display: flex;
   flex-direction: column;
-  background: #f5f7fa;
+  background: var(--bg-secondary);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  transition: background-color 0.3s ease;
 }
 
 .sessions-header {
   padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
-  background: white;
-  border-bottom: 1px solid var(--gray-200);
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-primary);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .sessions-header h1 {
   font-size: 24px;
   font-weight: 700;
-  color: var(--gray-900);
+  color: var(--text-primary);
   margin: 0 0 var(--spacing-xs) 0;
 }
 
@@ -25,7 +28,7 @@
   align-items: center;
   gap: var(--spacing-xs);
   font-size: 13px;
-  color: var(--gray-600);
+  color: var(--text-tertiary);
   margin: 0;
   font-weight: 500;
 }
@@ -33,7 +36,7 @@
 .selected-dataset svg {
   width: 16px;
   height: 16px;
-  color: var(--primary-600);
+  color: var(--primary-500);
 }
 
 .new-chat-btn {
@@ -44,8 +47,8 @@
   width: calc(100% - 2 * var(--spacing-lg));
   margin: var(--spacing-lg);
   padding: var(--spacing-md);
-  background: var(--primary-600);
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   border: none;
   border-radius: var(--radius-lg);
   font-size: 16px;
@@ -58,12 +61,12 @@
 
 .new-chat-btn:active {
   transform: scale(0.98);
-  background: var(--primary-700);
+  background: var(--btn-primary-hover);
 }
 
 .new-chat-btn:disabled {
-  background: var(--gray-300);
-  color: var(--gray-500);
+  background: var(--bg-tertiary);
+  color: var(--text-disabled);
   cursor: not-allowed;
   box-shadow: none;
   transform: none;
@@ -81,7 +84,7 @@
   align-items: center;
   justify-content: center;
   padding: var(--spacing-xl);
-  color: var(--gray-500);
+  color: var(--text-tertiary);
   text-align: center;
   gap: var(--spacing-md);
 }
@@ -89,20 +92,20 @@
 .sessions-empty svg {
   width: 64px;
   height: 64px;
-  color: var(--gray-300);
+  color: var(--text-muted);
   margin-bottom: var(--spacing-sm);
 }
 
 .sessions-empty h3 {
   font-size: 18px;
   font-weight: 600;
-  color: var(--gray-700);
+  color: var(--text-secondary);
   margin: 0;
 }
 
 .sessions-empty p {
   font-size: 14px;
-  color: var(--gray-500);
+  color: var(--text-tertiary);
   margin: 0;
 }
 
@@ -123,8 +126,8 @@
 .goto-datasets-btn {
   margin-top: var(--spacing-md);
   padding: var(--spacing-sm) var(--spacing-lg);
-  background: var(--primary-600);
-  color: white;
+  background: var(--btn-primary-bg);
+  color: var(--btn-primary-text);
   border: none;
   border-radius: var(--radius-md);
   font-size: 14px;
@@ -135,7 +138,7 @@
 
 .goto-datasets-btn:active {
   transform: scale(0.95);
-  background: var(--primary-700);
+  background: var(--btn-primary-hover);
 }
 
 .sessions-list {
@@ -151,14 +154,14 @@
   gap: var(--spacing-md);
   width: 100%;
   padding: var(--spacing-md);
-  background: white;
-  border: 1px solid var(--gray-200);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   cursor: pointer;
   transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
   text-align: left;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow-sm);
 }
 
 .session-card:active {
@@ -166,9 +169,13 @@
 }
 
 .session-card.active {
-  border-color: var(--primary-600);
-  background: rgba(59, 130, 246, 0.05);
+  border-color: var(--primary-500);
+  background: var(--primary-100);
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.15);
+}
+
+[data-theme="dark"] .session-card.active {
+  background: rgba(59, 130, 246, 0.1);
 }
 
 .session-icon {
@@ -203,7 +210,7 @@
 .session-title {
   font-size: 15px;
   font-weight: 600;
-  color: var(--gray-900);
+  color: var(--text-primary);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -212,7 +219,7 @@
 
 .session-timestamp {
   font-size: 12px;
-  color: var(--gray-500);
+  color: var(--text-tertiary);
   margin: 0;
   font-weight: 500;
 }
@@ -220,7 +227,7 @@
 .chevron-right {
   width: 20px;
   height: 20px;
-  color: var(--gray-400);
+  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -231,7 +238,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--bg-overlay);
   z-index: 10000;
   display: flex;
   align-items: flex-end;
@@ -240,7 +247,7 @@
 
 .action-menu {
   width: 100%;
-  background: white;
+  background: var(--bg-modal);
   border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   padding: var(--spacing-md);
   display: flex;
@@ -273,12 +280,12 @@
   gap: var(--spacing-md);
   width: 100%;
   padding: var(--spacing-md);
-  background: white;
-  border: 1px solid var(--gray-200);
+  background: var(--bg-card);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
   font-size: 16px;
   font-weight: 500;
-  color: var(--gray-900);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all 0.2s;
   -webkit-tap-highlight-color: transparent;
@@ -286,7 +293,7 @@
 
 .action-menu-item:active {
   transform: scale(0.98);
-  background: var(--gray-50);
+  background: var(--bg-tertiary);
 }
 
 .action-menu-item svg {
@@ -295,18 +302,18 @@
 }
 
 .action-menu-item.danger {
-  color: #dc2626;
-  border-color: #fca5a5;
-  background: #fef2f2;
+  color: var(--error);
+  border-color: var(--error);
+  background: var(--error-light);
 }
 
 .action-menu-item.danger:active {
-  background: #fee2e2;
+  background: var(--error-light);
 }
 
 .action-menu-item.cancel {
-  background: var(--gray-100);
-  border-color: var(--gray-300);
+  background: var(--bg-tertiary);
+  border-color: var(--border-primary);
   font-weight: 600;
   margin-top: var(--spacing-xs);
 }
@@ -324,7 +331,7 @@
   }
 
   .session-card:hover {
-    border-color: var(--primary-300);
+    border-color: var(--primary-400);
     box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15);
   }
 

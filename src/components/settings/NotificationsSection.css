@@ -45,11 +45,12 @@
 
 /* Settings Card */
 .settings-card {
-  background: white;
+  background: var(--card-background, #ffffff);
   border-radius: 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border-primary, #e5e7eb);
   overflow: hidden;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .card-header {
@@ -57,14 +58,14 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #f3f4f6;
-  background: #fafafa;
+  border-bottom: 1px solid var(--border-light, #f3f4f6);
+  background: var(--card-header-background, #fafafa);
 }
 
 .card-header h2 {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary, #1f2937);
   margin: 0;
 }
 
@@ -433,3 +434,110 @@
   }
 }
 
+/* Dark Mode Support */
+html[data-theme='dark'] .settings-card {
+  background-color: var(--card-background, #1a1c2e);
+  border-color: var(--border-primary, #374151);
+}
+
+html[data-theme='dark'] .card-header {
+  background-color: var(--card-header-background, #252836);
+  border-bottom-color: var(--border-primary, #374151);
+}
+
+html[data-theme='dark'] .card-header h2,
+html[data-theme='dark'] .card-header h3 {
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .header-text h1 {
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .header-text p {
+  color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .notification-item {
+  border-bottom-color: var(--border-primary, #374151);
+}
+
+html[data-theme='dark'] .notification-label h4 {
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .notification-label p {
+  color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .channel-tag {
+  background-color: var(--bg-tertiary, #374151);
+  color: var(--text-secondary, #d1d5db);
+}
+
+html[data-theme='dark'] .digest-panel {
+  background-color: var(--bg-tertiary, #374151);
+  border-color: var(--border-primary, #4b5563);
+}
+
+html[data-theme='dark'] .digest-panel label {
+  color: var(--text-primary, #e5e7eb);
+}
+
+html[data-theme='dark'] .digest-panel p {
+  color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] select {
+  background-color: var(--bg-tertiary, #374151);
+  border-color: var(--border-primary, #4b5563);
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] select:focus {
+  border-color: var(--primary-color, #3b82f6);
+  background-color: var(--bg-secondary, #252836);
+}
+
+html[data-theme='dark'] .weekday-btn {
+  background-color: var(--bg-tertiary, #374151);
+  border-color: var(--border-primary, #4b5563);
+  color: var(--text-secondary, #d1d5db);
+}
+
+html[data-theme='dark'] .weekday-btn.active {
+  background-color: var(--primary-color, #3b82f6);
+  border-color: var(--primary-color, #3b82f6);
+  color: white;
+}
+
+html[data-theme='dark'] .weekday-btn:hover:not(.active) {
+  background-color: var(--border-primary, #4b5563);
+}
+
+html[data-theme='dark'] .toggle-all-btn {
+  background: var(--bg-tertiary, #374151);
+  color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .toggle-all-btn:hover {
+  background: var(--border-primary, #4b5563);
+}
+
+html[data-theme='dark'] .toggle-all-btn.enabled {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+html[data-theme='dark'] .header-icon-small.email {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+html[data-theme='dark'] .header-icon-small.push {
+  background: rgba(217, 119, 6, 0.15);
+}
+
+html[data-theme='dark'] .card-badge {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}

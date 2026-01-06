@@ -219,7 +219,7 @@ export default function LandingPage() {
     {
       icon: FeatureIcons.team,
       title: 'Team Collaboration',
-      description: 'Share insights, workspaces, and chat sessions. Built for teams of any size.',
+      description: 'Share insights, workspaces, and chats. Built for teams of any size.',
       gradient: 'feature-gradient-6'
     }
   ];
@@ -253,7 +253,7 @@ export default function LandingPage() {
               Testimonials
             </button>
             <button onClick={() => scrollToSection('pricing')} className="nav-link-v2">
-              Pricing
+              Why Us?
             </button>
           </div>
 
@@ -607,7 +607,7 @@ export default function LandingPage() {
               </div>
             ))}
           </div>
-        </div>
+            </div>
       </section>
 
       {/* Testimonials */}
@@ -618,7 +618,7 @@ export default function LandingPage() {
             <h2 className="section-title-v2">
               Loved by <span className="highlight">Data Teams</span>
             </h2>
-          </div>
+            </div>
 
           <div className="testimonials-carousel">
             {testimonials.map((testimonial, index) => (
@@ -633,11 +633,11 @@ export default function LandingPage() {
                   <div className="author-info">
                     <div className="author-name">{testimonial.author}</div>
                     <div className="author-role">{testimonial.role} at {testimonial.company}</div>
-                  </div>
-                </div>
-              </div>
+            </div>
+            </div>
+            </div>
             ))}
-          </div>
+            </div>
 
           <div className="testimonial-dots">
             {testimonials.map((_, index) => (
@@ -659,7 +659,7 @@ export default function LandingPage() {
             <h2 className="section-title-v2">
               Why Choose <span className="highlight">Beleh</span>?
             </h2>
-          </div>
+            </div>
 
           <div className="comparison-table-v2">
             <div className="comparison-header-v2">
@@ -683,16 +683,16 @@ export default function LandingPage() {
                   <div className="comp-cell row-label">
                     <span className="row-icon">{row.icon}</span>
                     {row.label}
-                  </div>
+              </div>
                   <div className="comp-cell row-beleh">
                     <span className="check-icon">✓</span>
                     {row.beleh}
-                  </div>
+              </div>
                   <div className="comp-cell row-other">
                     <span className="cross-icon">✗</span>
                     {row.other}
-                  </div>
-                </div>
+              </div>
+            </div>
               ))}
             </div>
           </div>

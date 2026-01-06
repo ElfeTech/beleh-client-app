@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
@@ -82,8 +83,10 @@ export function WorkspacesPage() {
 
             setShowDeleteConfirm(false);
             setSelectedWorkspace(null);
+            toast.success('Workspace deleted successfully');
         } catch (err) {
             console.error('Failed to delete workspace:', err);
+            toast.error('Failed to delete workspace. Please try again.');
         } finally {
             setIsDeleting(false);
         }
