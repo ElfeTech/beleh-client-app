@@ -11,7 +11,9 @@ import type {
   ChatSessionRead,
   ChatMessageRead,
   WorkspaceContextResponse,
-  UpdateWorkspaceStateRequest
+  UpdateWorkspaceStateRequest,
+  PaginatedResponse,
+  PaginationParams
 } from '../types/api';
 import type {
   CurrentUsageResponse,
@@ -137,13 +139,32 @@ class APIClient {
     });
   }
 
-  async listWorkspaces(authToken: string): Promise<WorkspaceResponse[]> {
-    return this.request<WorkspaceResponse[]>('/api/workspaces/', {
+  async listWorkspaces(authToken: string): Promise<PaginatedResponse<WorkspaceResponse>> {
+    return this.request<PaginatedResponse<WorkspaceResponse>>('/api/workspaces/', {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${authToken}`,
       },
     });
+  }
+
+  async listWorkspacesPaginated(
+    authToken: string,
+    params: PaginationParams
+  ): Promise<PaginatedResponse<WorkspaceResponse>> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+
+    return this.request<PaginatedResponse<WorkspaceResponse>>(
+      `/api/workspaces/?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      }
+    );
   }
 
   async createWorkspace(authToken: string, name: string): Promise<WorkspaceResponse> {
@@ -179,13 +200,33 @@ class APIClient {
     });
   }
 
-  async listWorkspaceDatasources(authToken: string, workspaceId: string): Promise<DataSourceResponse[]> {
-    return this.request<DataSourceResponse[]>(`/api/datasets/workspaces/${workspaceId}/datasources`, {
+  async listWorkspaceDatasources(authToken: string, workspaceId: string): Promise<PaginatedResponse<DataSourceResponse>> {
+    return this.request<PaginatedResponse<DataSourceResponse>>(`/api/datasets/workspaces/${workspaceId}/datasources`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${authToken}`,
       },
     });
+  }
+
+  async listWorkspaceDatasourcesPaginated(
+    authToken: string,
+    workspaceId: string,
+    params: PaginationParams
+  ): Promise<PaginatedResponse<DataSourceResponse>> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+
+    return this.request<PaginatedResponse<DataSourceResponse>>(
+      `/api/datasets/workspaces/${workspaceId}/datasources?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      }
+    );
   }
 
   async createDatasource(
@@ -304,8 +345,8 @@ class APIClient {
   async listChatSessions(
     authToken: string,
     datasetId: string
-  ): Promise<ChatSessionRead[]> {
-    return this.request<ChatSessionRead[]>(`/api/datasets/${datasetId}/sessions`, {
+  ): Promise<PaginatedResponse<ChatSessionRead>> {
+    return this.request<PaginatedResponse<ChatSessionRead>>(`/api/datasets/${datasetId}/sessions`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${authToken}`,
@@ -313,18 +354,56 @@ class APIClient {
     });
   }
 
+  async listChatSessionsPaginated(
+    authToken: string,
+    datasetId: string,
+    params: PaginationParams
+  ): Promise<PaginatedResponse<ChatSessionRead>> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+
+    return this.request<PaginatedResponse<ChatSessionRead>>(
+      `/api/datasets/${datasetId}/sessions?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      }
+    );
+  }
+
   async getSessionMessages(
     authToken: string,
     sessionId: string
-  ): Promise<ChatMessageRead[]> {
-    const messages = await this.request<ChatMessageRead[]>(`/api/sessions/${sessionId}/messages`, {
+  ): Promise<PaginatedResponse<ChatMessageRead>> {
+    return this.request<PaginatedResponse<ChatMessageRead>>(`/api/sessions/${sessionId}/messages`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${authToken}`,
       },
     });
+  }
 
-    return messages;
+  async getSessionMessagesPaginated(
+    authToken: string,
+    sessionId: string,
+    params: PaginationParams
+  ): Promise<PaginatedResponse<ChatMessageRead>> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+
+    return this.request<PaginatedResponse<ChatMessageRead>>(
+      `/api/sessions/${sessionId}/messages?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      }
+    );
   }
 
   async addMessageToSession(

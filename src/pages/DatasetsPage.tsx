@@ -1,5 +1,6 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { WorkspaceContext } from '../context/WorkspaceContext';
 import { DatasourceContext } from '../context/DatasourceContext';
 import { useAuth } from '../context/useAuth';
@@ -116,8 +117,10 @@ const DatasetsPage: React.FC = () => {
 
       setShowDeleteConfirm(false);
       setDatasetToDelete(null);
+      toast.success('Dataset deleted successfully');
     } catch (err) {
       console.error('Failed to delete dataset:', err);
+      toast.error('Failed to delete dataset. Please try again.');
     } finally {
       setIsDeleting(false);
     }

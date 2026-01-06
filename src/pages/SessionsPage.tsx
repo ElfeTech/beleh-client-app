@@ -1,10 +1,13 @@
-import React, { useContext, useState, useEffect, useRef } from 'react';
+import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { ChatSessionContext } from '../context/ChatSessionContext';
 import { DatasourceContext } from '../context/DatasourceContext';
 import { WorkspaceContext } from '../context/WorkspaceContext';
 import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
+import { usePaginatedFetch } from '../hooks/usePaginatedFetch';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import './SessionsPage.css';
 
 const SessionsPage: React.FC = () => {
@@ -16,13 +19,10 @@ const SessionsPage: React.FC = () => {
   const [longPressSession, setLongPressSession] = useState<string | null>(null);
   const [pressTimer, setPressTimer] = useState<number | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
-  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  // Ref to track if we've already loaded sessions for current datasource
-  const loadedDatasourceRef = useRef<string | null>(null);
-
-  const sessions = chatContext?.sessions || [];
-  const setSessions = chatContext?.setSessions || (() => {});
   const addSession = chatContext?.addSession || (() => ({ id: '', dataset_id: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), title: '', is_deleted: false }));
   const removeSession = chatContext?.removeSession || (() => {});
   const activeSessionId = chatContext?.activeSessionId || null;
@@ -32,53 +32,38 @@ const SessionsPage: React.FC = () => {
 
   const selectedDataset = datasources.find(ds => ds.id === selectedDatasourceId);
 
-  // Load sessions from API when datasource changes
+  // Paginated fetch for sessions
+  const fetchSessions = useCallback(async (page: number, pageSize: number) => {
+    if (!selectedDatasourceId) throw new Error('No datasource selected');
+    const token = authService.getAuthToken();
+    if (!token) throw new Error('No auth token found');
+    return apiClient.listChatSessionsPaginated(token, selectedDatasourceId, { page, page_size: pageSize });
+  }, [selectedDatasourceId]);
+
+  const {
+    items: sessions,
+    isLoading: isLoadingSessions,
+    isFetchingMore,
+    hasMore,
+    observerRef,
+    reset: resetPagination
+  } = usePaginatedFetch({
+    fetchFn: fetchSessions,
+    enabled: !!selectedDatasourceId,
+    resetDeps: [selectedDatasourceId]
+  });
+
+  // Restore last active session when sessions are loaded
   useEffect(() => {
-    const loadSessions = async () => {
-      // Don't make API calls if no datasource is selected
-      if (!selectedDatasourceId) {
-        loadedDatasourceRef.current = null;
-        setSessions([]);
-        setIsLoadingSessions(false);
-        return;
+    if (selectedDatasourceId && sessions.length > 0) {
+      const savedActiveSession = localStorage.getItem(`activeSession_${selectedDatasourceId}`);
+      if (savedActiveSession && sessions.some(s => s.id === savedActiveSession)) {
+        setActiveSessionId(savedActiveSession);
       }
+    }
+  }, [sessions, selectedDatasourceId, setActiveSessionId]);
 
-      // Only load if we haven't already loaded for this datasource
-      if (loadedDatasourceRef.current === selectedDatasourceId) {
-        return;
-      }
-
-      try {
-        loadedDatasourceRef.current = selectedDatasourceId;
-        setIsLoadingSessions(true);
-        const token = authService.getAuthToken();
-        if (!token) {
-          console.error('No auth token found');
-          setIsLoadingSessions(false);
-          return;
-        }
-
-        // Fetch sessions from API for the selected datasource
-        const sessionList = await apiClient.listChatSessions(token, selectedDatasourceId);
-        setSessions(sessionList);
-
-        // Restore last active session for this datasource if it exists
-        const savedActiveSession = localStorage.getItem(`activeSession_${selectedDatasourceId}`);
-        if (savedActiveSession && sessionList.some(s => s.id === savedActiveSession)) {
-          setActiveSessionId(savedActiveSession);
-        }
-      } catch (err) {
-        console.error('Failed to load sessions:', err);
-        setSessions([]);
-      } finally {
-        setIsLoadingSessions(false);
-      }
-    };
-
-    loadSessions();
-  }, [selectedDatasourceId, setSessions, setActiveSessionId]);
-
-  // Filter sessions by selected dataset (sessions are now already filtered by API)
+  // Filter sessions by selected dataset
   const datasetSessions = sessions.filter(
     session => session.dataset_id === selectedDatasourceId
   );
@@ -99,7 +84,7 @@ const SessionsPage: React.FC = () => {
 
   const getSessionTitle = (session: { id: string; title: string }) => {
     // Use the actual session title from the API, trimmed for mobile display
-    const title = session.title || `Session ${session.id.substring(0, 8)}`;
+    const title = session.title || `Chat ${session.id.substring(0, 8)}`;
     const maxLength = 50; // Optimal length for mobile display
 
     if (title.length > maxLength) {
@@ -177,7 +162,7 @@ const SessionsPage: React.FC = () => {
   };
 
   const handleRename = (_sessionId: string) => {
-    const newName = prompt('Enter new session name:');
+    const newName = prompt('Enter new chat name:');
     if (newName) {
       // TODO: Implement rename functionality in context using _sessionId
     }
@@ -185,10 +170,31 @@ const SessionsPage: React.FC = () => {
   };
 
   const handleDelete = (sessionId: string) => {
-    if (window.confirm('Are you sure you want to delete this session?')) {
-      removeSession(sessionId);
-    }
+    setSessionToDelete(sessionId);
+    setShowDeleteConfirm(true);
     setLongPressSession(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!sessionToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const token = authService.getAuthToken();
+      if (!token) throw new Error('No auth token');
+
+      await apiClient.deleteChatSession(token, sessionToDelete);
+      removeSession(sessionToDelete);
+      resetPagination();
+      toast.success('Chat deleted successfully');
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+      toast.error('Failed to delete chat. Please try again.');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setSessionToDelete(null);
+    }
   };
 
   const handleBackdropClick = () => {
@@ -206,7 +212,7 @@ const SessionsPage: React.FC = () => {
   return (
     <div className="sessions-page">
       <div className="sessions-header">
-        <h1>Chat Sessions</h1>
+        <h1>Your Chats</h1>
         {selectedDataset && (
           <p className="selected-dataset">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -234,7 +240,7 @@ const SessionsPage: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
           </svg>
           <h3>No dataset selected</h3>
-          <p>Select a dataset to view or create chat sessions</p>
+          <p>Select a dataset to view or create chats</p>
           <button className="goto-datasets-btn" onClick={() => navigate(`/workspace/${workspaceId}/datasets`)}>
             Go to Datasets
           </button>
@@ -244,46 +250,62 @@ const SessionsPage: React.FC = () => {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="loading-spinner">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          <h3>Loading sessions...</h3>
+          <h3>Loading chats...</h3>
         </div>
       ) : datasetSessions.length === 0 ? (
         <div className="sessions-empty">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
           </svg>
-          <h3>No sessions yet</h3>
+          <h3>No chats yet</h3>
           <p>Start a new chat to begin analyzing your data</p>
         </div>
       ) : (
-        <div className="sessions-list">
-          {datasetSessions.map((session) => (
-            <button
-              key={session.id}
-              className={`session-card ${activeSessionId === session.id ? 'active' : ''}`}
-              onClick={() => handleSessionClick(session.id)}
-              onTouchStart={() => handleTouchStart(session.id)}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={() => handleTouchStart(session.id)}
-              onMouseUp={handleTouchEnd}
-              onMouseLeave={handleTouchEnd}
-            >
-              <div className="session-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+        <>
+          <div className="sessions-list">
+            {datasetSessions.map((session) => (
+              <button
+                key={session.id}
+                className={`session-card ${activeSessionId === session.id ? 'active' : ''}`}
+                onClick={() => handleSessionClick(session.id)}
+                onTouchStart={() => handleTouchStart(session.id)}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={() => handleTouchStart(session.id)}
+                onMouseUp={handleTouchEnd}
+                onMouseLeave={handleTouchEnd}
+              >
+                <div className="session-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                  </svg>
+                </div>
+
+                <div className="session-content">
+                  <h3 className="session-title">{getSessionTitle(session)}</h3>
+                  <p className="session-timestamp">{formatTimestamp(new Date(session.created_at))}</p>
+                </div>
+
+                <svg className="chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-              </div>
+              </button>
+            ))}
+          </div>
 
-              <div className="session-content">
-                <h3 className="session-title">{getSessionTitle(session)}</h3>
-                <p className="session-timestamp">{formatTimestamp(new Date(session.created_at))}</p>
-              </div>
-
-              <svg className="chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          ))}
-        </div>
+          {/* Infinite scroll sentinel */}
+          {hasMore && (
+            <div ref={observerRef} style={{ height: '20px', margin: '20px 0' }}>
+              {isFetchingMore && (
+                <div className="sessions-empty">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="loading-spinner">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <h3>Loading more chats...</h3>
+                </div>
+              )}
+            </div>
+          )}
+        </>
       )}
 
       {/* Long-press action menu */}
@@ -308,6 +330,22 @@ const SessionsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title="Delete Chat?"
+        message="This action cannot be undone. This chat and all its messages will be permanently deleted."
+        confirmText="Delete"
+        cancelText="Cancel"
+        variant="danger"
+        isLoading={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => {
+          setShowDeleteConfirm(false);
+          setSessionToDelete(null);
+        }}
+      />
     </div>
   );
 };

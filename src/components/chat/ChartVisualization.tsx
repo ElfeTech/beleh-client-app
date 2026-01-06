@@ -8,7 +8,27 @@ interface ChartVisualizationProps {
 
 export function ChartVisualization({ response }: ChartVisualizationProps) {
 
-    const { visualization, insight, execution } = response;
+    const { visualization, insight, execution, intent } = response;
+
+    // Check if we have results to show alongside clarification
+    const hasResults = execution && execution.row_count > 0;
+    const needsClarification = intent?.clarification_needed && intent.clarification_message;
+
+    // Handle clarification request - show only clarification if no results
+    if (needsClarification && !hasResults) {
+        return (
+            <div className="chart-response clarification">
+                <div className="clarification-message">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '20px', height: '20px', marginRight: '8px', color: '#3b82f6' }}>
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <p>{intent.clarification_message}</p>
+                </div>
+            </div>
+        );
+    }
 
     // Handle error state from execution metadata
     if (execution && execution.status === 'ERROR' && execution.message) {
@@ -46,6 +66,18 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
 
     return (
         <div className="chart-response">
+            {/* Show clarification message if needed, even with results */}
+            {needsClarification && hasResults && (
+                <div className="clarification-banner">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '20px', height: '20px', flexShrink: 0, color: '#3b82f6' }}>
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
+                        <line x1="12" y1="17" x2="12.01" y2="17" />
+                    </svg>
+                    <p>{intent.clarification_message}</p>
+                </div>
+            )}
+
             <ChartRenderer data={fullData} visualization={visualization} columns={columns} />
 
             {/* Insights Section */}

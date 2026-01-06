@@ -428,3 +428,67 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .modal-backdrop {
+  background-color: rgba(0, 0, 0, 0.8);
+}
+
+html[data-theme='dark'] .modal-container {
+  background-color: var(--card-background, #1a1c2e);
+}
+
+html[data-theme='dark'] .modal-header h2 {
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .modal-header p {
+  color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .plan-card {
+  background-color: var(--bg-tertiary, #252836);
+  border-color: var(--border-primary, #374151);
+}
+
+html[data-theme='dark'] .plan-card.featured {
+  border-color: var(--primary-color, #3b82f6);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, #252836 100%);
+}
+
+html[data-theme='dark'] .plan-name {
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .plan-description {
+  color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .price-value {
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .price-period {
+  color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .features-list li {
+  color: var(--text-secondary, #d1d5db);
+}
+
+html[data-theme='dark'] .features-list svg {
+  color: #60a5fa;
+}
+
+html[data-theme='dark'] .modal-footer {
+  border-top-color: var(--border-primary, #374151);
+}
+
+html[data-theme='dark'] .close-modal-btn {
+  background-color: var(--bg-tertiary, #374151);
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .close-modal-btn:hover {
+  background-color: var(--border-primary, #4b5563);
+}

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import { useState, useRef } from 'react';
 import { useFeedback } from '../../../context/FeedbackContext';
 import { FEEDBACK_TRIGGERS } from '../../../types/feedback';
 import { BarChart } from './BarChart';
@@ -267,7 +267,7 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
             }
 
             case 'PIE_CHART':
-                return <PieChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />;
+                return <PieChart data={data} visualization={visualization} isExpanded={expanded} />;
 
             case 'TABLE':
                 return <DataTable columns={columns} data={data} isExpanded={expanded} />;
@@ -351,7 +351,6 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
                             xField={chartData.xField}
                             yField={chartData.yField}
                             colorField={chartData.colorField}
-                            timeGrain={chartData.timeGrain}
                             isExpanded={expanded}
                         />
                     );
@@ -375,7 +374,7 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
             default:
                 return (
                     <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                        Unsupported visualization type: {normalizedVisualization.type || normalizedVisualization.visualization_type} (normalized: {vizType})
+                        Unsupported visualization type: {visualization.visualization_type} (normalized: {vizType})
                     </div>
                 );
         }

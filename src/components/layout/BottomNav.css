@@ -1,17 +1,23 @@
+/* BottomNav with Theme Support */
 .bottom-nav {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   height: 64px;
-  background: #ffffff;
-  border-top: 1px solid var(--gray-200);
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-primary);
   display: flex;
   justify-content: space-around;
   align-items: center;
   padding: 0 var(--spacing-xs);
   z-index: 1000;
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.05);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+[data-theme="dark"] .bottom-nav {
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.2);
 }
 
 .bottom-nav-item {
@@ -22,7 +28,7 @@
   gap: 4px;
   background: none;
   border: none;
-  color: var(--gray-600);
+  color: var(--text-tertiary);
   cursor: pointer;
   padding: var(--spacing-xs) var(--spacing-sm);
   border-radius: var(--radius-md);
@@ -33,15 +39,15 @@
 
 .bottom-nav-item:active {
   transform: scale(0.95);
-  background: var(--gray-100);
+  background: var(--bg-tertiary);
 }
 
 .bottom-nav-item.active {
-  color: var(--primary-600);
+  color: var(--primary-500);
 }
 
 .bottom-nav-item.active .bottom-nav-icon {
-  stroke: var(--primary-600);
+  stroke: var(--primary-500);
 }
 
 /* Disabled state */
@@ -78,14 +84,20 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  background: #1f2937;
-  color: white;
+  background: var(--bg-card);
+  color: var(--text-primary);
   padding: var(--spacing-md) var(--spacing-lg);
   border-radius: var(--radius-lg);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-xl);
+  border: 1px solid var(--border-primary);
   z-index: 10001;
   max-width: 90%;
   animation: slideUpToast 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+[data-theme="dark"] .bottom-nav-toast {
+  background: #1f2937;
+  border-color: #374151;
 }
 
 .bottom-nav-toast svg {

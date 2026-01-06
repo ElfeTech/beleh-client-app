@@ -310,3 +310,79 @@
     opacity: 1;
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .bottom-sheet-container {
+  background: var(--card-background);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
+}
+
+html[data-theme='dark'] .bottom-sheet-header {
+  border-bottom-color: var(--border-color);
+}
+
+html[data-theme='dark'] .bottom-sheet-handle {
+  background: #4b5563;
+}
+
+html[data-theme='dark'] .bottom-sheet-header h2 {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .bottom-sheet-close {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .bottom-sheet-close:active {
+  background: #374151;
+}
+
+html[data-theme='dark'] .workspace-list-item {
+  background: var(--card-background);
+  border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .workspace-list-item.active {
+  border-color: var(--primary-600);
+  background: rgba(59, 130, 246, 0.15);
+}
+
+html[data-theme='dark'] .workspace-name {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .workspace-list-item .default-badge {
+  background: #374151;
+  border-color: #4b5563;
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .workspace-list-divider {
+  background: var(--border-color);
+}
+
+html[data-theme='dark'] .workspace-more-btn {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .workspace-more-btn:hover {
+  background: #374151;
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .workspace-more-btn:active {
+  background: #4b5563;
+}
+
+html[data-theme='dark'] .create-workspace-btn {
+  border-color: var(--primary-500) !important;
+  background: rgba(59, 130, 246, 0.1) !important;
+}
+
+html[data-theme='dark'] .create-workspace-btn:hover {
+  background: rgba(59, 130, 246, 0.2) !important;
+}
+
+html[data-theme='dark'] .create-workspace-btn .workspace-name {
+  color: var(--primary-400);
+}

@@ -207,3 +207,36 @@
     display: none;
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .mobile-chat-header {
+  background: var(--card-background);
+  border-bottom-color: var(--border-color);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme='dark'] .mobile-selector {
+  background: var(--background-color);
+  border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .mobile-selector:active {
+  background: #374151;
+}
+
+html[data-theme='dark'] .dataset-selector-btn .selector-value {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .mobile-usage-badge {
+  background: var(--card-background);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='dark'] .usage-circle-bg {
+  stroke: #374151;
+}
+
+html[data-theme='dark'] .usage-circle-text {
+  fill: var(--text-primary);
+}

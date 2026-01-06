@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { toast } from 'sonner';
 import { useChatSession } from '../../context/ChatSessionContext';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import './SessionList.css';
 
 interface SessionListProps {
@@ -11,6 +13,8 @@ interface SessionListProps {
 export function SessionList({ onNewSession, onDeleteSession, isCreatingSession }: SessionListProps) {
     const { sessions, activeSessionId, setActiveSessionId } = useChatSession();
     const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
     const formatDate = (dateString: string) => {
         const date = new Date(dateString);
@@ -28,20 +32,33 @@ export function SessionList({ onNewSession, onDeleteSession, isCreatingSession }
         return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     };
 
-    const handleDelete = async (e: React.MouseEvent, sessionId: string) => {
+    const handleDeleteClick = (e: React.MouseEvent, sessionId: string) => {
         e.stopPropagation();
-        setDeletingSessionId(sessionId);
+        setSessionToDelete(sessionId);
+        setShowDeleteConfirm(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!sessionToDelete) return;
+
+        setDeletingSessionId(sessionToDelete);
         try {
-            await onDeleteSession(sessionId);
+            await onDeleteSession(sessionToDelete);
+            toast.success('Chat deleted successfully');
+        } catch (err) {
+            console.error('Failed to delete session:', err);
+            toast.error('Failed to delete chat. Please try again.');
         } finally {
             setDeletingSessionId(null);
+            setShowDeleteConfirm(false);
+            setSessionToDelete(null);
         }
     };
 
     return (
         <div className="session-list-container">
             <div className="session-list-header">
-                <h3>Sessions</h3>
+                <h3>Your Chats</h3>
                 <button
                     className="new-session-btn"
                     onClick={onNewSession}
@@ -58,7 +75,7 @@ export function SessionList({ onNewSession, onDeleteSession, isCreatingSession }
             <div className="session-list">
                 {sessions.length === 0 ? (
                     <div className="session-list-empty">
-                        <p>No sessions yet</p>
+                        <p>No chats yet</p>
                         <p className="session-list-empty-hint">Click "New Chat" to start</p>
                     </div>
                 ) : (
@@ -81,9 +98,9 @@ export function SessionList({ onNewSession, onDeleteSession, isCreatingSession }
                             </div>
                             <button
                                 className="session-item-delete"
-                                onClick={(e) => handleDelete(e, session.id)}
+                                onClick={(e) => handleDeleteClick(e, session.id)}
                                 disabled={deletingSessionId === session.id}
-                                title="Delete session"
+                                title="Delete chat"
                             >
                                 {deletingSessionId === session.id ? (
                                     <svg className="spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -100,6 +117,22 @@ export function SessionList({ onNewSession, onDeleteSession, isCreatingSession }
                     ))
                 )}
             </div>
+
+            {/* Delete Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={showDeleteConfirm}
+                title="Delete Chat?"
+                message="This action cannot be undone. This chat and all its messages will be permanently deleted."
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                isLoading={deletingSessionId !== null}
+                onConfirm={handleConfirmDelete}
+                onCancel={() => {
+                    setShowDeleteConfirm(false);
+                    setSessionToDelete(null);
+                }}
+            />
         </div>
     );
 }

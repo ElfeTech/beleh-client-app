@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import { WorkspaceProvider } from './context/WorkspaceContext';
 import { ChatSessionProvider } from './context/ChatSessionContext';
 import { UsageProvider } from './context/UsageContext';
 import { FeedbackProvider } from './context/FeedbackContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import LandingPage from './pages/LandingPage';
 import { SignIn } from './pages/SignIn';
@@ -18,11 +20,24 @@ import FeedbackModal from './components/common/FeedbackModal';
 function App() {
   return (
     <BrowserRouter>
+      <ThemeProvider>
       <AuthProvider>
         <UsageProvider>
           <WorkspaceProvider>
             <ChatSessionProvider>
               <FeedbackProvider>
+                <Toaster 
+                  position="top-center" 
+                  richColors 
+                  closeButton
+                  toastOptions={{
+                    style: {
+                      background: 'var(--card-background)',
+                      color: 'var(--text-primary)',
+                      border: '1px solid var(--border-primary)',
+                    },
+                  }}
+                />
                 <Routes>
                   <Route path="/" element={<LandingPage />} />
                   <Route path="/signin" element={<SignIn />} />
@@ -48,6 +63,7 @@ function App() {
           </WorkspaceProvider>
         </UsageProvider>
       </AuthProvider>
+      </ThemeProvider>
     </BrowserRouter>
   );
 }

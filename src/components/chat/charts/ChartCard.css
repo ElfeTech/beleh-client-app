@@ -1,8 +1,8 @@
 /* Chart Card Container */
 .chart-card {
-    background: white;
+    background: var(--card-background, #ffffff);
     border-radius: 12px;
-    border: 1px solid #e5e7eb;
+    border: 1px solid var(--border-primary, #e5e7eb);
     box-shadow:
         0 1px 3px rgba(0, 0, 0, 0.05),
         0 1px 2px rgba(0, 0, 0, 0.03);
@@ -15,7 +15,7 @@
     box-shadow:
         0 4px 12px rgba(0, 0, 0, 0.08),
         0 2px 4px rgba(0, 0, 0, 0.04);
-    border-color: #d1d5db;
+    border-color: var(--border-secondary, #d1d5db);
 }
 
 /* Header */
@@ -24,7 +24,7 @@
     align-items: flex-start;
     justify-content: space-between;
     padding: 1.25rem 1.5rem 1rem;
-    border-bottom: 1px solid #f3f4f6;
+    border-bottom: 1px solid var(--border-light, #f3f4f6);
 }
 
 .chart-card-title-section {
@@ -34,14 +34,14 @@
 .chart-card-title {
     font-size: 1.0625rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--text-primary, #111827);
     margin: 0 0 0.375rem 0;
     line-height: 1.4;
 }
 
 .chart-card-description {
     font-size: 0.875rem;
-    color: #6b7280;
+    color: var(--text-secondary, #6b7280);
     margin: 0;
     line-height: 1.5;
 }
@@ -71,18 +71,18 @@
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
-    color: #6b7280;
+    color: var(--text-secondary, #6b7280);
     transition: all 0.15s ease;
     white-space: nowrap;
 }
 
 .chart-action-btn:hover {
-    background: #f3f4f6;
-    color: #3b82f6;
+    background: var(--hover-background, #f3f4f6);
+    color: var(--primary-color, #3b82f6);
 }
 
 .chart-action-btn:active {
-    background: #e5e7eb;
+    background: var(--active-background, #e5e7eb);
     transform: scale(0.95);
 }
 
@@ -98,18 +98,19 @@
 }
 
 .chart-close-btn {
-    color: #ef4444;
+    color: var(--danger-color, #ef4444);
 }
 
 .chart-close-btn:hover {
-    background: #fef2f2;
-    color: #dc2626;
+    background: var(--danger-background, #fef2f2);
+    color: var(--danger-color-dark, #dc2626);
 }
 
 /* Content */
 .chart-card-content {
     padding: 1.5rem;
     min-height: 300px;
+    background: var(--card-background, #ffffff);
 }
 
 /* Responsive */
@@ -141,4 +142,58 @@
         padding: 0.75rem;
         min-height: 250px;
     }
+}
+
+/* Dark Mode Support */
+html[data-theme='dark'] .chart-card {
+    background: var(--card-background, #1a1c2e);
+    border-color: var(--border-primary, #374151);
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.3),
+        0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme='dark'] .chart-card:hover {
+    border-color: var(--border-secondary, #4b5563);
+    box-shadow:
+        0 4px 12px rgba(0, 0, 0, 0.4),
+        0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='dark'] .chart-card-header {
+    border-bottom-color: var(--border-light, #374151);
+}
+
+html[data-theme='dark'] .chart-card-title {
+    color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .chart-card-description {
+    color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .chart-action-btn {
+    color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .chart-action-btn:hover {
+    background: var(--hover-background, #374151);
+    color: var(--primary-color, #60a5fa);
+}
+
+html[data-theme='dark'] .chart-action-btn:active {
+    background: var(--active-background, #4b5563);
+}
+
+html[data-theme='dark'] .chart-close-btn {
+    color: var(--danger-color, #f87171);
+}
+
+html[data-theme='dark'] .chart-close-btn:hover {
+    background: rgba(239, 68, 68, 0.15);
+    color: var(--danger-color, #ef4444);
+}
+
+html[data-theme='dark'] .chart-card-content {
+    background: var(--card-background, #1a1c2e);
 }

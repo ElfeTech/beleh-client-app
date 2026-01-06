@@ -1,14 +1,20 @@
 import { useState, useContext } from 'react';
 import { AuthContext } from '../../context/AuthContext';
+import { useTheme, type ThemePreference } from '../../context/ThemeContext';
 import './GeneralSection.css';
 
 export function GeneralSection() {
   const authContext = useContext(AuthContext);
   const user = authContext?.user;
+  const { themePreference, setThemePreference } = useTheme();
 
   const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleThemeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setThemePreference(e.target.value as ThemePreference);
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -155,7 +161,11 @@ export function GeneralSection() {
                 <h3>Theme</h3>
                 <p>Choose your preferred color scheme</p>
               </div>
-              <select className="preference-select">
+              <select 
+                className="preference-select" 
+                value={themePreference}
+                onChange={handleThemeChange}
+              >
                 <option value="system">System Default</option>
                 <option value="light">Light</option>
                 <option value="dark">Dark</option>
@@ -221,7 +231,7 @@ export function GeneralSection() {
           <div className="danger-item">
             <div className="danger-content">
               <h3>Export Data</h3>
-              <p>Download all your data including datasets, sessions, and settings</p>
+              <p>Download all your data including datasets, chats, and settings</p>
             </div>
             <button className="outline-btn">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

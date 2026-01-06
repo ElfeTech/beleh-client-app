@@ -10,6 +10,11 @@ import './Layout.css';
 export function MainLayout() {
     const { id } = useParams<{ id: string }>();
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+        // Restore collapsed state from localStorage
+        const saved = localStorage.getItem('sidebar-collapsed');
+        return saved === 'true';
+    });
 
     useEffect(() => {
         const handleResize = () => {
@@ -20,13 +25,26 @@ export function MainLayout() {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
+    const handleToggleCollapse = () => {
+        setIsSidebarCollapsed(prev => {
+            const newState = !prev;
+            localStorage.setItem('sidebar-collapsed', String(newState));
+            return newState;
+        });
+    };
+
     return (
         <DatasourceProvider>
             <div className="main-layout">
                 {/* Desktop: Show sidebar */}
-                {!isMobile && <SideMenu />}
+                {!isMobile && (
+                    <SideMenu 
+                        isCollapsed={isSidebarCollapsed} 
+                        onToggleCollapse={handleToggleCollapse} 
+                    />
+                )}
 
-                <div className={`main-content-wrapper ${isMobile ? 'mobile' : ''}`}>
+                <div className={`main-content-wrapper ${isMobile ? 'mobile' : ''} ${!isMobile && isSidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
                     {/* Desktop: Show top nav */}
                     {!isMobile && <TopNav />}
 

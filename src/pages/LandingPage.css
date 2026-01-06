@@ -28,6 +28,26 @@
   --brand-border-light: #F3F4F6;
 }
 
+/* Dark Mode Brand Variables */
+html[data-theme='dark'] {
+  --brand-primary: #60A5FA;
+  --brand-primary-light: #93C5FD;
+  --brand-primary-dark: #3B82F6;
+  --brand-secondary: #E5E7EB;
+  --brand-secondary-light: #D1D5DB;
+  --brand-accent: #34D399;
+  --brand-accent-light: #6EE7B7;
+  --brand-bg-white: #0f1117;
+  --brand-bg-light: #1a1c2e;
+  --brand-bg-subtle: #252836;
+  --brand-text-dark: #F9FAFB;
+  --brand-text-medium: #D1D5DB;
+  --brand-text-light: #9CA3AF;
+  --brand-text-muted: #6B7280;
+  --brand-border: #374151;
+  --brand-border-light: #1F2937;
+}
+
 /* Base Styles */
 .landing-page-v2 {
   min-height: 100vh;
@@ -2369,4 +2389,297 @@ button:focus-visible,
 a:focus-visible {
   outline: 2px solid var(--brand-primary);
   outline-offset: 2px;
+}
+
+/* ===============================================
+   DARK MODE OVERRIDES FOR LANDING PAGE
+   =============================================== */
+
+html[data-theme='dark'] .landing-page-v2 {
+  background: var(--brand-bg-white);
+  color: var(--brand-text-dark);
+}
+
+/* Hero Section Dark Mode */
+html[data-theme='dark'] .hero-light {
+  background: linear-gradient(135deg, #0f1117 0%, #1a1c2e 50%, #252836 100%);
+}
+
+html[data-theme='dark'] .hero-bg-light::before {
+  background: radial-gradient(circle at 30% 40%, rgba(96, 165, 250, 0.08) 0%, transparent 50%);
+}
+
+html[data-theme='dark'] .hero-bg-light::after {
+  background: radial-gradient(circle at 70% 60%, rgba(52, 211, 153, 0.06) 0%, transparent 40%);
+}
+
+html[data-theme='dark'] .hero-light-title .title-dark {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .hero-light-subtitle {
+  color: var(--brand-text-light);
+}
+
+html[data-theme='dark'] .btn-light-outline {
+  border-color: var(--brand-border);
+  color: var(--brand-text-dark);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+html[data-theme='dark'] .btn-light-outline:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--brand-primary);
+}
+
+/* Mockup Windows Dark Mode */
+html[data-theme='dark'] .mockup-3d-window-light {
+  background: #1a1c2e;
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+html[data-theme='dark'] .mockup-3d-header-light {
+  background: linear-gradient(to right, #252836, #2d3041);
+  border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+html[data-theme='dark'] .mockup-title-light {
+  color: var(--brand-text-light);
+}
+
+html[data-theme='dark'] .ai-bubble {
+  background: linear-gradient(135deg, #252836 0%, #2d3041 100%);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='dark'] .ai-bubble p {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .demo-input {
+  background: #252836;
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--brand-text-light);
+}
+
+/* Stats Section Dark Mode */
+html[data-theme='dark'] .stats-section-v2 {
+  background: #0f1117;
+  border-top-color: rgba(255, 255, 255, 0.05);
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+html[data-theme='dark'] .stat-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .stat-value {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .stat-label {
+  color: var(--brand-text-light);
+}
+
+/* Problem Section Dark Mode */
+html[data-theme='dark'] .problem-section-v2 {
+  background: linear-gradient(180deg, #1a1c2e 0%, #0f1117 100%);
+}
+
+html[data-theme='dark'] .problem-card-v2 {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .problem-card-v2 h3 {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .problem-card-v2 p {
+  color: var(--brand-text-light);
+}
+
+html[data-theme='dark'] .problem-stat {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+html[data-theme='dark'] .problem-stat .stat-num {
+  color: var(--brand-accent);
+}
+
+html[data-theme='dark'] .problem-stat .stat-text {
+  color: var(--brand-text-muted);
+}
+
+/* Solution Section Dark Mode */
+html[data-theme='dark'] .solution-section-v2 {
+  background: linear-gradient(180deg, #0f1117 0%, #1a1c2e 100%);
+}
+
+html[data-theme='dark'] .step-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .step-card h3 {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .step-card p {
+  color: var(--brand-text-light);
+}
+
+html[data-theme='dark'] .step-icon {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+html[data-theme='dark'] .step-arrow svg {
+  color: var(--brand-border);
+}
+
+/* Features Section Dark Mode */
+html[data-theme='dark'] .features-section-v2 {
+  background: linear-gradient(180deg, #1a1c2e 0%, #252836 100%);
+}
+
+html[data-theme='dark'] .feature-card-v2 {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .feature-card-v2 h3 {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .feature-card-v2 p {
+  color: var(--brand-text-light);
+}
+
+/* Testimonials Section Dark Mode */
+html[data-theme='dark'] .testimonials-section-v2 {
+  background: linear-gradient(180deg, #252836 0%, #1a1c2e 100%);
+}
+
+html[data-theme='dark'] .testimonial-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .testimonial-quote {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .testimonial-big-quote {
+  color: rgba(59, 130, 246, 0.2);
+}
+
+html[data-theme='dark'] .testimonial-author-name {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .testimonial-author-role {
+  color: var(--brand-text-light);
+}
+
+/* Comparison Section Dark Mode */
+html[data-theme='dark'] .comparison-section-v2 {
+  background: linear-gradient(180deg, #1a1c2e 0%, #0f1117 100%);
+}
+
+html[data-theme='dark'] .comparison-table-v2 {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .comparison-header-v2 {
+  background: rgba(255, 255, 255, 0.03);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .comp-row {
+  border-bottom-color: rgba(255, 255, 255, 0.05);
+}
+
+html[data-theme='dark'] .row-label {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .row-beleh,
+html[data-theme='dark'] .row-other {
+  color: var(--brand-text-light);
+}
+
+html[data-theme='dark'] .comp-cell {
+  border-right-color: rgba(255, 255, 255, 0.05);
+}
+
+/* CTA Section Dark Mode */
+html[data-theme='dark'] .cta-section-v2 {
+  background: linear-gradient(135deg, #1a1c2e 0%, #252836 100%);
+}
+
+html[data-theme='dark'] .cta-section-v2 h2 {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .cta-section-v2 p {
+  color: var(--brand-text-light);
+}
+
+html[data-theme='dark'] .cta-feature {
+  color: var(--brand-text-light);
+}
+
+/* Footer Dark Mode */
+html[data-theme='dark'] .footer-v2 {
+  background: #0f1117;
+  border-top-color: rgba(255, 255, 255, 0.05);
+}
+
+html[data-theme='dark'] .footer-copyright {
+  color: var(--brand-text-muted);
+}
+
+html[data-theme='dark'] .footer-badge {
+  color: var(--brand-text-light);
+}
+
+/* Navigation Dark Mode */
+html[data-theme='dark'] .nav-v2.nav-scrolled {
+  background: rgba(15, 17, 23, 0.95);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme='dark'] .nav-link-v2 {
+  color: var(--brand-text-light);
+}
+
+html[data-theme='dark'] .nav-link-v2:hover {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .btn-ghost-v2 {
+  color: var(--brand-text-light);
+}
+
+html[data-theme='dark'] .btn-ghost-v2:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--brand-text-dark);
+}
+
+/* Section Headers Dark Mode */
+html[data-theme='dark'] .section-tag-v2 {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--brand-primary);
+}
+
+html[data-theme='dark'] .section-title-v2 {
+  color: var(--brand-text-dark);
+}
+
+html[data-theme='dark'] .section-subtitle-v2 {
+  color: var(--brand-text-light);
 }
