@@ -13,7 +13,9 @@ import type {
   WorkspaceContextResponse,
   UpdateWorkspaceStateRequest,
   PaginatedResponse,
-  PaginationParams
+  PaginationParams,
+  DataSourceRecoveryRequest,
+  DataSourceRecoveryResponse,
 } from '../types/api';
 import type {
   CurrentUsageResponse,
@@ -229,6 +231,15 @@ class APIClient {
     );
   }
 
+  async getDatasource(authToken: string, datasourceId: string): Promise<DataSourceResponse> {
+    return this.request<DataSourceResponse>(`/api/datasets/datasources/${datasourceId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+  }
+
   async createDatasource(
     authToken: string,
     workspaceId: string,
@@ -282,6 +293,40 @@ class APIClient {
         'Authorization': `Bearer ${authToken}`,
       },
       body: formData,
+    });
+  }
+
+  async updateDatasourceHeader(
+    authToken: string,
+    datasourceId: string,
+    sheetName: string,
+    rowIndex: number
+  ): Promise<DataSourceResponse> {
+    return this.request<DataSourceResponse>(`/api/datasets/datasources/${datasourceId}/header`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sheet_name: sheetName,
+        header_row_index: rowIndex,
+      }),
+    });
+  }
+
+  async recoverDatasource(
+    authToken: string,
+    datasourceId: string,
+    request: DataSourceRecoveryRequest
+  ): Promise<DataSourceRecoveryResponse> {
+    return this.request<DataSourceRecoveryResponse>(`/api/datasets/datasources/${datasourceId}/recover`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
     });
   }
 

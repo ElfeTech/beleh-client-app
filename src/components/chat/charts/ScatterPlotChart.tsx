@@ -51,6 +51,21 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
   colorLabel,
   isExpanded = false,
 }) => {
+  // State for legend interactive filtering
+  const [disabledCategories, setDisabledCategories] = React.useState<Set<string>>(new Set());
+
+  const handleToggle = (key: string) => {
+    setDisabledCategories((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
   // Transform data for scatter plot
   const minSize = 50;
   const maxSize = 400;
@@ -65,13 +80,28 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
   }
 
   // Get unique color values if color field is present
-  const colorValues = colorField
+  const allColorValues = colorField
     ? Array.from(new Set(data.map((d) => d[colorField])))
     : [];
 
+  const MAX_CATEGORIES = 20;
+  const isOverloaded = allColorValues.length > MAX_CATEGORIES;
+
+  // Use either all values or first 19 + "Other"
+  const displayColorValues = isOverloaded
+    ? [...allColorValues.slice(0, MAX_CATEGORIES - 1), 'Other']
+    : allColorValues;
+
+  const topColorSet = new Set(allColorValues.slice(0, MAX_CATEGORIES - 1));
+
   const colorMap = new Map<any, string>();
-  colorValues.forEach((value, index) => {
-    colorMap.set(value, COLOR_PALETTE[index % COLOR_PALETTE.length]);
+  displayColorValues.forEach((value, index) => {
+    // If it's "Other", use a neutral gray
+    if (isOverloaded && value === 'Other') {
+      colorMap.set(value, '#9ca3af');
+    } else {
+      colorMap.set(value, COLOR_PALETTE[index % COLOR_PALETTE.length]);
+    }
   });
 
   // Transform data
@@ -79,7 +109,12 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
     const x = row[xField];
     const y = row[yField];
     const size = sizeField ? row[sizeField] : 100;
-    const color = colorField ? row[colorField] : null;
+    let color = colorField ? row[colorField] : null;
+
+    // Map to "Other" if overloaded and not in top list
+    if (isOverloaded && color !== null && !topColorSet.has(color)) {
+      color = 'Other';
+    }
 
     // Normalize size
     let normalizedSize = 100;
@@ -93,16 +128,16 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
       z: normalizedSize,
       size: sizeField ? row[sizeField] : undefined,
       color: color,
-      colorValue: colorMap.get(color) || COLOR_PALETTE[0],
+      colorValue: colorMap.get(color) || (color === null ? COLOR_PALETTE[0] : '#9ca3af'),
       _raw: row,
     };
-  });
+  }).filter(item => !disabledCategories.has(String(item.color)));
 
   // Create legend items for color dimension
-  const legendItems: LegendItem[] = colorValues.map((value, index) => ({
+  const legendItems: LegendItem[] = displayColorValues.map((value) => ({
     key: String(value),
     label: String(value),
-    color: COLOR_PALETTE[index % COLOR_PALETTE.length],
+    color: colorMap.get(value) || COLOR_PALETTE[0],
   }));
 
   const height = isExpanded ? 500 : 350;
@@ -156,15 +191,7 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
     );
   };
 
-  // Check for dimension overload
-  if (colorValues.length > 20) {
-    return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-600)' }}>
-        <p>Too many color categories to display ({colorValues.length} categories detected).</p>
-        <p>Please narrow down your data to 20 or fewer categories for optimal visualization.</p>
-      </div>
-    );
-  }
+  // No longer blocking on unique categories as we now group extras into "Other"
 
   return (
     <div style={{ width: '100%' }}>
@@ -173,7 +200,12 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
           <div style={{ fontSize: '0.875rem', color: 'var(--gray-600)', marginBottom: '0.5rem' }}>
             {colorLabel}
           </div>
-          <ChartLegend items={legendItems} layout="horizontal" interactive={false} />
+          <ChartLegend
+            items={legendItems}
+            layout="horizontal"
+            interactive={true}
+            onToggle={handleToggle}
+          />
         </div>
       )}
       <ResponsiveContainer width="100%" height={height}>

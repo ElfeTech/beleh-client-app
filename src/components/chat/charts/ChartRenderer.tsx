@@ -13,9 +13,9 @@ import { ScatterPlotChart } from './ScatterPlotChart';
 import { HeatmapChart } from './HeatmapChart';
 import type { VisualizationRecommendation } from '../../../types/api';
 import {
-  adaptMultiDimensionalData,
-  checkDimensionOverload,
-  checkFieldCardinality,
+    adaptMultiDimensionalData,
+    checkDimensionOverload,
+    checkFieldCardinality,
 } from '../../../utils/visualizationAdapter';
 
 interface ChartRendererProps {
@@ -306,9 +306,9 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
             case 'SCATTER_PLOT': {
                 const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
 
-                // Check color field cardinality if present
+                // Check color field cardinality if present - relaxed for scatter plots
                 if (chartData.colorField) {
-                    const cardinalityCheck = checkFieldCardinality(data, chartData.colorField, 20);
+                    const cardinalityCheck = checkFieldCardinality(data, chartData.colorField, 50);
                     if (!cardinalityCheck.valid) {
                         return (
                             <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>

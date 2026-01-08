@@ -24,11 +24,13 @@ const DatasetsPage: React.FC = () => {
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  
+
   // Mobile menu state
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [selectedDatasetForMenu, setSelectedDatasetForMenu] = useState<string | null>(null);
   const [datasetToEdit, setDatasetToEdit] = useState<string | null>(null);
+  const [datasetToRename, setDatasetToRename] = useState<string | null>(null);
+  const [showRenameModal, setShowRenameModal] = useState(false);
   const [datasetToDelete, setDatasetToDelete] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -36,7 +38,7 @@ const DatasetsPage: React.FC = () => {
 
   const datasources = workspaceContext?.datasources || [];
   const loading = workspaceContext?.loading || false;
-  const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => {});
+  const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => { });
 
   useEffect(() => {
     const handleResize = () => {
@@ -90,6 +92,11 @@ const DatasetsPage: React.FC = () => {
     setShowActionSheet(true);
   };
 
+  const handleRename = () => {
+    setDatasetToRename(selectedDatasetForMenu);
+    setShowRenameModal(true);
+  };
+
   const handleEdit = () => {
     // Store the dataset ID before ActionSheet closes and clears selectedDatasetForMenu
     setDatasetToEdit(selectedDatasetForMenu);
@@ -131,17 +138,32 @@ const DatasetsPage: React.FC = () => {
       await workspaceContext.refreshDatasources();
     }
     setShowEditModal(false);
+    setShowRenameModal(false);
     setDatasetToEdit(null);
+    setDatasetToRename(null);
   };
 
   const getMenuItems = (): ActionSheetItem[] => [
     {
-      id: 'edit',
-      label: 'Edit Dataset',
+      id: 'rename',
+      label: 'Rename',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      ),
+      variant: 'default' as const,
+      onClick: handleRename,
+    },
+    {
+      id: 'update',
+      label: 'Update Dataset',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
       ),
       variant: 'default' as const,
@@ -166,7 +188,7 @@ const DatasetsPage: React.FC = () => {
       {isMobile && (
         <MobileChatHeader
           onWorkspaceClick={() => setShowWorkspaceSwitcher(true)}
-          onDatasetClick={() => {/* Already on datasets page */}}
+          onDatasetClick={() => {/* Already on datasets page */ }}
           showDatasetSelector={false}
         />
       )}
@@ -312,7 +334,7 @@ const DatasetsPage: React.FC = () => {
         onClose={() => {
           setShowActionSheet(false);
           // Only clear selection if no modal is being opened
-          if (!showEditModal && !showDeleteConfirm) {
+          if (!showEditModal && !showDeleteConfirm && !showRenameModal) {
             setSelectedDatasetForMenu(null);
           }
         }}
@@ -343,6 +365,20 @@ const DatasetsPage: React.FC = () => {
           onClose={() => {
             setShowEditModal(false);
             setDatasetToEdit(null);
+          }}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+
+      {/* Rename Dataset Modal */}
+      {showRenameModal && datasetToRename && (
+        <DatasourceModal
+          mode="rename"
+          datasourceId={datasetToRename}
+          initialName={datasources.find(ds => ds.id === datasetToRename)?.name || ''}
+          onClose={() => {
+            setShowRenameModal(false);
+            setDatasetToRename(null);
           }}
           onSuccess={handleEditSuccess}
         />

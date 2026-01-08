@@ -431,7 +431,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
-    padding: var(--spacing-sm);
+    padding: 6px 8px;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -505,7 +505,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
 }
 
 .dataset-item-title {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: white;
     flex: 1;
@@ -582,6 +582,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
 .dataset-item-wrapper .dataset-item-detailed,
 .dataset-item-wrapper .dataset-item-compact {
     flex: 1;
+    min-width: 0;
 }
 
 /* Clean Compact Dataset Card */
@@ -589,7 +590,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: 8px 10px;
+    padding: 6px 8px;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -622,7 +623,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
 
 .dataset-item-compact .dataset-item-title {
     flex: 1;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: white;
     white-space: nowrap;
@@ -690,7 +691,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
 }
 
 .dataset-info-wrapper:hover .dataset-info-tooltip,
-.dataset-info-btn:focus + .dataset-info-tooltip {
+.dataset-info-btn:focus+.dataset-info-tooltip {
     opacity: 1;
     visibility: visible;
 }
@@ -794,15 +795,15 @@ html[data-theme="dark"] .add-workspace-btn:active {
     .session-submenu-title {
         color: var(--text-tertiary);
     }
-    
+
     .session-title {
         color: var(--text-primary);
     }
-    
+
     .session-time {
         color: var(--text-muted);
     }
-    
+
     .session-loading,
     .session-empty {
         color: var(--text-muted);
@@ -859,7 +860,9 @@ html[data-theme="dark"] .add-workspace-btn:active {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .session-list-submenu {
@@ -1252,6 +1255,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
         opacity: 0;
         transform: translateY(-8px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -1565,7 +1569,8 @@ html[data-theme="dark"] .add-workspace-btn:active {
     }
 
     .main-content.mobile-content-wrapper {
-        padding-bottom: 80px; /* Space for bottom nav (64px + 16px buffer) */
+        padding-bottom: 80px;
+        /* Space for bottom nav (64px + 16px buffer) */
     }
 
     .top-header {
