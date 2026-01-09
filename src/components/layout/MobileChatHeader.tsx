@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { WorkspaceContext } from '../../context/WorkspaceContext';
 import { DatasourceContext } from '../../context/DatasourceContext';
 import { useUsage } from '../../context/UsageContext';
+import { formatCompactNumber } from '../../utils/formatters';
 import './MobileChatHeader.css';
 
 interface MobileChatHeaderProps {
@@ -108,7 +109,7 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
               dominantBaseline="central"
               className="usage-circle-text"
             >
-              {queriesRemaining}
+              {formatCompactNumber(queriesRemaining, 0)}
             </text>
           </svg>
         </button>
