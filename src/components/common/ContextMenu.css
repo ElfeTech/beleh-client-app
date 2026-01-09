@@ -75,6 +75,7 @@
     opacity: 0;
     transform: translateY(-8px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -90,19 +91,20 @@
 
 /* Dark Mode Support */
 html[data-theme='dark'] .context-menu {
-  background: var(--card-background);
-  border-color: var(--border-color);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  background: #1e293b;
+  /* Solid background for readability */
+  border-color: #334155;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 html[data-theme='dark'] .context-menu-item:hover:not(:disabled) {
-  background: #374151;
+  background: #334155;
 }
 
 html[data-theme='dark'] .context-menu-item.default {
-  color: var(--text-primary);
+  color: #f1f5f9;
 }
 
 html[data-theme='dark'] .context-menu-item.danger:hover:not(:disabled) {
-  background: rgba(239, 68, 68, 0.15);
+  background: rgba(239, 68, 68, 0.2);
 }

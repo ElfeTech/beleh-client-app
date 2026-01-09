@@ -341,3 +341,31 @@ export interface PaginationParams {
   page?: number;
   page_size?: number;
 }
+
+// Dataset Preview Types
+export interface DatasetTableColumn {
+  name: string;
+  type: string;
+}
+
+export interface DatasetTable {
+  table_name: string;
+  row_count: number;
+  column_count: number;
+  columns: DatasetTableColumn[];
+}
+
+export interface DatasetTablesResponse {
+  dataset_id: string;
+  tables: DatasetTable[];
+}
+
+export interface DatasetTablePreviewResponse {
+  table_name: string;
+  page: number;
+  page_size: number;
+  total_rows: number;
+  total_pages: number;
+  columns: DatasetTableColumn[];
+  rows: any[][];
+}

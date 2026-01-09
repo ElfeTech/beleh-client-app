@@ -840,7 +840,8 @@
     }
 
     /* Mobile message bubbles */
-    .message-avatar {
+    /* Hide AI avatar on mobile to maximize content width */
+    .message-avatar.ai {
         display: none;
     }
 
@@ -851,11 +852,6 @@
     .message-bubble {
         padding: var(--spacing-sm) var(--spacing-md);
         font-size: 15px;
-    }
-
-    .message-avatar {
-        width: 36px;
-        height: 36px;
     }
 
     /* Sticky mobile chat input */

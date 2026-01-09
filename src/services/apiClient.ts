@@ -16,6 +16,8 @@ import type {
   PaginationParams,
   DataSourceRecoveryRequest,
   DataSourceRecoveryResponse,
+  DatasetTablesResponse,
+  DatasetTablePreviewResponse,
 } from '../types/api';
 import type {
   CurrentUsageResponse,
@@ -101,9 +103,18 @@ class APIClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[API] Error response:', errorData);
-        throw new Error(
-          errorData.detail || `HTTP error! status: ${response.status}`
-        );
+
+        // Handle structured error details (e.g., quota exceeded)
+        if (errorData.detail) {
+          if (typeof errorData.detail === 'object' && errorData.detail.message) {
+            throw new Error(errorData.detail.message);
+          }
+          if (typeof errorData.detail === 'string') {
+            throw new Error(errorData.detail);
+          }
+        }
+
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       const data = await response.json();
@@ -622,6 +633,42 @@ class APIClient {
       },
       body: JSON.stringify(feedback),
     });
+  }
+
+  // Dataset Preview Methods
+  async listDatasetTables(
+    authToken: string,
+    datasetId: string
+  ): Promise<DatasetTablesResponse> {
+    return this.request<DatasetTablesResponse>(`/api/datasets/${datasetId}/tables`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async getDatasetTablePreview(
+    authToken: string,
+    datasetId: string,
+    tableName: string,
+    page: number = 1,
+    pageSize: number = 50
+  ): Promise<DatasetTablePreviewResponse> {
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+
+    return this.request<DatasetTablePreviewResponse>(
+      `/api/datasets/${datasetId}/tables/${tableName}/preview?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      }
+    );
   }
 }
 

@@ -348,6 +348,10 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
         setShowEditModal(true);
     };
 
+    const handlePreview = (datasetId: string) => {
+        navigate(`/workspace/${workspaceId}/datasets/${datasetId}/preview`);
+    };
+
     const handleRename = () => {
         setShowRenameModal(true);
     };
@@ -397,6 +401,20 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
     };
 
     const getMenuItems = (): ContextMenuItem[] | ActionSheetItem[] => [
+        {
+            id: 'preview',
+            label: 'Preview Data',
+            icon: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                </svg>
+            ),
+            variant: 'default' as const,
+            onClick: () => {
+                if (selectedDatasetForMenu) handlePreview(selectedDatasetForMenu);
+            },
+        },
         {
             id: 'rename',
             label: 'Rename',
