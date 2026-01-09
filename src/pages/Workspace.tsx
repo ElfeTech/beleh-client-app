@@ -41,6 +41,7 @@ export function Workspace() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [isInitialChatLoading, setIsInitialChatLoading] = useState(true);
     const [processingStatus, setProcessingStatus] = useState('');
     const [isCreatingSession, setIsCreatingSession] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -125,10 +126,12 @@ export function Workspace() {
 
     const loadSessions = useCallback(async () => {
         if (!selectedDatasourceId) {
+            setIsInitialChatLoading(false);
             return;
         }
 
         try {
+            setIsInitialChatLoading(true);
             const token = authService.getAuthToken();
             if (!token) {
                 return;
@@ -163,14 +166,19 @@ export function Workspace() {
                 setActiveSessionId(sessionToActivate);
             } else if (sessionList.length > 0) {
                 setActiveSessionId(sessionList[0].id);
+            } else {
+                // No sessions at all, so we're not loading messages
+                setIsInitialChatLoading(false);
             }
         } catch (err) {
             console.error('[Workspace] Failed to load sessions:', err);
+            setIsInitialChatLoading(false);
         }
     }, [selectedDatasourceId, workspaceId, workspaceContext, setSessions, setActiveSessionId]);
 
     const loadSessionMessages = useCallback(async (sessionId: string, page: number = 1) => {
         try {
+            if (page === 1) setIsInitialChatLoading(true);
             const token = authService.getAuthToken();
             if (!token) return;
 
@@ -240,26 +248,10 @@ export function Workspace() {
                 setCurrentPage(page);
                 setHasMoreMessages(response.has_next);
             }
-        } catch (err) {
-            console.error('Failed to load session messages:', err);
-            // Check if it's a 404 (session doesn't exist on server yet - new session)
-            const error = err as any;
-            if (error?.response?.status === 404 || error?.status === 404) {
-                // New session that doesn't exist on server yet - start with empty messages
-                setMessages([]);
-                setCurrentPage(1);
-                setHasMoreMessages(false);
-                setError(null); // Clear any previous errors
-            } else {
-                // Actual error loading messages
-                console.error('Error loading messages:', error);
-                setMessages([]);
-                setCurrentPage(1);
-                setHasMoreMessages(false);
-                // Don't show error for new sessions, only for actual failures
-            }
+        } finally {
+            if (page === 1) setIsInitialChatLoading(false);
         }
-    }, []);
+    }, [setSelectedDatasourceId]); // Added dependency to keep it stable
 
     // Load more (older) messages when scrolling to top
     const loadMoreMessages = useCallback(async () => {
@@ -322,6 +314,7 @@ export function Workspace() {
             workspaceSwitchAbortController.current = abortController;
 
             try {
+                setIsInitialChatLoading(true);
                 const context = await workspaceContext.loadWorkspaceContext(workspaceId);
 
                 // Check if this request was aborted
@@ -728,7 +721,17 @@ export function Workspace() {
                 {/* Chat Section */}
                 <div className="chat-section">
                     <div className="chat-messages" ref={chatMessagesContainerRef}>
-                        {messages.length === 0 ? (
+                        {isInitialChatLoading ? (
+                            <div className="chat-loading-state">
+                                <div className="typing-indicator">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                                <h3>Syncing your chats...</h3>
+                                <p>Please wait, this will only take a moment.</p>
+                            </div>
+                        ) : messages.length === 0 ? (
                             <div className="chat-empty-state">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
