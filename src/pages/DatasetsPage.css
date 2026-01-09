@@ -330,12 +330,15 @@
   .dataset-card-wrapper .chevron-right {
     display: none;
   }
+
   .datasets-page {
-    padding-bottom: 80px; /* Space for bottom nav */
+    padding-bottom: 80px;
+    /* Space for bottom nav */
   }
 
   .datasets-header {
-    display: none; /* Hide on mobile - header is in MobileChatHeader */
+    display: none;
+    /* Hide on mobile - header is in MobileChatHeader */
   }
 }
 
@@ -364,5 +367,59 @@
 
   .chevron-right {
     display: none;
+  }
+
+  .dataset-more-btn-desktop {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: var(--text-tertiary);
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0;
+    /* Hidden by default, shown on card hover */
+  }
+
+  .dataset-card-wrapper:hover .dataset-more-btn-desktop {
+    opacity: 1;
+  }
+
+  .dataset-more-btn-desktop:hover {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+  }
+
+  .dataset-more-btn-desktop svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .dataset-preview-btn-desktop {
+    margin-top: var(--spacing-md);
+    padding: 8px 16px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-primary);
+    border-radius: var(--radius-md);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    text-align: center;
+  }
+
+  .dataset-preview-btn-desktop:hover {
+    background: var(--primary-50);
+    border-color: var(--primary-500);
+    color: var(--primary-600);
   }
 }

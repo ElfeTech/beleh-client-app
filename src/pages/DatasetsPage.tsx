@@ -12,6 +12,7 @@ import { WorkspaceModal } from '../components/layout/WorkspaceModal';
 import { DatasourceModal } from '../components/layout/DatasourceModal';
 import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
+import { ContextMenu, type ContextMenuItem } from '../components/common/ContextMenu';
 import './DatasetsPage.css';
 
 const DatasetsPage: React.FC = () => {
@@ -24,19 +25,25 @@ const DatasetsPage: React.FC = () => {
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  
+
   // Mobile menu state
   const [showActionSheet, setShowActionSheet] = useState(false);
   const [selectedDatasetForMenu, setSelectedDatasetForMenu] = useState<string | null>(null);
   const [datasetToEdit, setDatasetToEdit] = useState<string | null>(null);
+  const [datasetToRename, setDatasetToRename] = useState<string | null>(null);
+  const [showRenameModal, setShowRenameModal] = useState(false);
   const [datasetToDelete, setDatasetToDelete] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Desktop menu state
+  const [showContextMenu, setShowContextMenu] = useState(false);
+  const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
+
   const datasources = workspaceContext?.datasources || [];
   const loading = workspaceContext?.loading || false;
-  const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => {});
+  const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => { });
 
   useEffect(() => {
     const handleResize = () => {
@@ -90,6 +97,18 @@ const DatasetsPage: React.FC = () => {
     setShowActionSheet(true);
   };
 
+  const handleDesktopMenuClick = (e: React.MouseEvent<HTMLButtonElement>, datasetId: string) => {
+    e.stopPropagation();
+    setSelectedDatasetForMenu(datasetId);
+    setMenuAnchorEl(e.currentTarget);
+    setShowContextMenu(true);
+  };
+
+  const handleRename = () => {
+    setDatasetToRename(selectedDatasetForMenu);
+    setShowRenameModal(true);
+  };
+
   const handleEdit = () => {
     // Store the dataset ID before ActionSheet closes and clears selectedDatasetForMenu
     setDatasetToEdit(selectedDatasetForMenu);
@@ -100,6 +119,10 @@ const DatasetsPage: React.FC = () => {
     // Store the dataset ID before ActionSheet closes and clears selectedDatasetForMenu
     setDatasetToDelete(selectedDatasetForMenu);
     setShowDeleteConfirm(true);
+  };
+
+  const handlePreview = (datasetId: string) => {
+    navigate(`/workspace/${workspaceId}/datasets/${datasetId}/preview`);
   };
 
   const handleConfirmDelete = async () => {
@@ -131,17 +154,46 @@ const DatasetsPage: React.FC = () => {
       await workspaceContext.refreshDatasources();
     }
     setShowEditModal(false);
+    setShowRenameModal(false);
     setDatasetToEdit(null);
+    setDatasetToRename(null);
   };
 
   const getMenuItems = (): ActionSheetItem[] => [
     {
-      id: 'edit',
-      label: 'Edit Dataset',
+      id: 'preview',
+      label: 'Preview Data',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      ),
+      variant: 'default' as const,
+      onClick: () => {
+        if (selectedDatasetForMenu) handlePreview(selectedDatasetForMenu);
+      },
+    },
+    {
+      id: 'rename',
+      label: 'Rename',
       icon: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      ),
+      variant: 'default' as const,
+      onClick: handleRename,
+    },
+    {
+      id: 'update',
+      label: 'Update Dataset',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
         </svg>
       ),
       variant: 'default' as const,
@@ -161,12 +213,66 @@ const DatasetsPage: React.FC = () => {
     },
   ];
 
+  const getContextMenuItems = (): ContextMenuItem[] => [
+    {
+      id: 'preview',
+      label: 'Preview Data',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+          <circle cx="12" cy="12" r="3" />
+        </svg>
+      ),
+      variant: 'default',
+      onClick: () => {
+        if (selectedDatasetForMenu) handlePreview(selectedDatasetForMenu);
+      },
+    },
+    {
+      id: 'rename',
+      label: 'Rename',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+        </svg>
+      ),
+      variant: 'default',
+      onClick: handleRename,
+    },
+    {
+      id: 'update',
+      label: 'Update Dataset',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+          <polyline points="17 8 12 3 7 8" />
+          <line x1="12" y1="3" x2="12" y2="15" />
+        </svg>
+      ),
+      variant: 'default',
+      onClick: handleEdit,
+    },
+    {
+      id: 'delete',
+      label: 'Delete Dataset',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <polyline points="3 6 5 6 21 6" />
+          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+        </svg>
+      ),
+      variant: 'danger',
+      onClick: handleDelete,
+    },
+  ];
+
   return (
     <div className="datasets-page">
       {isMobile && (
         <MobileChatHeader
           onWorkspaceClick={() => setShowWorkspaceSwitcher(true)}
-          onDatasetClick={() => {/* Already on datasets page */}}
+          onDatasetClick={() => {/* Already on datasets page */ }}
           showDatasetSelector={false}
         />
       )}
@@ -242,6 +348,34 @@ const DatasetsPage: React.FC = () => {
                 <svg className="chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
+
+                {/* Desktop Menu Button */}
+                {!isMobile && (
+                  <button
+                    className="dataset-more-btn-desktop"
+                    onClick={(e) => handleDesktopMenuClick(e, dataset.id)}
+                    aria-label="More options"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="1" />
+                      <circle cx="12" cy="5" r="1" />
+                      <circle cx="12" cy="19" r="1" />
+                    </svg>
+                  </button>
+                )}
+
+                {/* Desktop Preview Button */}
+                {!isMobile && dataset.status === 'READY' && (
+                  <button
+                    className="dataset-preview-btn-desktop"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handlePreview(dataset.id);
+                    }}
+                  >
+                    Preview
+                  </button>
+                )}
               </button>
 
               {/* Mobile-only more options button */}
@@ -311,8 +445,23 @@ const DatasetsPage: React.FC = () => {
         items={getMenuItems()}
         onClose={() => {
           setShowActionSheet(false);
+          // Only clear selection if no modal or context menu is being opened
+          if (!showEditModal && !showDeleteConfirm && !showRenameModal && !showContextMenu) {
+            setSelectedDatasetForMenu(null);
+          }
+        }}
+      />
+
+      {/* Desktop Context Menu for dataset options */}
+      <ContextMenu
+        isOpen={showContextMenu}
+        anchorEl={menuAnchorEl}
+        items={getContextMenuItems()}
+        onClose={() => {
+          setShowContextMenu(false);
+          setMenuAnchorEl(null);
           // Only clear selection if no modal is being opened
-          if (!showEditModal && !showDeleteConfirm) {
+          if (!showEditModal && !showDeleteConfirm && !showRenameModal) {
             setSelectedDatasetForMenu(null);
           }
         }}
@@ -343,6 +492,20 @@ const DatasetsPage: React.FC = () => {
           onClose={() => {
             setShowEditModal(false);
             setDatasetToEdit(null);
+          }}
+          onSuccess={handleEditSuccess}
+        />
+      )}
+
+      {/* Rename Dataset Modal */}
+      {showRenameModal && datasetToRename && (
+        <DatasourceModal
+          mode="rename"
+          datasourceId={datasetToRename}
+          initialName={datasources.find(ds => ds.id === datasetToRename)?.name || ''}
+          onClose={() => {
+            setShowRenameModal(false);
+            setDatasetToRename(null);
           }}
           onSuccess={handleEditSuccess}
         />

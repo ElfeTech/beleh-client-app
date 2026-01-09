@@ -157,12 +157,15 @@ html[data-theme="dark"] .sidebar-collapse-btn:hover {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     margin-bottom: var(--spacing-md);
     position: relative;
-    z-index: 1;
+    /* Higher z-index than sidebar-content to ensure dropdown appears above dataset items */
+    z-index: 100;
 }
 
 .workspace-selector {
     position: relative;
     width: 100%;
+    /* Ensure dropdown appears above other content */
+    z-index: 10000;
 }
 
 .workspace-trigger {
@@ -218,16 +221,19 @@ html[data-theme="dark"] .sidebar-collapse-btn:hover {
     top: calc(100% + var(--spacing-xs));
     left: 0;
     right: 0;
-    background: var(--bg-card);
+    /* Solid background to ensure visibility */
+    background: #ffffff;
     border: 1px solid var(--border-primary);
     border-radius: var(--radius-md);
     box-shadow: var(--shadow-xl);
-    z-index: 1000;
+    /* Higher z-index to appear above dataset name and other content */
+    z-index: 10000;
     overflow: hidden;
     animation: slideDown 0.2s ease-out;
 }
 
 [data-theme="dark"] .workspace-dropdown {
+    /* Solid dark background for dark theme */
     background: #0f172a;
     border-color: rgba(255, 255, 255, 0.15);
 }
@@ -248,6 +254,8 @@ html[data-theme="dark"] .sidebar-collapse-btn:hover {
     max-height: 200px;
     overflow-y: auto;
     padding: var(--spacing-xs) 0;
+    /* Ensure solid background */
+    background: inherit;
 }
 
 .workspace-option {
@@ -431,7 +439,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-xs);
-    padding: var(--spacing-sm);
+    padding: 6px 8px;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -505,7 +513,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
 }
 
 .dataset-item-title {
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: white;
     flex: 1;
@@ -577,11 +585,14 @@ html[data-theme="dark"] .add-workspace-btn:active {
     display: flex;
     align-items: center;
     gap: 2px;
+    /* Lower z-index to ensure workspace dropdown appears above */
+    z-index: 1;
 }
 
 .dataset-item-wrapper .dataset-item-detailed,
 .dataset-item-wrapper .dataset-item-compact {
     flex: 1;
+    min-width: 0;
 }
 
 /* Clean Compact Dataset Card */
@@ -589,7 +600,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
     display: flex;
     align-items: center;
     gap: var(--spacing-sm);
-    padding: 8px 10px;
+    padding: 6px 8px;
     border-radius: var(--radius-md);
     cursor: pointer;
     transition: all 0.2s ease;
@@ -622,7 +633,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
 
 .dataset-item-compact .dataset-item-title {
     flex: 1;
-    font-size: 0.8125rem;
+    font-size: 0.75rem;
     font-weight: 500;
     color: white;
     white-space: nowrap;
@@ -690,7 +701,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
 }
 
 .dataset-info-wrapper:hover .dataset-info-tooltip,
-.dataset-info-btn:focus + .dataset-info-tooltip {
+.dataset-info-btn:focus+.dataset-info-tooltip {
     opacity: 1;
     visibility: visible;
 }
@@ -794,15 +805,15 @@ html[data-theme="dark"] .add-workspace-btn:active {
     .session-submenu-title {
         color: var(--text-tertiary);
     }
-    
+
     .session-title {
         color: var(--text-primary);
     }
-    
+
     .session-time {
         color: var(--text-muted);
     }
-    
+
     .session-loading,
     .session-empty {
         color: var(--text-muted);
@@ -859,7 +870,9 @@ html[data-theme="dark"] .add-workspace-btn:active {
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .session-list-submenu {
@@ -991,6 +1004,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
     overflow-x: hidden;
     min-height: 0;
     position: relative;
+    /* Lower z-index than sidebar-header to allow dropdown to appear above */
     z-index: 1;
 }
 
@@ -1252,6 +1266,7 @@ html[data-theme="dark"] .add-workspace-btn:active {
         opacity: 0;
         transform: translateY(-8px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -1565,7 +1580,8 @@ html[data-theme="dark"] .add-workspace-btn:active {
     }
 
     .main-content.mobile-content-wrapper {
-        padding-bottom: 80px; /* Space for bottom nav (64px + 16px buffer) */
+        padding-bottom: 80px;
+        /* Space for bottom nav (64px + 16px buffer) */
     }
 
     .top-header {

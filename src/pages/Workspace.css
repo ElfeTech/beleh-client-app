@@ -690,7 +690,8 @@
     resize: none;
     line-height: 24px;
     min-height: 24px;
-    max-height: 96px; /* 4 lines: 24px * 4 */
+    max-height: 96px;
+    /* 4 lines: 24px * 4 */
     overflow-y: auto;
     overflow-x: hidden;
     color: var(--text-primary);
@@ -839,18 +840,18 @@
     }
 
     /* Mobile message bubbles */
+    /* Hide AI avatar on mobile to maximize content width */
+    .message-avatar.ai {
+        display: none;
+    }
+
     .message-content {
-        max-width: 85%;
+        max-width: 100%;
     }
 
     .message-bubble {
         padding: var(--spacing-sm) var(--spacing-md);
         font-size: 15px;
-    }
-
-    .message-avatar {
-        width: 36px;
-        height: 36px;
     }
 
     /* Sticky mobile chat input */
@@ -872,7 +873,8 @@
 
     .chat-input-wrapper input,
     .chat-input-wrapper textarea {
-        font-size: 16px; /* Prevents iOS zoom */
+        font-size: 16px;
+        /* Prevents iOS zoom */
         padding: var(--spacing-sm) var(--spacing-md);
     }
 
@@ -978,10 +980,14 @@
 }
 
 @keyframes typing {
-    0%, 60%, 100% {
+
+    0%,
+    60%,
+    100% {
         opacity: 0.3;
         transform: translateY(0);
     }
+
     30% {
         opacity: 1;
         transform: translateY(-4px);

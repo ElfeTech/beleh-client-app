@@ -42,9 +42,11 @@ export function ChatMessage({ message, userInitials }: ChatMessageProps) {
                 )}
             </div>
             <div className="message-content">
-                <div className="message-bubble">
-                    {message.content}
-                </div>
+                {message.response?.execution?.status !== "FAILED" && (
+                    <div className="message-bubble">
+                        {message.content}
+                    </div>
+                )}
 
                 {/* AI Response with Visualization */}
                 {!isUser && message.response && (

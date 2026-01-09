@@ -1,0 +1,161 @@
+.sheet-selection-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.sheet-selection-header h3 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--gray-900);
+}
+
+.sheet-selection-header p {
+    margin: 0.25rem 0 0;
+    font-size: 0.875rem;
+    color: var(--gray-500);
+}
+
+.sheet-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 1rem;
+}
+
+.sheet-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.sheet-card:hover {
+    border-color: var(--primary-300);
+    background: var(--primary-25);
+}
+
+.sheet-card.selected {
+    border-color: var(--primary-600);
+    background: var(--primary-50);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.sheet-card-content {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    min-width: 0;
+}
+
+.sheet-icon {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gray-50);
+    color: var(--gray-400);
+    border-radius: 8px;
+    flex-shrink: 0;
+}
+
+.sheet-card.selected .sheet-icon {
+    background: var(--primary-100);
+    color: var(--primary-600);
+}
+
+.sheet-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+}
+
+.sheet-name {
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--gray-900);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+}
+
+.status-badge .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+}
+
+.status-badge.ready {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.status-badge.ready .dot {
+    background: #10b981;
+}
+
+.status-badge.attention {
+    background: #fffbeb;
+    color: #d97706;
+}
+
+.status-badge.attention .dot {
+    background: #ef4444;
+}
+
+.status-attention-container {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.sheet-issue-text {
+    font-size: 0.75rem;
+    color: #ef4444;
+    line-height: 1.2;
+    font-weight: 500;
+}
+
+/* Checkbox */
+.sheet-checkbox {
+    flex-shrink: 0;
+}
+
+.checked-icon {
+    width: 20px;
+    height: 20px;
+    background: var(--primary-600);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.unchecked-icon {
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--gray-300);
+    border-radius: 50%;
+}
+
+.sheet-card.selected .unchecked-icon {
+    border-color: var(--primary-600);
+}
