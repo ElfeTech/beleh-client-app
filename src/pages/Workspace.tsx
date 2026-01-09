@@ -42,6 +42,7 @@ export function Workspace() {
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [isInitialChatLoading, setIsInitialChatLoading] = useState(true);
+    const [initialSyncError, setInitialSyncError] = useState<string | null>(null);
     const [processingStatus, setProcessingStatus] = useState('');
     const [isCreatingSession, setIsCreatingSession] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -132,8 +133,10 @@ export function Workspace() {
 
         try {
             setIsInitialChatLoading(true);
+            setInitialSyncError(null);
             const token = authService.getAuthToken();
             if (!token) {
+                setIsInitialChatLoading(false);
                 return;
             }
 
@@ -170,17 +173,24 @@ export function Workspace() {
                 // No sessions at all, so we're not loading messages
                 setIsInitialChatLoading(false);
             }
-        } catch (err) {
+        } catch (err: any) {
             console.error('[Workspace] Failed to load sessions:', err);
+            setInitialSyncError(err.message || 'We had trouble loading your chat sessions. Please try again.');
             setIsInitialChatLoading(false);
         }
     }, [selectedDatasourceId, workspaceId, workspaceContext, setSessions, setActiveSessionId]);
 
     const loadSessionMessages = useCallback(async (sessionId: string, page: number = 1) => {
         try {
-            if (page === 1) setIsInitialChatLoading(true);
+            if (page === 1) {
+                setIsInitialChatLoading(true);
+                setInitialSyncError(null);
+            }
             const token = authService.getAuthToken();
-            if (!token) return;
+            if (!token) {
+                if (page === 1) setIsInitialChatLoading(false);
+                return;
+            }
 
             const response = await apiClient.getSessionMessagesPaginated(token, sessionId, { page, page_size: 20 });
             const messagesData = response.items;
@@ -247,6 +257,11 @@ export function Workspace() {
                 setMessages(prev => [...reversedMessages, ...prev]);
                 setCurrentPage(page);
                 setHasMoreMessages(response.has_next);
+            }
+        } catch (err: any) {
+            console.error('Failed to load session messages:', err);
+            if (page === 1) {
+                setInitialSyncError(err.message || 'We couldn\'t retrieve your message history. Please try again.');
             }
         } finally {
             if (page === 1) setIsInitialChatLoading(false);
@@ -315,24 +330,35 @@ export function Workspace() {
 
             try {
                 setIsInitialChatLoading(true);
+                setInitialSyncError(null);
                 const context = await workspaceContext.loadWorkspaceContext(workspaceId);
 
                 // Check if this request was aborted
                 if (abortController.signal.aborted) {
+                    setIsInitialChatLoading(false);
                     return;
                 }
 
                 if (context?.state) {
-
                     // Set the active dataset from state
                     if (context.state.last_active_dataset_id) {
                         setSelectedDatasourceId(context.state.last_active_dataset_id);
                     }
-
                     // Active session will be set when sessions are loaded
+                } else if (!context) {
+                    // Context load returned null (already logged in WorkspaceContext)
+                    setInitialSyncError('Failed to synchronize workspace settings.');
                 }
-            } catch (error) {
+            } catch (error: any) {
                 console.error('[Workspace] Failed to load workspace context:', error);
+                setInitialSyncError(error.message || 'Failed to synchronize workspace settings.');
+            } finally {
+                // Ensure we don't stay in loading state if context load fails
+                // but only if we don't have a datasource that will trigger loadSessions
+                // or if an error occurred
+                if (!selectedDatasourceId || initialSyncError) {
+                    setIsInitialChatLoading(false);
+                }
             }
         };
 
@@ -731,6 +757,22 @@ export function Workspace() {
                                 <h3>Syncing your chats...</h3>
                                 <p>Please wait, this will only take a moment.</p>
                             </div>
+                        ) : initialSyncError ? (
+                            <div className="chat-error-state">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="10" />
+                                    <line x1="12" y1="8" x2="12" y2="12" />
+                                    <line x1="12" y1="16" x2="12.01" y2="16" />
+                                </svg>
+                                <h3>Synchronization failed</h3>
+                                <p>{initialSyncError}</p>
+                                <button
+                                    className="retry-sync-btn"
+                                    onClick={() => activeSessionId ? loadSessionMessages(activeSessionId) : loadSessions()}
+                                >
+                                    Retry Synchronization
+                                </button>
+                            </div>
                         ) : messages.length === 0 ? (
                             <div className="chat-empty-state">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -809,14 +851,14 @@ export function Workspace() {
                                 value={inputValue}
                                 onChange={handleInputChange}
                                 onKeyDown={handleKeyDown}
-                                disabled={isLoading || !selectedDatasourceId}
+                                disabled={isLoading || isInitialChatLoading || !!initialSyncError || !selectedDatasourceId}
                                 rows={1}
                             />
                             <div className="input-actions">
                                 <button
                                     className="send-btn"
                                     onClick={handleSendMessage}
-                                    disabled={isLoading || !inputValue.trim() || !selectedDatasourceId}
+                                    disabled={isLoading || isInitialChatLoading || !!initialSyncError || !inputValue.trim() || !selectedDatasourceId}
                                     aria-label={isLoading ? 'Sending message' : 'Send message'}
                                 >
                                     {isMobile ? (
