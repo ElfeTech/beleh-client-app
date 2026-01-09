@@ -1,8 +1,8 @@
-/* Action Sheet Styles - Mobile Bottom Sheet */
+/* Action Sheet with Theme Support - Mobile Bottom Sheet */
 .action-sheet-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.4);
+  background-color: var(--bg-overlay);
   backdrop-filter: blur(2px);
   z-index: 10000;
   animation: fadeIn 0.2s ease-out;
@@ -14,33 +14,35 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background: white;
+  background: var(--bg-modal);
   border-radius: 20px 20px 0 0;
   padding: 8px 16px 24px;
   max-height: 80vh;
   overflow-y: auto;
   animation: slideUpSheet 0.3s ease-out;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-xl);
+  border-top: 1px solid var(--border-primary);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .action-sheet-handle {
   width: 36px;
   height: 5px;
-  background: #d1d5db;
+  background: var(--text-muted);
   border-radius: 3px;
   margin: 8px auto 16px;
 }
 
 .action-sheet-header {
   padding: 12px 8px 16px;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border-primary);
   margin-bottom: 8px;
 }
 
 .action-sheet-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0;
   text-align: center;
 }
@@ -69,7 +71,7 @@
 }
 
 .action-sheet-item:active:not(:disabled) {
-  background: #f3f4f6;
+  background: var(--bg-tertiary);
 }
 
 .action-sheet-item:disabled {
@@ -78,11 +80,11 @@
 }
 
 .action-sheet-item.default {
-  color: #374151;
+  color: var(--text-primary);
 }
 
 .action-sheet-item.danger {
-  color: #dc2626;
+  color: var(--error);
 }
 
 .action-sheet-icon {
@@ -107,17 +109,17 @@
   width: 100%;
   padding: 16px;
   border: none;
-  background: #f3f4f6;
+  background: var(--bg-tertiary);
   border-radius: 12px;
   font-size: 16px;
   font-weight: 600;
-  color: #374151;
+  color: var(--text-primary);
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
 
 .action-sheet-cancel:active {
-  background: #e5e7eb;
+  background: var(--bg-card-hover);
 }
 
 @keyframes fadeIn {

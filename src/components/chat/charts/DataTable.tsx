@@ -145,7 +145,7 @@ export function DataTable({ columns, data, isExpanded = false }: DataTableProps)
                     <div className="pagination-info">
                         <span className="pagination-current">
                             Page {currentPage} of {totalPages}
-                        </span>
+                        </span> &nbsp;|&nbsp;
                         <span className="pagination-total">
                             {data.length.toLocaleString()} rows
                         </span>

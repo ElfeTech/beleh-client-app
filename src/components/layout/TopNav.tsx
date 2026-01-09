@@ -37,8 +37,10 @@ export function TopNav() {
     return (
         <header className="top-header">
             <div className="welcome-section">
-                <img src={logoImage} alt="Beleh" className="header-logo" />
-                
+                <div className="logo-container">
+                    <img src={logoImage} alt="Beleh" className="header-logo" />
+                    <span className="auth-alpha-badge header">Alpha</span>
+                </div>
             </div>
             <div className="header-actions">
                 <button className="notification-btn" aria-label="Notifications">

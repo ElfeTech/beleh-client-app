@@ -428,3 +428,117 @@
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .upgrade-modal-container {
+  background: var(--card-background);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+html[data-theme='dark'] .upgrade-modal-header {
+  border-bottom-color: var(--border-color);
+}
+
+html[data-theme='dark'] .upgrade-modal-title-section h2 {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .upgrade-modal-title-section p {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .upgrade-modal-close {
+  background: #374151;
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .upgrade-modal-close:hover {
+  background: #4b5563;
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .billing-cycle-toggle {
+  background: var(--background-color);
+  border-bottom-color: var(--border-color);
+}
+
+html[data-theme='dark'] .toggle-option {
+  background: var(--card-background);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .toggle-option:hover {
+  border-color: var(--primary-400);
+}
+
+html[data-theme='dark'] .toggle-option.active {
+  background: rgba(59, 130, 246, 0.2);
+  color: var(--primary-400);
+}
+
+html[data-theme='dark'] .upgrade-loading .spinner {
+  border-color: #374151;
+  border-top-color: var(--primary-500);
+}
+
+html[data-theme='dark'] .upgrade-loading p {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .upgrade-error p {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .plan-card {
+  background: var(--card-background);
+  border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .plan-card:hover {
+  border-color: var(--primary-500);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+html[data-theme='dark'] .plan-card.current-plan {
+  background: var(--background-color);
+  border-color: var(--border-color);
+}
+
+html[data-theme='dark'] .plan-name {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .plan-description {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .plan-price-section {
+  border-bottom-color: var(--border-color);
+}
+
+html[data-theme='dark'] .price-currency {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .price-value {
+  color: var(--text-primary);
+}
+
+html[data-theme='dark'] .price-period {
+  color: var(--text-muted);
+}
+
+html[data-theme='dark'] .feature-item {
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .plan-cta:disabled {
+  background: #374151;
+  color: var(--text-muted);
+}
+
+html[data-theme='dark'] .plan-cta.current {
+  background: #374151;
+  color: var(--text-secondary);
+}

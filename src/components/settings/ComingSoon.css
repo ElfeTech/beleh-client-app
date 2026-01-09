@@ -68,3 +68,22 @@
     font-size: 0.875rem;
   }
 }
+
+/* Dark Mode Support */
+html[data-theme='dark'] .coming-soon-container {
+  background-color: var(--card-background, #1a1c2e);
+  border-color: var(--border-primary, #374151);
+}
+
+html[data-theme='dark'] .coming-soon-content h2 {
+  color: var(--text-primary, #f9fafb);
+}
+
+html[data-theme='dark'] .coming-soon-content p {
+  color: var(--text-secondary, #9ca3af);
+}
+
+html[data-theme='dark'] .coming-soon-badge {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(99, 102, 241, 0.2) 100%);
+  color: #60a5fa;
+}

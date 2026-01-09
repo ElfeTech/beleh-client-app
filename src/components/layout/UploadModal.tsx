@@ -1,6 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/useAuth';
+import { useFeedback } from '../../context/FeedbackContext';
+import { useUsage } from '../../context/UsageContext';
 import { apiClient } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import type { DataSourceResponse } from '../../types/api';
@@ -12,10 +14,12 @@ interface UploadModalProps {
     onSuccess: () => void;
 }
 
-type UploadStatus = 'IDLE' | 'UPLOADING' | 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
+type UploadStatus = 'IDLE' | 'UPLOADING' | 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'NEEDS_INPUT';
 
 export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProps) {
     const { user } = useAuth();
+    const { trackDatasetUpload } = useFeedback();
+    const { refreshUsageAfterAction } = useUsage();
     const [file, setFile] = useState<File | null>(null);
     const [name, setName] = useState('');
     const [uploadStatus, setUploadStatus] = useState<UploadStatus>('IDLE');
@@ -61,6 +65,10 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
                 if (pollIntervalRef.current) {
                     clearInterval(pollIntervalRef.current);
                 }
+                // Track dataset upload for feedback
+                trackDatasetUpload();
+                // Force refresh usage data after dataset upload
+                refreshUsageAfterAction();
                 // Wait a bit to show the success state, then refresh and close
                 setTimeout(() => {
                     onSuccess();
@@ -139,6 +147,8 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
                 return 'Dataset ready!';
             case 'FAILED':
                 return 'Processing failed';
+            case 'NEEDS_INPUT':
+                return 'Needs your input...';
             default:
                 return '';
         }
@@ -155,12 +165,14 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
                 return '#10b981';
             case 'FAILED':
                 return '#ef4444';
+            case 'NEEDS_INPUT':
+                return '#f59e0b';
             default:
                 return '#6b7280';
         }
     };
 
-    const isProcessing = ['UPLOADING', 'PENDING', 'PROCESSING'].includes(uploadStatus);
+    const isProcessing = ['UPLOADING', 'PENDING', 'PROCESSING', 'NEEDS_INPUT'].includes(uploadStatus);
     const isComplete = uploadStatus === 'READY';
     const hasFailed = uploadStatus === 'FAILED';
 

@@ -74,7 +74,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         try {
             setLoading(true);
             const token = await user.getIdToken();
-            const fetchedWorkspaces = await apiClient.listWorkspaces(token);
+            const response = await apiClient.listWorkspaces(token);
+
+            // Extract items from paginated response
+            const fetchedWorkspaces = response.items;
             setWorkspaces(fetchedWorkspaces);
 
             // Only set default workspace on initial load
@@ -83,11 +86,11 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                 let workspaceToSet: WorkspaceResponse | null = null;
 
                 if (savedWorkspaceId) {
-                    workspaceToSet = fetchedWorkspaces.find(w => w.id === savedWorkspaceId) || null;
+                    workspaceToSet = fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === savedWorkspaceId) || null;
                 }
 
                 if (!workspaceToSet) {
-                    workspaceToSet = fetchedWorkspaces.find(ws => ws.is_default) || fetchedWorkspaces[0];
+                    workspaceToSet = fetchedWorkspaces.find((ws: WorkspaceResponse) => ws.is_default) || fetchedWorkspaces[0];
                 }
 
                 setCurrentWorkspace(workspaceToSet);
@@ -111,8 +114,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         try {
             setLoading(true);
             const token = await user.getIdToken();
-            const fetchedDatasources = await apiClient.listWorkspaceDatasources(token, currentWorkspace.id);
-            setDatasources(fetchedDatasources);
+            const response = await apiClient.listWorkspaceDatasources(token, currentWorkspace.id);
+            setDatasources(response.items);
         } catch (error) {
             console.error('Failed to fetch datasources:', error);
             setDatasources([]);

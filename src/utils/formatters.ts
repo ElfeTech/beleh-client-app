@@ -3,12 +3,12 @@
  * Provides consistent, professional formatting across all chart types
  */
 
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, getQuarter, getISOWeek } from 'date-fns';
 
 /**
  * Time granularity detection from data patterns
  */
-export type TimeGranularity = 'year' | 'month' | 'day' | 'hour' | 'minute' | 'second' | 'none';
+export type TimeGranularity = 'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second' | 'none';
 
 export interface FormatConfig {
   type: 'number' | 'currency' | 'percentage' | 'date' | 'time' | 'datetime' | 'string';
@@ -48,6 +48,40 @@ export function isDateTime(value: any): boolean {
   }
 
   return false;
+}
+
+/**
+ * Map backend grain value to TimeGranularity
+ */
+function mapGrainToGranularity(grain: string): TimeGranularity {
+  const normalizedGrain = grain.toLowerCase();
+
+  switch (normalizedGrain) {
+    case 'year':
+    case 'yearly':
+      return 'year';
+    case 'quarter':
+    case 'quarterly':
+      return 'quarter';
+    case 'month':
+    case 'monthly':
+      return 'month';
+    case 'week':
+    case 'weekly':
+      return 'week';
+    case 'day':
+    case 'daily':
+      return 'day';
+    case 'hour':
+    case 'hourly':
+      return 'hour';
+    case 'minute':
+      return 'minute';
+    case 'second':
+      return 'second';
+    default:
+      return 'day'; // Default fallback
+  }
 }
 
 /**
@@ -104,6 +138,12 @@ export function detectTimeGranularity(values: any[]): TimeGranularity {
 
 /**
  * Format a date value based on granularity
+ * Follows user requirements:
+ * - Year: 4-digit year (2014, 2022)
+ * - Quarter: Q1, 2024 or Q3 2012
+ * - Month: Jan, 2023
+ * - Week: W1 2024
+ * - Day: Jan 15
  */
 export function formatDate(value: any, granularity: TimeGranularity = 'day', fullFormat: boolean = false): string {
   if (!value) return 'N/A';
@@ -117,8 +157,12 @@ export function formatDate(value: any, granularity: TimeGranularity = 'day', ful
       switch (granularity) {
         case 'year':
           return format(date, 'yyyy');
+        case 'quarter':
+          return `Q${getQuarter(date)}, ${format(date, 'yyyy')}`;
         case 'month':
           return format(date, 'MMMM yyyy');
+        case 'week':
+          return `Week ${getISOWeek(date)}, ${format(date, 'yyyy')}`;
         case 'day':
           return format(date, 'MMMM d, yyyy');
         case 'hour':
@@ -134,11 +178,15 @@ export function formatDate(value: any, granularity: TimeGranularity = 'day', ful
       // Compact format for axis labels
       switch (granularity) {
         case 'year':
-          return format(date, 'yyyy');
+          return format(date, 'yyyy'); // e.g., 2014, 2022
+        case 'quarter':
+          return `Q${getQuarter(date)}, ${format(date, 'yyyy')}`; // e.g., Q1, 2024
         case 'month':
-          return format(date, 'MMM');
+          return `${format(date, 'MMM')}, ${format(date, 'yyyy')}`; // e.g., Jan, 2023
+        case 'week':
+          return `W${getISOWeek(date)} ${format(date, 'yyyy')}`; // e.g., W1 2024
         case 'day':
-          return format(date, 'MMM d');
+          return format(date, 'MMM d'); // e.g., Jan 15
         case 'hour':
           return format(date, 'HH:mm');
         case 'minute':
@@ -267,6 +315,128 @@ export function formatPercentage(
 }
 
 /**
+ * Format time label based on grain from backend
+ * Maps backend grain values to user-friendly display formats
+ */
+export function formatTimeLabel(
+  value: any,
+  grain?: string,
+  config: Partial<FormatConfig> = {}
+): string {
+  if (!value) return 'N/A';
+
+  try {
+    // Parse the date value
+    const date = typeof value === 'string' ? parseISO(value) : new Date(value);
+
+    if (!isValid(date)) {
+      return String(value);
+    }
+
+    // Normalize grain to lowercase for comparison
+    const normalizedGrain = grain?.toLowerCase() || config.timeGranularity || 'day';
+
+    // Format based on grain
+    switch (normalizedGrain) {
+      case 'year':
+      case 'yearly':
+        return format(date, 'yyyy');
+
+      case 'quarter':
+      case 'quarterly':
+        return `Q${getQuarter(date)} ${format(date, 'yyyy')}`;
+
+      case 'month':
+      case 'monthly':
+        return format(date, 'MMM yyyy');
+
+      case 'week':
+      case 'weekly':
+        return `W${getISOWeek(date)} ${format(date, 'yyyy')}`;
+
+      case 'day':
+      case 'daily':
+        return format(date, 'MMM d');
+
+      case 'hour':
+      case 'hourly':
+        return format(date, 'HH:mm');
+
+      case 'minute':
+        return format(date, 'HH:mm');
+
+      case 'second':
+        return format(date, 'HH:mm:ss');
+
+      default:
+        // Default to a sensible format
+        return format(date, 'MMM d, yyyy');
+    }
+  } catch (error) {
+    return String(value);
+  }
+}
+
+/**
+ * Format time label for tooltips (more detailed)
+ * Shows fuller context than axis labels
+ */
+export function formatTimeLabelTooltip(
+  value: any,
+  grain?: string
+): string {
+  if (!value) return 'N/A';
+
+  try {
+    const date = typeof value === 'string' ? parseISO(value) : new Date(value);
+
+    if (!isValid(date)) {
+      return String(value);
+    }
+
+    const normalizedGrain = grain?.toLowerCase() || 'day';
+
+    // Format based on grain with more detail for tooltips
+    switch (normalizedGrain) {
+      case 'year':
+      case 'yearly':
+        return `Year: ${format(date, 'yyyy')}`;
+
+      case 'quarter':
+      case 'quarterly':
+        return `Quarter: Q${getQuarter(date)} ${format(date, 'yyyy')}`;
+
+      case 'month':
+      case 'monthly':
+        return `Month: ${format(date, 'MMMM yyyy')}`;
+
+      case 'week':
+      case 'weekly':
+        return `Week: W${getISOWeek(date)} ${format(date, 'yyyy')} (${format(date, 'MMM d')})`;
+
+      case 'day':
+      case 'daily':
+        return `Date: ${format(date, 'MMM d, yyyy')}`;
+
+      case 'hour':
+      case 'hourly':
+        return `Time: ${format(date, 'MMM d, yyyy HH:mm')}`;
+
+      case 'minute':
+        return `Time: ${format(date, 'MMM d, yyyy HH:mm')}`;
+
+      case 'second':
+        return `Time: ${format(date, 'MMM d, yyyy HH:mm:ss')}`;
+
+      default:
+        return `Date: ${format(date, 'MMM d, yyyy')}`;
+    }
+  } catch (error) {
+    return String(value);
+  }
+}
+
+/**
  * Auto-detect format type from field name and sample values
  */
 export function detectFormatType(
@@ -317,7 +487,8 @@ export function createFormatConfig(
   field: string,
   fieldType: 'categorical' | 'quantitative' | 'temporal',
   sampleValues: any[],
-  format?: string
+  format?: string,
+  timeGrain?: string
 ): FormatConfig {
   // Use explicit format if provided
   if (format) {
@@ -328,7 +499,8 @@ export function createFormatConfig(
 
   // Auto-detect based on field type
   if (fieldType === 'temporal') {
-    const granularity = detectTimeGranularity(sampleValues);
+    // Use backend-provided time grain if available, otherwise auto-detect
+    const granularity = timeGrain ? mapGrainToGranularity(timeGrain) : detectTimeGranularity(sampleValues);
     return { type: 'date', timeGranularity: granularity };
   }
 
@@ -349,7 +521,8 @@ export function createFormatConfig(
   // Categorical - check if it's actually dates
   const detectedType = detectFormatType(field, sampleValues);
   if (detectedType === 'date' || detectedType === 'time') {
-    const granularity = detectTimeGranularity(sampleValues);
+    // Use backend-provided time grain if available, otherwise auto-detect
+    const granularity = timeGrain ? mapGrainToGranularity(timeGrain) : detectTimeGranularity(sampleValues);
     return { type: 'date', timeGranularity: granularity };
   }
 
