@@ -13,9 +13,10 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
     // Check if we have results to show alongside clarification
     const hasResults = execution && execution.row_count > 0;
     const needsClarification = intent?.clarification_needed && intent.clarification_message;
+    const isExecutionFailed = execution?.status === 'FAILED' || execution?.status === 'ERROR';
 
-    // Handle clarification request - show only clarification if no results
-    if (needsClarification && !hasResults) {
+    // Handle clarification request - show ONLY clarification if no results OR execution failed
+    if (needsClarification && (!hasResults || isExecutionFailed)) {
         return (
             <div className="chart-response clarification">
                 <div className="clarification-message">
@@ -24,14 +25,14 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
                         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                         <line x1="12" y1="17" x2="12.01" y2="17" />
                     </svg>
-                    <p>{intent.clarification_message}</p>
+                    <p>{intent?.clarification_message}</p>
                 </div>
             </div>
         );
     }
 
     // Handle error state from execution metadata
-    if (execution && execution.status === 'ERROR' && execution.message) {
+    if (execution && execution.status === 'FAILED' && execution.message) {
         return (
             <div className="chart-response error">
                 <div className="error-message">
@@ -74,7 +75,7 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
                         <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" />
                         <line x1="12" y1="17" x2="12.01" y2="17" />
                     </svg>
-                    <p>{intent.clarification_message}</p>
+                    <p>{intent?.clarification_message}</p>
                 </div>
             )}
 

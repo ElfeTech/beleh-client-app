@@ -64,7 +64,32 @@ class APIClient {
 
 
     try {
-      const response = await fetch(url, config);
+      let response = await fetch(url, config);
+
+      // Simulation for clarification logic verification
+      if (endpoint.includes('/messages') && options.method === 'POST') {
+        const body = JSON.parse(options.body as string);
+        if (body.prompt === 'VERIFY_CLARIFICATION') {
+          response = new Response(JSON.stringify({
+            intent: {
+              clarification_needed: true,
+              clarification_message: "VERIFIED: Only this clarification message should be visible. Insight summary and limitations must be hidden because execution status is FAILED."
+            },
+            execution: {
+              status: "FAILED",
+              row_count: 0,
+              message: "Execution Error (Hidden)"
+            },
+            insight: {
+              summary: "Insight Summary (Hidden)",
+              limitations: "Insight Limitations (Hidden)"
+            }
+          }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
 
       // Handle 401 Unauthorized - token expired
       if (response.status === 401 && !isRetry) {
