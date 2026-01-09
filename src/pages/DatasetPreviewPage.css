@@ -71,15 +71,11 @@
     margin-top: 2px;
 }
 
-/* Table Selector Section - Isolated from Header */
+/* Table Selector Section - Now inside header on desktop */
 .table-selector-section {
-    padding: 16px;
-    border-bottom: 1px solid var(--border-primary, #eee);
-    background: var(--bg-primary, #fff);
-    flex-shrink: 0;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
 }
 
 .table-select-label {
@@ -426,7 +422,8 @@
 @media (min-width: 769px) {
     .preview-page-header {
         padding: 0 24px;
-        height: 64px;
+        height: 72px;
+        /* Increased height to accommodate label and title */
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -442,21 +439,25 @@
     }
 
     .table-selector-section {
-        padding: 0 24px;
-        height: 56px;
         flex-direction: row;
         align-items: center;
         gap: 12px;
+        margin-left: auto;
+        /* Push to the right */
+        padding-right: 8px;
     }
 
     .table-select-label {
         margin: 0;
         white-space: nowrap;
+        font-size: 0.85rem;
     }
 
     .table-select {
-        min-width: 300px;
-        max-width: 500px;
+        min-width: 260px;
+        max-width: 400px;
+        padding: 8px 36px 8px 12px;
+        height: 40px;
     }
 }
 
@@ -481,6 +482,9 @@
 
     .table-selector-section {
         padding: 12px 16px;
+        border-top: 1px solid var(--border-primary, #eee);
+        margin-top: 12px;
+        width: 100%;
     }
 
     .table-select-label {

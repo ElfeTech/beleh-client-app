@@ -956,11 +956,36 @@
 .typing-indicator {
     display: flex;
     gap: 0.5rem;
-    padding: var(--spacing-md) var(--spacing-lg);
-    background: linear-gradient(135deg, var(--primary-500), var(--primary-600));
-    border-radius: var(--radius-lg);
-    border-bottom-left-radius: var(--radius-sm);
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
     width: fit-content;
+}
+
+.loading-status-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.loading-status-text {
+    font-size: 0.8125rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+    white-space: nowrap;
+    animation: fadeInOut 2s ease-in-out infinite;
+}
+
+@keyframes fadeInOut {
+
+    0%,
+    100% {
+        opacity: 0.7;
+    }
+
+    50% {
+        opacity: 1;
+    }
 }
 
 .typing-indicator span {
@@ -1053,6 +1078,25 @@
 
 .send-btn:disabled:hover {
     background: var(--bg-tertiary);
+}
+
+.status-indicator.sending {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.6);
+    margin-left: 4px;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 0.4;
+    }
+
+    50% {
+        opacity: 1;
+    }
 }
 
 /* Loading more indicator */

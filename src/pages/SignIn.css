@@ -96,9 +96,12 @@
 }
 
 @keyframes pulse-alpha-auth {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
   }
+
   50% {
     box-shadow: 0 2px 16px rgba(16, 185, 129, 0.6);
   }
@@ -307,8 +310,37 @@
 }
 
 .auth-google-btn:disabled {
-  opacity: 0.6;
+  opacity: 0.8;
   cursor: not-allowed;
+  background: var(--gray-50);
+}
+
+.btn-spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--gray-200);
+  border-top-color: var(--primary-600);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.auth-loading-feedback {
+  margin-top: 1rem;
+  text-align: center;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.loading-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin-bottom: 0.25rem;
+}
+
+.auth-slow-message {
+  font-size: 0.8125rem;
+  color: var(--warning);
+  font-weight: 500;
+  animation: slideUp 0.3s ease-out;
 }
 
 .google-icon {

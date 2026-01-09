@@ -1157,6 +1157,22 @@ html[data-theme="dark"] .add-workspace-btn:active {
     flex-shrink: 0;
 }
 
+.logo-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.auth-alpha-badge.header {
+    position: absolute;
+    top: 40px;
+    right: -40px;
+    font-size: 0.625rem;
+    padding: 2px 6px;
+    border-radius: 4px;
+    z-index: 5;
+}
+
 .welcome-text h2 {
     font-size: 1.25rem;
     font-weight: 700;

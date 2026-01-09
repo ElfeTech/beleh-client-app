@@ -163,26 +163,26 @@ export const DatasetPreviewPage: React.FC = () => {
                         <h1>{datasetName || 'Dataset Preview'}</h1>
                         <span className="dataset-id-tag">ID: {datasetId}</span>
                     </div>
+
+                    {tables.length > 0 && (
+                        <div className="table-selector-section">
+                            <label htmlFor="table-select" className="table-select-label">Table:</label>
+                            <select
+                                id="table-select"
+                                value={selectedTable}
+                                onChange={handleTableChange}
+                                className="table-select"
+                            >
+                                {tables.map(table => (
+                                    <option key={table.table_name} value={table.table_name}>
+                                        {table.table_name} ({table.row_count.toLocaleString()} rows)
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
             </header>
-
-            {tables.length > 0 && (
-                <div className="table-selector-section">
-                    <label htmlFor="table-select" className="table-select-label">Table:</label>
-                    <select
-                        id="table-select"
-                        value={selectedTable}
-                        onChange={handleTableChange}
-                        className="table-select"
-                    >
-                        {tables.map(table => (
-                            <option key={table.table_name} value={table.table_name}>
-                                {table.table_name} ({table.row_count.toLocaleString()} rows)
-                            </option>
-                        ))}
-                    </select>
-                </div>
-            )}
 
             <main className="preview-page-content">
                 {loading ? (

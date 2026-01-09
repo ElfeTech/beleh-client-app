@@ -25,6 +25,8 @@ interface Message {
     content: string;
     response?: ChatWorkflowResponse;
     timestamp: Date;
+    isLoading?: boolean;
+    status?: 'sending' | 'sent' | 'error';
 }
 
 export function Workspace() {
@@ -39,6 +41,7 @@ export function Workspace() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [processingStatus, setProcessingStatus] = useState('');
     const [isCreatingSession, setIsCreatingSession] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showUploadModal, setShowUploadModal] = useState(false);
@@ -160,7 +163,7 @@ export function Workspace() {
                 setActiveSessionId(sessionToActivate);
             } else if (sessionList.length > 0) {
                 setActiveSessionId(sessionList[0].id);
-            } 
+            }
         } catch (err) {
             console.error('[Workspace] Failed to load sessions:', err);
         }
@@ -334,9 +337,9 @@ export function Workspace() {
                     }
 
                     // Active session will be set when sessions are loaded
-                } 
+                }
             } catch (error) {
-                    console.error('[Workspace] Failed to load workspace context:', error);
+                console.error('[Workspace] Failed to load workspace context:', error);
             }
         };
 
@@ -500,15 +503,41 @@ export function Workspace() {
             textareaRef.current.style.height = 'auto';
         }
 
-        // Add user message immediately
+        // Add user message immediately with 'sending' status
+        const userMessageId = Date.now().toString();
         const userMessage: Message = {
-            id: Date.now().toString(),
+            id: userMessageId,
             type: 'user',
             content: question,
             timestamp: new Date(),
+            status: 'sending'
         };
-        setMessages(prev => [...prev, userMessage]);
+
+        // Add a temporary AI "thinking" message
+        const aiLoadingMessageId = (Date.now() + 1).toString();
+        const aiLoadingMessage: Message = {
+            id: aiLoadingMessageId,
+            type: 'ai',
+            content: '',
+            timestamp: new Date(),
+            isLoading: true
+        };
+
+        setMessages(prev => [...prev, userMessage, aiLoadingMessage]);
         setIsLoading(true);
+        setProcessingStatus('Analyzing your request...');
+
+        // Status update intervals
+        const statusUpdates = [
+            { time: 1500, status: 'Fetching your data...' },
+            { time: 3500, status: 'Performing AI calculations...' },
+            { time: 6000, status: 'Generating insights...' },
+            { time: 8500, status: 'Finalizing visualization...' }
+        ];
+
+        const timerIds = statusUpdates.map(update =>
+            setTimeout(() => setProcessingStatus(update.status), update.time)
+        );
 
         try {
             const token = authService.getAuthToken();
@@ -536,16 +565,23 @@ export function Workspace() {
                 aiMessageContent = response.insight?.summary || 'Here are the results:';
             }
 
-            // Add AI response
-            const aiMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                type: 'ai',
-                content: aiMessageContent,
-                response: response,
-                timestamp: new Date(),
-            };
-
-            setMessages(prev => [...prev, aiMessage]);
+            setMessages(prev => prev.map(msg => {
+                if (msg.id === userMessageId) {
+                    return { ...msg, status: 'sent' as const };
+                }
+                if (msg.id === aiLoadingMessageId) {
+                    return {
+                        ...msg,
+                        id: (Date.now() + 2).toString(),
+                        type: 'ai',
+                        content: aiMessageContent,
+                        response: response,
+                        timestamp: new Date(),
+                        isLoading: false
+                    };
+                }
+                return msg;
+            }));
 
             // Track chat query for feedback
             trackChatQuery();
@@ -561,7 +597,7 @@ export function Workspace() {
                 question.toLowerCase().includes('sum') ||
                 question.toLowerCase().includes('count') ||
                 (response.execution?.visualization_hint &&
-                 ['bar', 'line', 'pie'].includes(response.execution.visualization_hint));
+                    ['bar', 'line', 'pie'].includes(response.execution.visualization_hint));
 
             if (isComplexQuery) {
                 trackComplexQuery();
@@ -582,30 +618,42 @@ export function Workspace() {
             workspaceContext.refreshDatasources();
         } catch (err) {
             console.error('Failed to send message:', err);
-            const errorMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                type: 'ai',
-                content: 'Sorry, I encountered an error processing your request.',
-                response: {
-                    execution: {
-                        status: 'ERROR',
-                        execution_time_ms: 0,
-                        row_count: 0,
-                        columns: [],
-                        rows: [],
-                        cache_hit: false,
-                        visualization_hint: null,
-                        error_type: 'SYSTEM_ERROR',
-                        message: err instanceof Error ? err.message : 'Unknown error occurred'
-                    },
-                    visualization: null,
-                    insight: null,
-                },
-                timestamp: new Date(),
-            };
-            setMessages(prev => [...prev, errorMessage]);
+            setMessages(prev => prev.map(msg => {
+                if (msg.id === userMessageId) {
+                    return { ...msg, status: 'error' as const };
+                }
+                if (msg.id === aiLoadingMessageId) {
+                    return {
+                        ...msg,
+                        id: (Date.now() + 2).toString(),
+                        type: 'ai',
+                        content: 'Sorry, I encountered an error processing your request.',
+                        response: {
+                            execution: {
+                                status: 'ERROR',
+                                execution_time_ms: 0,
+                                row_count: 0,
+                                columns: [],
+                                rows: [],
+                                cache_hit: false,
+                                visualization_hint: null,
+                                error_type: 'SYSTEM_ERROR',
+                                message: err instanceof Error ? err.message : 'Unknown error occurred'
+                            },
+                            visualization: null,
+                            insight: null,
+                        },
+                        timestamp: new Date(),
+                        isLoading: false
+                    };
+                }
+                return msg;
+            }));
         } finally {
             setIsLoading(false);
+            setProcessingStatus('');
+            // Clear any pending status update timers
+            timerIds.forEach(id => clearTimeout(id));
         }
     };
 
@@ -740,27 +788,10 @@ export function Workspace() {
                                         <ChatMessage
                                             message={message}
                                             userInitials={initials}
+                                            processingStatus={processingStatus}
                                         />
                                     </ErrorBoundary>
                                 ))}
-                                {isLoading && (
-                                    <div className="message ai loading">
-                                        <div className="message-avatar ai">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                                <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                                                <path d="M2 17l10 5 10-5" />
-                                                <path d="M2 12l10 5 10-5" />
-                                            </svg>
-                                        </div>
-                                        <div className="message-content">
-                                            <div className="typing-indicator">
-                                                <span></span>
-                                                <span></span>
-                                                <span></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
                                 <div ref={messagesEndRef} />
                             </>
                         )}

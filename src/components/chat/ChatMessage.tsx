@@ -9,11 +9,14 @@ interface ChatMessageProps {
         content: string;
         response?: ChatWorkflowResponse;
         timestamp: Date;
+        isLoading?: boolean;
+        status?: 'sending' | 'sent' | 'error';
     };
     userInitials: string;
+    processingStatus?: string;
 }
 
-export function ChatMessage({ message, userInitials }: ChatMessageProps) {
+export function ChatMessage({ message, userInitials, processingStatus }: ChatMessageProps) {
     const isUser = message.type === 'user';
 
     return (
@@ -41,10 +44,26 @@ export function ChatMessage({ message, userInitials }: ChatMessageProps) {
                     </svg>
                 )}
             </div>
-            <div className="message-content">
-                {message.response?.execution?.status !== "FAILED" && (
+            <div className={`message-content ${message.isLoading ? 'loading' : ''}`}>
+                {(message.content || message.isLoading) && message.response?.execution?.status !== "FAILED" && (
                     <div className="message-bubble">
-                        {message.content}
+                        {message.isLoading ? (
+                            <div className="loading-status-container">
+                                <div className="typing-indicator">
+                                    <span></span>
+                                    <span></span>
+                                    <span></span>
+                                </div>
+                                {processingStatus && <span className="loading-status-text">{processingStatus}</span>}
+                            </div>
+                        ) : (
+                            <>
+                                {message.content}
+                                {isUser && message.status === 'sending' && (
+                                    <span className="status-indicator sending">...</span>
+                                )}
+                            </>
+                        )}
                     </div>
                 )}
 
