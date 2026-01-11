@@ -84,7 +84,6 @@ const DatasetsPage: React.FC = () => {
   const handleDatasetSelect = async (datasetId: string) => {
     // Set as active dataset
     setSelectedDatasourceId(datasetId);
-    localStorage.setItem('selectedDatasourceId', datasetId);
 
     // Navigate back to chat (session will be created in Workspace component)
     navigate(`/workspace/${workspaceId}`);
@@ -307,7 +306,7 @@ const DatasetsPage: React.FC = () => {
           {datasources.map((dataset) => (
             <div key={dataset.id} className="dataset-card-wrapper">
               <button
-                className="dataset-card"
+                className={`dataset-card ${datasourceContext?.selectedDatasourceId === dataset.id ? 'active' : ''}`}
                 onClick={() => handleDatasetSelect(dataset.id)}
                 disabled={dataset.status !== 'READY'}
               >

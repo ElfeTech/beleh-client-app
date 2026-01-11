@@ -1,6 +1,7 @@
 import { createContext, useState, useContext, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { useAuth } from './useAuth';
 import { apiClient } from '../services/apiClient';
+import { apiCacheManager } from '../utils/apiCacheManager';
 import type { WorkspaceResponse, DataSourceResponse, WorkspaceContextResponse } from '../types/api';
 
 interface WorkspaceContextType {
@@ -8,6 +9,8 @@ interface WorkspaceContextType {
     currentWorkspace: WorkspaceResponse | null;
     setCurrentWorkspace: (workspace: WorkspaceResponse | null) => void;
     datasources: DataSourceResponse[];
+    // usage: WorkspaceContextResponse | null; // Renamed for clarity? No, let's call it workspaceContext to avoid confusion with UsageContext
+    workspaceContext: WorkspaceContextResponse | null;
     loading: boolean;
     refreshWorkspaces: () => Promise<void>;
     refreshDatasources: () => Promise<void>;
@@ -18,15 +21,6 @@ interface WorkspaceContextType {
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
 
-// Cache for workspace context to prevent duplicate API calls
-interface ContextCache {
-    data: WorkspaceContextResponse;
-    timestamp: number;
-}
-
-// Cache TTL in milliseconds (5 minutes)
-const CONTEXT_CACHE_TTL = 5 * 60 * 1000;
-
 // Debounce delay for state saves (500ms)
 const STATE_SAVE_DEBOUNCE_MS = 500;
 
@@ -35,17 +29,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>([]);
     const [currentWorkspace, setCurrentWorkspace] = useState<WorkspaceResponse | null>(null);
     const [datasources, setDatasources] = useState<DataSourceResponse[]>([]);
+    const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContextResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
 
     // Ref to track if we've already loaded datasources for current workspace
     const loadedWorkspaceRef = useRef<string | null>(null);
-
-    // Cache for workspace context responses
-    const contextCacheRef = useRef<Map<string, ContextCache>>(new Map());
-
-    // Track in-flight context requests to prevent duplicate calls
-    const pendingContextRequestsRef = useRef<Map<string, Promise<WorkspaceContextResponse | null>>>(new Map());
 
     // Debounce timer for state saves
     const stateSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,7 +93,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }
     }, [user, isInitialized]);
 
-    // Refresh datasources function
+    // Refresh datasources function using unified cache manager
     const refreshDatasources = useCallback(async () => {
         if (!user || !currentWorkspace) {
             setDatasources([]);
@@ -114,10 +103,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         try {
             setLoading(true);
             const token = await user.getIdToken();
-            const response = await apiClient.listWorkspaceDatasources(token, currentWorkspace.id);
-            setDatasources(response.items);
+
+            const data = await apiCacheManager.fetch(
+                'datasources',
+                async (authToken: string, wId: string) => {
+                    const response = await apiClient.listWorkspaceDatasources(authToken, wId);
+                    return response.items;
+                },
+                [token, currentWorkspace.id]
+            );
+
+            setDatasources(data);
         } catch (error) {
-            console.error('Failed to fetch datasources:', error);
+            console.error('[WorkspaceContext] Failed to fetch datasources:', error);
             setDatasources([]);
         } finally {
             setLoading(false);
@@ -129,6 +127,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         if (!user || !currentWorkspace) {
             loadedWorkspaceRef.current = null;
             setDatasources([]);
+            setWorkspaceContext(null); // Clear context when workspace changes/clears
             return;
         }
 
@@ -148,62 +147,46 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         }
     }, [user, isInitialized, refreshWorkspaces]);
 
-    // Load workspace context (state + metadata) with caching and deduplication
+    // Load workspace context (state + metadata) using unified cache manager
     const loadWorkspaceContext = useCallback(async (
         workspaceId: string,
         forceRefresh: boolean = false
     ): Promise<WorkspaceContextResponse | null> => {
         if (!user) return null;
 
-        // Check cache first (unless force refresh)
-        if (!forceRefresh) {
-            const cached = contextCacheRef.current.get(workspaceId);
-            if (cached && (Date.now() - cached.timestamp) < CONTEXT_CACHE_TTL) {
-                console.log('[WorkspaceContext] Returning cached context for workspace:', workspaceId);
-                return cached.data;
-            }
+        try {
+            const token = await user.getIdToken();
+
+            const data = await apiCacheManager.fetch(
+                'workspace-context',
+                async (authToken: string, wId: string) => {
+                    return apiClient.getWorkspaceContext(authToken, wId);
+                },
+                [token, workspaceId],
+                forceRefresh ? { ttl: 0 } : undefined // Force refresh by setting TTL to 0
+            );
+
+            setWorkspaceContext(data);
+            return data;
+        } catch (error) {
+            console.error('[WorkspaceContext] Failed to load workspace context:', error);
+            setWorkspaceContext(null);
+            return null;
         }
-
-        // Check if there's already a pending request for this workspace
-        const pendingRequest = pendingContextRequestsRef.current.get(workspaceId);
-        if (pendingRequest) {
-            console.log('[WorkspaceContext] Waiting for pending context request for workspace:', workspaceId);
-            return pendingRequest;
-        }
-
-        // Create new request
-        const requestPromise = (async (): Promise<WorkspaceContextResponse | null> => {
-            try {
-                console.log('[WorkspaceContext] Fetching context for workspace:', workspaceId);
-                const token = await user.getIdToken();
-                const context = await apiClient.getWorkspaceContext(token, workspaceId);
-
-                // Cache the result
-                contextCacheRef.current.set(workspaceId, {
-                    data: context,
-                    timestamp: Date.now(),
-                });
-
-                return context;
-            } catch (error) {
-                console.error('[WorkspaceContext] Failed to load workspace context:', error);
-                return null;
-            } finally {
-                // Remove from pending requests
-                pendingContextRequestsRef.current.delete(workspaceId);
-            }
-        })();
-
-        // Store pending request
-        pendingContextRequestsRef.current.set(workspaceId, requestPromise);
-
-        return requestPromise;
     }, [user]);
 
     // Invalidate context cache for a workspace
     const invalidateContextCache = useCallback((workspaceId: string) => {
-        contextCacheRef.current.delete(workspaceId);
-    }, []);
+        // We need to get the token to match the cache key
+        if (!user) return;
+
+        user.getIdToken().then(token => {
+            apiCacheManager.invalidate('workspace-context', [token, workspaceId]);
+            console.log('[WorkspaceContext] Invalidated context cache for workspace:', workspaceId);
+        }).catch(err => {
+            console.error('[WorkspaceContext] Failed to invalidate cache:', err);
+        });
+    }, [user]);
 
     // Save workspace state with debouncing to prevent multiple rapid API calls
     const saveWorkspaceState = useCallback(async (
@@ -242,7 +225,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                 });
 
                 // Invalidate context cache since state changed
-                contextCacheRef.current.delete(stateToSave.workspaceId);
+                apiCacheManager.invalidate('workspace-context', [token, stateToSave.workspaceId]);
             } catch (error) {
                 // Silently fail - state saving is not critical
                 console.error('[WorkspaceContext] Failed to save workspace state:', error);
@@ -266,6 +249,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                 currentWorkspace,
                 setCurrentWorkspace,
                 datasources,
+                workspaceContext,
                 loading,
                 refreshWorkspaces,
                 refreshDatasources,

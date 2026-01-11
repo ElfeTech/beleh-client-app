@@ -141,6 +141,16 @@
   box-shadow: var(--shadow-sm);
 }
 
+.dataset-card.active {
+  border-color: var(--primary-500);
+  background: var(--primary-50);
+  box-shadow: 0 0 0 1px var(--primary-500);
+}
+
+[data-theme="dark"] .dataset-card.active {
+  background: rgba(59, 130, 246, 0.1);
+}
+
 .dataset-card:active {
   transform: scale(0.98);
   box-shadow: var(--shadow-md);

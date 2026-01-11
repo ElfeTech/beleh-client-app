@@ -1,4 +1,4 @@
-import { createContext, useState, useContext, useEffect, type ReactNode } from 'react';
+import { createContext, useState, useContext, type ReactNode } from 'react';
 
 interface DatasourceContextType {
     selectedDatasourceId: string | null;
@@ -10,19 +10,7 @@ const DatasourceContext = createContext<DatasourceContextType | undefined>(undef
 export { DatasourceContext };
 
 export function DatasourceProvider({ children }: { children: ReactNode }) {
-    const [selectedDatasourceId, setSelectedDatasourceId] = useState<string | null>(() => {
-        // Load from localStorage on mount
-        return localStorage.getItem('selectedDatasourceId');
-    });
-
-    // Persist to localStorage when it changes
-    useEffect(() => {
-        if (selectedDatasourceId) {
-            localStorage.setItem('selectedDatasourceId', selectedDatasourceId);
-        } else {
-            localStorage.removeItem('selectedDatasourceId');
-        }
-    }, [selectedDatasourceId]);
+    const [selectedDatasourceId, setSelectedDatasourceId] = useState<string | null>(null);
 
     return (
         <DatasourceContext.Provider value={{ selectedDatasourceId, setSelectedDatasourceId }}>

@@ -6,7 +6,6 @@ import { useDatasource } from '../../context/DatasourceContext';
 import { useChatSession } from '../../context/ChatSessionContext';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
-import { authService } from '../../services/authService';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { ActionSheet, type ActionSheetItem } from '../common/ActionSheet';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -18,16 +17,12 @@ interface WorkspaceMenuProps {
     onRefresh?: () => void;
 }
 
-// Session cache to avoid refetching
-const sessionCache = new Map<string, { sessions: ChatSessionRead[], timestamp: number }>();
-const CACHE_DURATION = 30000; // 30 seconds
-
 export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceMenuProps) {
     const { user } = useAuth();
     const navigate = useNavigate();
     const { id: workspaceId } = useParams<{ id: string }>();
     const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
-    const { setSessions, activeSessionId, setActiveSessionId, addSession, removeSession } = useChatSession();
+    const { setSessions, activeSessionId, setActiveSessionId, addSession, removeSession, loadSessions: loadSessionsContext } = useChatSession();
 
     const [expandedDatasets, setExpandedDatasets] = useState<Set<string>>(new Set());
     const [datasetSessions, setDatasetSessions] = useState<Map<string, ChatSessionRead[]>>(new Map());
@@ -99,36 +94,27 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
         return dateB - dateA; // Most recent first
     });
 
-    // Fetch sessions for a dataset
+    /**
+     * Fetch sessions for a dataset using the unified cache manager via ChatSessionContext
+     * This ensures all components share the same cached data with no duplicates
+     */
     const fetchSessions = useCallback(async (datasourceId: string) => {
-        // Check cache first
-        const cached = sessionCache.get(datasourceId);
-        if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-            setDatasetSessions(prev => new Map(prev).set(datasourceId, cached.sessions));
-            return;
-        }
-
         setLoadingSessions(prev => new Set(prev).add(datasourceId));
 
         try {
-            const token = authService.getAuthToken();
-            if (!token) return;
+            // Always use context's loadSessions which uses unified cache manager
+            // This ensures consistency across all components and prevents duplicate API calls
+            const sessionList = await loadSessionsContext(datasourceId);
 
-            const response = await apiClient.listChatSessions(token, datasourceId);
-            const sessionList = response.items;
-
-            // Update cache
-            sessionCache.set(datasourceId, { sessions: sessionList, timestamp: Date.now() });
-
-            // Update state
+            // Update local state for this specific dataset
             setDatasetSessions(prev => new Map(prev).set(datasourceId, sessionList));
 
-            // If this is the selected datasource, also update the chat session context
+            // If this is the active datasource, the context state is already updated
             if (datasourceId === selectedDatasourceId) {
                 setSessions(sessionList);
             }
         } catch (err) {
-            console.error('Failed to load sessions for dataset:', datasourceId, err);
+            console.error('[WorkspaceMenu] Failed to load sessions for dataset:', datasourceId, err);
         } finally {
             setLoadingSessions(prev => {
                 const newSet = new Set(prev);
@@ -136,7 +122,7 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
                 return newSet;
             });
         }
-    }, [selectedDatasourceId, setSessions]);
+    }, [selectedDatasourceId, loadSessionsContext, setSessions]);
 
     // Toggle dataset expansion
     const toggleDatasetExpansion = async (datasourceId: string, e?: React.MouseEvent) => {
@@ -166,25 +152,6 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
             }
         }
     }, [selectedDatasourceId, fetchSessions, datasetSessions]);
-
-    // Auto-select first datasource or restore from localStorage
-    useEffect(() => {
-        const savedDatasetId = localStorage.getItem('last_active_dataset_id');
-
-        if (savedDatasetId && dataSources.some(ds => ds.id === savedDatasetId)) {
-            setSelectedDatasourceId(savedDatasetId);
-        } else if (dataSources.length > 0 && !selectedDatasourceId) {
-            setSelectedDatasourceId(dataSources[0].id);
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [dataSources]);
-
-    // Persist selected dataset
-    useEffect(() => {
-        if (selectedDatasourceId) {
-            localStorage.setItem('last_active_dataset_id', selectedDatasourceId);
-        }
-    }, [selectedDatasourceId]);
 
     // Handle mobile detection
     useEffect(() => {
@@ -227,7 +194,8 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
         setIsCreatingSession(true);
 
         try {
-            const token = authService.getAuthToken();
+            // Use user.getIdToken() instead of authService directly if possible, or use the hook
+            const token = user ? await user.getIdToken() : null;
             if (!token) throw new Error('No auth token');
 
             // Set datasource first
@@ -238,15 +206,6 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
                 datasourceId,
                 `Chat ${new Date().toLocaleDateString()}`
             );
-
-            // Update cache
-            const cached = sessionCache.get(datasourceId);
-            if (cached) {
-                sessionCache.set(datasourceId, {
-                    sessions: [newSession, ...cached.sessions],
-                    timestamp: Date.now()
-                });
-            }
 
             // Update local state
             setDatasetSessions(prev => {
@@ -282,24 +241,15 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
         setDeletingSessionId(sessionId);
 
         try {
-            const token = authService.getAuthToken();
+            const token = user ? await user.getIdToken() : null;
             if (!token) throw new Error('No auth token');
 
             await apiClient.deleteChatSession(token, sessionId);
 
-            // Update cache
-            const cached = sessionCache.get(datasourceId);
-            if (cached) {
-                sessionCache.set(datasourceId, {
-                    sessions: cached.sessions.filter(s => s.id !== sessionId),
-                    timestamp: Date.now()
-                });
-            }
-
             // Update local state
             setDatasetSessions(prev => {
                 const existing = prev.get(datasourceId) || [];
-                return new Map(prev).set(datasourceId, existing.filter(s => s.id !== sessionId));
+                return new Map(prev).set(datasourceId, existing.filter((s: ChatSessionRead) => s.id !== sessionId));
             });
 
             // Update context
@@ -307,7 +257,7 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
 
             // If this was the active session, clear it
             if (activeSessionId === sessionId) {
-                const remaining = datasetSessions.get(datasourceId)?.filter(s => s.id !== sessionId) || [];
+                const remaining = datasetSessions.get(datasourceId)?.filter((s: ChatSessionRead) => s.id !== sessionId) || [];
                 if (remaining.length > 0) {
                     setActiveSessionId(remaining[0].id);
                 } else {
@@ -368,8 +318,8 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
             const token = await user.getIdToken();
             await apiClient.deleteDatasource(token, selectedDatasetForMenu);
 
-            // Clear session cache for this dataset
-            sessionCache.delete(selectedDatasetForMenu);
+            // Clear session cache for this dataset by invalidating through context if needed
+            // (Cache invalidation logic should ideally be handled by the context or API client)
 
             if (selectedDatasourceId === selectedDatasetForMenu) {
                 const remainingDatasets = dataSources.filter((ds) => ds.id !== selectedDatasetForMenu);
@@ -694,3 +644,4 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
         </div>
     );
 }
+

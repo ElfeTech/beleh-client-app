@@ -24,9 +24,9 @@ const SessionsPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
 
   const addSession = chatContext?.addSession || (() => ({ id: '', dataset_id: '', created_at: new Date().toISOString(), updated_at: new Date().toISOString(), title: '', is_deleted: false }));
-  const removeSession = chatContext?.removeSession || (() => {});
+  const removeSession = chatContext?.removeSession || (() => { });
   const activeSessionId = chatContext?.activeSessionId || null;
-  const setActiveSessionId = chatContext?.setActiveSessionId || (() => {});
+  const setActiveSessionId = chatContext?.setActiveSessionId || (() => { });
   const selectedDatasourceId = datasourceContext?.selectedDatasourceId || null;
   const datasources = workspaceContext?.datasources || [];
 
@@ -44,6 +44,7 @@ const SessionsPage: React.FC = () => {
     items: sessions,
     isLoading: isLoadingSessions,
     isFetchingMore,
+    error: sessionsError,
     hasMore,
     observerRef,
     reset: resetPagination
@@ -55,13 +56,12 @@ const SessionsPage: React.FC = () => {
 
   // Restore last active session when sessions are loaded
   useEffect(() => {
-    if (selectedDatasourceId && sessions.length > 0) {
-      const savedActiveSession = localStorage.getItem(`activeSession_${selectedDatasourceId}`);
-      if (savedActiveSession && sessions.some(s => s.id === savedActiveSession)) {
-        setActiveSessionId(savedActiveSession);
-      }
+    // Only set active session if it's not already set
+    if (!activeSessionId && sessions.length > 0) {
+      // We can just rely on the first session or let the user pick
+      // If we really want to restore "last active", it should come from backend
     }
-  }, [sessions, selectedDatasourceId, setActiveSessionId]);
+  }, [sessions, activeSessionId, setActiveSessionId]);
 
   // Filter sessions by selected dataset
   const datasetSessions = sessions.filter(
@@ -122,10 +122,6 @@ const SessionsPage: React.FC = () => {
       addSession(newSession);
       setActiveSessionId(newSession.id);
 
-      // Clear any stale localStorage data to ensure clean state
-      localStorage.setItem('activeSessionId', newSession.id);
-      localStorage.setItem(`activeSession_${selectedDatasourceId}`, newSession.id);
-
       // Navigate to workspace - the Workspace component will load messages (empty for new session)
       navigate(`/workspace/${workspaceId}`);
     } catch (err) {
@@ -139,7 +135,6 @@ const SessionsPage: React.FC = () => {
 
   const handleSessionClick = (sessionId: string) => {
     setActiveSessionId(sessionId);
-    localStorage.setItem('activeSessionId', sessionId);
     navigate(`/workspace/${workspaceId}`);
   };
 
@@ -245,12 +240,24 @@ const SessionsPage: React.FC = () => {
             Go to Datasets
           </button>
         </div>
-      ) : isLoadingSessions ? (
-        <div className="sessions-empty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="loading-spinner">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+      ) : sessionsError ? (
+        <div className="sessions-empty error-state">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="error-icon">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
-          <h3>Loading chats...</h3>
+          <h3>Failed to load chats</h3>
+          <p>{sessionsError.message || 'An error occurred while loading your chats. Please try again.'}</p>
+          <button className="retry-btn" onClick={resetPagination}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            Retry
+          </button>
+        </div>
+      ) : isLoadingSessions && datasetSessions.length === 0 ? (
+        <div className="sessions-loading">
+          <div className="sessions-loading-spinner"></div>
+          <p>Loading chats...</p>
         </div>
       ) : datasetSessions.length === 0 ? (
         <div className="sessions-empty">
