@@ -550,3 +550,105 @@ export function checkFieldCardinality(
       : `Too many unique values in '${field}' (${cardinality}). Maximum recommended is ${maxCardinality}.`,
   };
 }
+
+/**
+ * Wide-to-Long data format transformation
+ * Converts data with multiple metric columns into a normalized format suitable for multi-series charts
+ *
+ * Example:
+ * Input (wide format):
+ *   [{ segment: "A", total_sales: 100, total_profit: 20 }]
+ * Output (long format):
+ *   [{ segment: "A", metric: "total_sales", value: 100 }, { segment: "A", metric: "total_profit", value: 20 }]
+ */
+export interface WideToLongResult {
+  data: Record<string, any>[];
+  seriesField: string;
+  valueField: string;
+  metricNames: string[];
+}
+
+/**
+ * Detect if data is in wide format with multiple numeric columns
+ * that should be treated as separate series
+ */
+export function detectWideFormatData(
+  data: Record<string, any>[],
+  xField: string,
+  yField?: string
+): { isWideFormat: boolean; numericColumns: string[] } {
+  if (!data || data.length === 0) {
+    return { isWideFormat: false, numericColumns: [] };
+  }
+
+  const firstRow = data[0];
+  const allColumns = Object.keys(firstRow);
+
+  // Find all numeric columns (excluding the x-axis field)
+  const numericColumns = allColumns.filter(col => {
+    if (col === xField) return false;
+    const value = firstRow[col];
+    return typeof value === 'number' || (!Number.isNaN(Number(value)) && value !== null && value !== '');
+  });
+
+  // Consider it wide format if:
+  // 1. There are 2+ numeric columns
+  // 2. No explicit y-field is provided OR the y-field is just one of multiple numeric columns
+  const isWideFormat = numericColumns.length >= 2 && (!yField || numericColumns.includes(yField));
+
+  return { isWideFormat, numericColumns };
+}
+
+/**
+ * Transform wide-format data to long-format for multi-series visualization
+ */
+export function transformWideToLong(
+  data: Record<string, any>[],
+  xField: string,
+  metricColumns: string[],
+  seriesFieldName: string = 'metric',
+  valueFieldName: string = 'value'
+): WideToLongResult {
+  const longData: Record<string, any>[] = [];
+
+  data.forEach(row => {
+    metricColumns.forEach(metricCol => {
+      const newRow: Record<string, any> = {
+        [xField]: row[xField],
+        [seriesFieldName]: formatMetricName(metricCol),
+        [valueFieldName]: Number(row[metricCol]) || 0,
+        // Preserve original metric column name for reference
+        _originalMetric: metricCol,
+      };
+
+      // Copy any other non-metric fields (e.g., additional dimensions)
+      Object.keys(row).forEach(key => {
+        if (key !== xField && !metricColumns.includes(key)) {
+          newRow[key] = row[key];
+        }
+      });
+
+      longData.push(newRow);
+    });
+  });
+
+  return {
+    data: longData,
+    seriesField: seriesFieldName,
+    valueField: valueFieldName,
+    metricNames: metricColumns.map(formatMetricName),
+  };
+}
+
+/**
+ * Format metric column names for display
+ * e.g., "total_sales" -> "Total Sales"
+ */
+function formatMetricName(name: string): string {
+  return name
+    .replaceAll('_', ' ')
+    .replaceAll(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+}

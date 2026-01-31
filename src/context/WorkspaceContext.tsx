@@ -9,6 +9,8 @@ interface WorkspaceContextType {
     currentWorkspace: WorkspaceResponse | null;
     setCurrentWorkspace: (workspace: WorkspaceResponse | null) => void;
     datasources: DataSourceResponse[];
+    /** Set datasources directly (e.g. after hydration fetches them) so UI has data without waiting for context effect */
+    setDatasources: (datasources: DataSourceResponse[]) => void;
     // usage: WorkspaceContextResponse | null; // Renamed for clarity? No, let's call it workspaceContext to avoid confusion with UsageContext
     workspaceContext: WorkspaceContextResponse | null;
     loading: boolean;
@@ -103,6 +105,10 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         try {
             setLoading(true);
             const token = await user.getIdToken();
+            if (!token || typeof token !== 'string' || token.length < 10) {
+                console.warn('[WorkspaceContext] No valid token for datasources, skipping fetch');
+                return;
+            }
 
             const data = await apiCacheManager.fetch(
                 'datasources',
@@ -249,6 +255,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                 currentWorkspace,
                 setCurrentWorkspace,
                 datasources,
+                setDatasources,
                 workspaceContext,
                 loading,
                 refreshWorkspaces,

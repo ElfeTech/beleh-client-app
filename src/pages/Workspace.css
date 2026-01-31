@@ -472,9 +472,21 @@
     border-bottom-right-radius: var(--radius-sm);
 }
 
-.message.ai .message-bubble {
-    background: var(--chat-ai-bg);
-    color: var(--chat-ai-text);
+/* Message Bubble Specificity Overrides */
+:root .message.ai .message-bubble,
+[data-theme="light"] .message.ai .message-bubble {
+    background: #e5e7eb;
+    /* var(--chat-ai-bg) */
+    color: #1f2937 !important;
+    /* var(--chat-ai-text) - Force dark text */
+    border-bottom-left-radius: var(--radius-sm);
+}
+
+[data-theme="dark"] .message.ai .message-bubble {
+    background: #334155;
+    /* Dark Slate */
+    color: #f1f5f9 !important;
+    /* Whiteish text */
     border-bottom-left-radius: var(--radius-sm);
 }
 
@@ -1155,4 +1167,82 @@
 /* Loading more indicator */
 .loading-more-indicator {
     color: var(--text-muted);
+}
+
+/* Demo mode */
+.demo-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.08) 100%);
+    border-bottom: 1px solid rgba(16, 185, 129, 0.2);
+    flex-shrink: 0;
+}
+
+.demo-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #059669;
+    background: rgba(16, 185, 129, 0.2);
+    padding: 0.25rem 0.6rem;
+    border-radius: 9999px;
+}
+
+.demo-banner-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+.demo-chat-messages {
+    padding-bottom: 1rem;
+}
+
+.demo-welcome {
+    padding: var(--spacing-xl) var(--spacing-lg);
+}
+
+.demo-welcome .demo-icon {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.demo-upload-cta {
+    margin: 1.5rem 1rem 0.5rem;
+    padding: 1.25rem 1.5rem;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(139, 92, 246, 0.06) 100%);
+    border: 1px dashed rgba(99, 102, 241, 0.4);
+    border-radius: 16px;
+    text-align: center;
+}
+
+.demo-upload-cta p {
+    margin: 0 0 0.75rem;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.demo-upload-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    color: white;
+    font-size: 0.9375rem;
+    font-weight: 600;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.demo-upload-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
 }

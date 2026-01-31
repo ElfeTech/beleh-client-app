@@ -288,7 +288,7 @@ const SessionsPage: React.FC = () => {
                 </div>
 
                 <div className="session-content">
-                  <h3 className="session-title">{getSessionTitle(session)}</h3>
+                  <h3 className="session-title-mobile">{getSessionTitle(session)}</h3>
                   <p className="session-timestamp">{formatTimestamp(new Date(session.created_at))}</p>
                 </div>
 

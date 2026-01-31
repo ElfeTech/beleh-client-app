@@ -930,6 +930,11 @@ html[data-theme="dark"] .add-workspace-btn:active {
     text-overflow: ellipsis;
 }
 
+/* Light mode: Ensure white text for contrast against dark sidebar */
+[data-theme="light"] .session-title {
+    color: rgba(255, 255, 255, 0.95);
+}
+
 .session-time {
     font-size: 0.625rem;
     color: rgba(255, 255, 255, 0.4);

@@ -1,10 +1,16 @@
 import './EmptyStateDashboard.css';
 
 interface EmptyStateDashboardProps {
-    onAddDataset: () => void;
+    readonly onAddDataset: () => void;
+    /** When provided and user hasn't completed demo, show "Start Demo" as primary CTA */
+    readonly onStartDemo?: () => void;
+    /** Whether to show the Start Demo option (e.g. new user, hasn't completed demo) */
+    readonly showDemoCta?: boolean;
 }
 
-export function EmptyStateDashboard({ onAddDataset }: EmptyStateDashboardProps) {
+export function EmptyStateDashboard({ onAddDataset, onStartDemo, showDemoCta }: EmptyStateDashboardProps) {
+    const showStartDemo = Boolean(showDemoCta && onStartDemo);
+
     return (
         <div className="empty-state-dashboard">
             <div className="empty-state-container">
@@ -19,25 +25,41 @@ export function EmptyStateDashboard({ onAddDataset }: EmptyStateDashboardProps) 
                     {/* Main Content */}
                     <div className="empty-state-content">
                         <h1 className="empty-state-headline">
-                            Your Workspace is Ready for Action
+                            {showStartDemo ? 'See Beleh in Action' : 'Your Workspace is Ready for Action'}
                         </h1>
                         <p className="empty-state-description">
-                            This is where your insights come to life. Upload your first dataset to start chatting with your data, uncovering patterns, and generating reports—all in one place.
+                            {showStartDemo
+                                ? 'Try a quick demo: ask sample questions and see how AI turns your questions into charts and insights. Then upload your own data to get started for real.'
+                                : 'This is where your insights come to life. Upload your first dataset to start chatting with your data, uncovering patterns, and generating reports—all in one place.'}
                         </p>
                     </div>
 
-                    {/* CTA Button */}
-                    <button
-                        className="empty-state-cta"
-                        onClick={onAddDataset}
-                        aria-label="Add your first dataset"
-                    >
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="12" y1="5" x2="12" y2="19" />
-                            <line x1="5" y1="12" x2="19" y2="12" />
-                        </svg>
-                        <span>Add New Dataset</span>
-                    </button>
+                    {/* CTAs: Start Demo (primary for new users) + Add Dataset */}
+                    <div className="empty-state-cta-row">
+                        {showStartDemo && (
+                            <button
+                                className="empty-state-cta empty-state-cta-primary"
+                                onClick={onStartDemo}
+                                aria-label="Start interactive demo"
+                            >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <polygon points="5 3 19 12 5 21 5 3" />
+                                </svg>
+                                <span>Start Demo</span>
+                            </button>
+                        )}
+                        <button
+                            className={`empty-state-cta ${showStartDemo ? 'empty-state-cta-secondary' : ''}`}
+                            onClick={onAddDataset}
+                            aria-label="Add your first dataset"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <line x1="12" y1="5" x2="12" y2="19" />
+                                <line x1="5" y1="12" x2="19" y2="12" />
+                            </svg>
+                            <span>Add New Dataset</span>
+                        </button>
+                    </div>
 
                     {/* Optional Feature Highlights */}
                     <div className="empty-state-features">

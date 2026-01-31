@@ -9,6 +9,7 @@ import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
 import type { ChatWorkflowResponse, ChatMessageRead } from '../types/api';
 import { ChatMessage } from '../components/chat/ChatMessage';
+import { ChatWelcome } from '../components/chat/ChatWelcome';
 import { EmptyStateDashboard } from '../components/workspace/EmptyStateDashboard';
 import { UploadModal } from '../components/layout/UploadModal';
 import MobileChatHeader from '../components/layout/MobileChatHeader';
@@ -17,6 +18,14 @@ import { WorkspaceModal } from '../components/layout/WorkspaceModal';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { FEEDBACK_TRIGGERS } from '../types/feedback';
+import {
+    hasCompletedDemo,
+    isNewUserForDemo,
+    setDemoCompleted,
+    DEMO_PROMPTS,
+    getDemoResponse,
+    matchDemoPromptId,
+} from '../constants/demoData';
 import './Workspace.css';
 
 interface Message {
@@ -37,6 +46,7 @@ export function Workspace() {
     const { setSessions, activeSessionId, setActiveSessionId, addSession, loadSessions: loadSessionsContext } = useChatSession();
     const { decrementQueryCount, refreshUsageAfterAction } = useUsage();
     const workspaceContext = useWorkspace();
+    const { workspaces, currentWorkspace, setCurrentWorkspace } = workspaceContext;
     const { trackChatQuery, trackComplexQuery, showFeedback } = useFeedback();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
@@ -50,6 +60,9 @@ export function Workspace() {
     const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
     const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    const [isDemoMode, setIsDemoMode] = useState(false);
+    const [demoMessages, setDemoMessages] = useState<Message[]>([]);
+    const demoMessagesEndRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesTopRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -82,6 +95,9 @@ export function Workspace() {
     // Use datasources from WorkspaceContext instead of local state
     const dataSources = workspaceContext.datasources;
     const isLoadingDataSources = workspaceContext.loading;
+
+    // Get the currently selected datasource for ChatWelcome
+    const selectedDatasource = dataSources.find(ds => ds.id === selectedDatasourceId) || null;
 
     const initials = user?.displayName
         ? user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -121,6 +137,15 @@ export function Workspace() {
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
+
+    // Sync WorkspaceContext currentWorkspace with URL so datasources and last-active state load for the viewed workspace
+    useEffect(() => {
+        if (!workspaceId || !workspaces?.length) return;
+        const workspace = workspaces.find((w: { id: string }) => w.id === workspaceId);
+        if (workspace && currentWorkspace?.id !== workspaceId) {
+            setCurrentWorkspace(workspace);
+        }
+    }, [workspaceId, workspaces, currentWorkspace?.id, setCurrentWorkspace]);
 
     // Check if we should show returning user feedback
     useEffect(() => {
@@ -302,10 +327,10 @@ export function Workspace() {
         });
     }, [messages]);
 
-    // Hydrate workspace data in parallel to avoid waterfall
+    // Hydrate workspace data in parallel to avoid waterfall (runs when user + workspaceId are available)
     useEffect(() => {
         const hydrateWorkspace = async () => {
-            if (!workspaceId) return;
+            if (!workspaceId || !user) return;
 
             // Skip if we've already hydrated this workspace in the last 2 seconds
             // This prevents double-call in React StrictMode but allows re-hydration on page refresh
@@ -334,8 +359,8 @@ export function Workspace() {
                 setIsInitialChatLoading(true);
                 setInitialSyncError(null);
 
-                // 1. Fetch Context first to know what to load
-                const token = authService.getAuthToken();
+                // 1. Fetch Context first to know what to load (use user token so it's available after login)
+                const token = await user.getIdToken();
                 if (!token) throw new Error('Authentication token not found');
 
                 const context = await workspaceContext.loadWorkspaceContext(workspaceId);
@@ -365,7 +390,10 @@ export function Workspace() {
                         availableDatasources = response.items;
                         console.log('[Workspace] Fetched datasources:', availableDatasources.length);
 
-                        // Also trigger context refresh in background to update context state
+                        // Update context so UI (sidebar, selectedDatasource) has data without hard refresh
+                        workspaceContext.setDatasources(availableDatasources);
+
+                        // Also trigger context refresh in background so cache stays in sync
                         workspaceContext.refreshDatasources().catch(err => {
                             console.error('[Workspace] Background datasource refresh failed:', err);
                         });
@@ -539,10 +567,9 @@ export function Workspace() {
                 workspaceSwitchAbortController.current.abort();
             }
         };
-        // Note: workspaceContext methods are stable callbacks, setSelectedDatasourceId and setActiveSessionId are setState functions
-        // Only workspaceId should trigger re-hydration (when user switches workspace)
+        // Run when user is available (e.g. after login) and when workspaceId changes
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [workspaceId]);
+    }, [workspaceId, user]);
 
     // Load messages when active session changes
     useEffect(() => {
@@ -847,7 +874,68 @@ export function Workspace() {
         adjustTextareaHeight();
     };
 
+    // Handle clicking on a sample prompt from ChatWelcome
+    const handlePromptClick = (prompt: string) => {
+        setInputValue(prompt);
+        // Focus the textarea so user can edit or send
+        textareaRef.current?.focus();
+    };
+
     const handleAddDataset = () => {
+        setShowUploadModal(true);
+    };
+
+    const handleStartDemo = () => {
+        setIsDemoMode(true);
+        setDemoMessages([]);
+    };
+
+    const handleDemoPromptClick = (promptText: string, promptId: string) => {
+        const userMsg: Message = {
+            id: `demo-user-${Date.now()}`,
+            type: 'user',
+            content: promptText,
+            timestamp: new Date(),
+        };
+        const loadingId = `demo-ai-loading-${Date.now()}`;
+        const loadingMsg: Message = {
+            id: loadingId,
+            type: 'ai',
+            content: '',
+            timestamp: new Date(),
+            isLoading: true,
+        };
+        setDemoMessages(prev => [...prev, userMsg, loadingMsg]);
+
+        const response = getDemoResponse(promptId);
+        const aiMsg: Message = {
+            id: `demo-ai-${Date.now()}`,
+            type: 'ai',
+            content: response.insight?.summary || 'Here are the results:',
+            response,
+            timestamp: new Date(),
+        };
+
+        setTimeout(() => {
+            setDemoMessages(prev =>
+                prev.map(m => (m.id === loadingId ? aiMsg : m))
+            );
+            demoMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 900);
+    };
+
+    const handleDemoSend = () => {
+        const question = inputValue.trim();
+        if (!question) return;
+        const promptId = matchDemoPromptId(question);
+        handleDemoPromptClick(question, promptId);
+        setInputValue('');
+    };
+
+    const handleExitDemo = () => {
+        setDemoCompleted();
+        setIsDemoMode(false);
+        setDemoMessages([]);
         setShowUploadModal(true);
     };
 
@@ -858,13 +946,130 @@ export function Workspace() {
 
     // Determine if workspace is empty
     const isWorkspaceEmpty = !isLoadingDataSources && dataSources.length === 0;
+    const showDemoCta = isNewUserForDemo() && !hasCompletedDemo();
 
-    // If workspace is empty, show the empty state dashboard
+    // If workspace is empty and user is in demo mode, show demo chat
+    if (isWorkspaceEmpty && isDemoMode) {
+        return (
+            <div className="workspace-with-sessions">
+                <div className={`content-area ${isMobile ? 'mobile' : ''}`}>
+                    <div className="demo-banner">
+                        <span className="demo-badge">Demo</span>
+                        <span className="demo-banner-text">Sample visualizations — try asking below</span>
+                    </div>
+                    <div className="chat-section">
+                        <div className="chat-messages demo-chat-messages" ref={chatMessagesContainerRef}>
+                            {demoMessages.length === 0 ? (
+                                <div className="chat-welcome demo-welcome">
+                                    <div className="chat-welcome-header">
+                                        <div className="chat-welcome-icon demo-icon">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                            </svg>
+                                        </div>
+                                        <h2 className="chat-welcome-title">
+                                            Try a sample question
+                                        </h2>
+                                        <p className="chat-welcome-subtitle">
+                                            Click any prompt to see how Beleh turns your question into a chart and insights. This uses sample data — upload your own to analyze real data.
+                                        </p>
+                                    </div>
+                                    <div className="chat-welcome-prompts">
+                                        <p className="prompts-label">Example prompts:</p>
+                                        <div className="prompts-grid">
+                                            {DEMO_PROMPTS.map((prompt) => (
+                                                <button
+                                                    key={prompt.id}
+                                                    className="prompt-suggestion"
+                                                    onClick={() => handleDemoPromptClick(prompt.text, prompt.id)}
+                                                >
+                                                    <span className="prompt-icon">{prompt.icon}</span>
+                                                    <span className="prompt-text">{prompt.text}</span>
+                                                    <svg className="prompt-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                                                    </svg>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {demoMessages.map((message) => (
+                                        <ErrorBoundary key={message.id}>
+                                            <ChatMessage
+                                                message={message}
+                                                userInitials={initials}
+                                                processingStatus=""
+                                            />
+                                        </ErrorBoundary>
+                                    ))}
+                                    <div className="demo-upload-cta">
+                                        <p>Ready to use your own data?</p>
+                                        <button type="button" className="demo-upload-btn" onClick={handleExitDemo}>
+                                            Upload your dataset
+                                        </button>
+                                    </div>
+                                    <div ref={demoMessagesEndRef} />
+                                </>
+                            )}
+                        </div>
+                        <div className="chat-input-container">
+                            <div className="chat-input-wrapper">
+                                <textarea
+                                    ref={textareaRef}
+                                    placeholder="Ask another demo question or type your own..."
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleDemoSend();
+                                        }
+                                    }}
+                                    rows={1}
+                                />
+                                <div className="input-actions">
+                                    <button
+                                        className="send-btn"
+                                        onClick={handleDemoSend}
+                                        disabled={!inputValue.trim()}
+                                        aria-label="Send demo message"
+                                    >
+                                        {isMobile ? (
+                                            <svg className="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                            </svg>
+                                        ) : (
+                                            'Send'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {showUploadModal && workspaceId && (
+                    <UploadModal
+                        workspaceId={workspaceId}
+                        onClose={() => setShowUploadModal(false)}
+                        onSuccess={handleUploadSuccess}
+                    />
+                )}
+            </div>
+        );
+    }
+
+    // If workspace is empty (and not in demo), show the empty state dashboard
     if (isWorkspaceEmpty) {
         return (
             <div className="workspace-with-sessions">
                 <div className="content-area" style={{ flex: 1 }}>
-                    <EmptyStateDashboard onAddDataset={handleAddDataset} />
+                    <EmptyStateDashboard
+                        onAddDataset={handleAddDataset}
+                        onStartDemo={handleStartDemo}
+                        showDemoCta={showDemoCta}
+                    />
                 </div>
 
                 {showUploadModal && workspaceId && (
@@ -932,18 +1137,22 @@ export function Workspace() {
                                 </button>
                             </div>
                         ) : messages.length === 0 ? (
-                            <div className="chat-empty-state">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                </svg>
-                                <h3>Start a conversation</h3>
-                                <p>Ask questions about your data and get AI-powered insights with visualizations</p>
-                                {!selectedDatasourceId ? (
-                                    <p className="warning-text">⚠️ Please select a datasource to get started</p>
-                                ) : !activeSessionId ? (
-                                    <p className="warning-text">Click "New Chat" to start</p>
-                                ) : null}
-                            </div>
+                            selectedDatasourceId ? (
+                                <ChatWelcome
+                                    datasource={selectedDatasource}
+                                    onPromptClick={handlePromptClick}
+                                    userName={user?.displayName || undefined}
+                                />
+                            ) : (
+                                <div className="chat-empty-state">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                    <h3>Start a conversation</h3>
+                                    <p>Ask questions about your data and get AI-powered insights with visualizations</p>
+                                    <p className="warning-text">Please select a datasource to get started</p>
+                                </div>
+                            )
                         ) : (
                             <>
                                 {/* Sentinel element for loading older messages at the top */}
@@ -1009,7 +1218,7 @@ export function Workspace() {
                                 value={inputValue}
                                 onChange={handleInputChange}
                                 onKeyDown={handleKeyDown}
-                                disabled={isLoading || isInitialChatLoading || !!initialSyncError || !selectedDatasourceId}
+                                disabled={isInitialChatLoading || !!initialSyncError || !selectedDatasourceId}
                                 rows={1}
                             />
                             <div className="input-actions">

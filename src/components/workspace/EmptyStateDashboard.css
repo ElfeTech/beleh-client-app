@@ -123,6 +123,16 @@
     max-width: 540px;
 }
 
+/* CTA Row (Demo + Add Dataset) */
+.empty-state-cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 0.5rem;
+}
+
 /* CTA Button */
 .empty-state-cta {
     display: inline-flex;
@@ -143,6 +153,32 @@
         inset 0 1px 0 rgba(255, 255, 255, 0.2);
     position: relative;
     overflow: hidden;
+}
+
+.empty-state-cta-primary {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    box-shadow:
+        0 8px 24px rgba(16, 185, 129, 0.4),
+        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.empty-state-cta-primary:hover {
+    box-shadow:
+        0 12px 32px rgba(16, 185, 129, 0.5),
+        inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.empty-state-cta-secondary {
+    background: rgba(99, 102, 241, 0.12);
+    color: #4f46e5;
+    border: 2px solid #6366f1;
+    box-shadow: none;
+}
+
+.empty-state-cta-secondary:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: #4f46e5;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
 }
 
 .empty-state-cta::before {

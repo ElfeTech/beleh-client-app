@@ -16,6 +16,8 @@ import {
     adaptMultiDimensionalData,
     checkDimensionOverload,
     checkFieldCardinality,
+    detectWideFormatData,
+    transformWideToLong,
 } from '../../../utils/visualizationAdapter';
 
 interface ChartRendererProps {
@@ -191,8 +193,52 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
             case 'STACKED_BAR_CHART': {
                 try {
                     const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
+
+                    // If no series field, check if data is in wide format (multiple metric columns)
+                    // and transform it to long format for proper visualization
                     if (!chartData.seriesField) {
-                        return <div style={{ padding: '2rem', color: '#ef4444' }}>Error: Series field is required for stacked bar chart</div>;
+                        const xField = chartData.xField;
+                        const { isWideFormat, numericColumns } = detectWideFormatData(data, xField, chartData.yField);
+
+                        if (isWideFormat && numericColumns.length >= 2) {
+                            // Transform wide-format data to long-format
+                            const { data: longData, seriesField, valueField } = transformWideToLong(
+                                data,
+                                xField,
+                                numericColumns
+                            );
+
+                            // Check cardinality on the new series field (metric names)
+                            const cardinalityCheck = checkFieldCardinality(longData, seriesField, 15);
+                            if (!cardinalityCheck.valid) {
+                                return (
+                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                                        <p>{cardinalityCheck.message}</p>
+                                        <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
+                                    </div>
+                                );
+                            }
+
+                            // Render with transformed data - use grouped mode for better comparison
+                            // when comparing different metrics (sales vs profit)
+                            return (
+                                <MultiBarChart
+                                    data={longData}
+                                    xLabel={chartData.xLabel}
+                                    yLabel="Value"
+                                    seriesField={seriesField}
+                                    xField={xField}
+                                    yField={valueField}
+                                    timeGrain={chartData.timeGrain}
+                                    mode="grouped"
+                                    isExpanded={expanded}
+                                />
+                            );
+                        }
+
+                        // If not wide format and no series field, fall back to regular bar chart
+                        console.warn('Stacked bar chart requested but no series field and data is not in wide format. Falling back to bar chart.');
+                        return <BarChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />;
                     }
 
                     // Check cardinality
@@ -221,11 +267,16 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
                     );
                 } catch (error) {
                     console.error('Stacked bar chart rendering error:', error);
-                    return (
-                        <div style={{ padding: '2rem', color: '#ef4444' }}>
-                            Error rendering stacked bar chart: {error instanceof Error ? error.message : 'Unknown error'}
-                        </div>
-                    );
+                    // Final fallback: try to render as a simple bar chart
+                    try {
+                        return <BarChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />;
+                    } catch {
+                        return (
+                            <div style={{ padding: '2rem', color: '#ef4444' }}>
+                                Error rendering chart: {error instanceof Error ? error.message : 'Unknown error'}
+                            </div>
+                        );
+                    }
                 }
             }
 

@@ -28,7 +28,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const signInWithGoogle = async () => {
         try {
             setLoading(true);
-            await authService.signInWithGoogle();
+            const result = await authService.signInWithGoogle();
+            // Set user immediately so navigation to workspace sees user (avoids redirect to /signin)
+            setUser(result.user);
         } catch (error) {
             // Don't log error if user just cancelled the popup
             if (error instanceof Error && error.message === 'POPUP_CLOSED') {
@@ -44,7 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const registerWithGoogle = async () => {
         try {
             setLoading(true);
-            await authService.registerWithGoogle();
+            const result = await authService.registerWithGoogle();
+            // Set user immediately so navigation to workspace sees user (avoids redirect to /signin)
+            setUser(result.user);
         } catch (error) {
             // Don't log error if user just cancelled the popup
             if (error instanceof Error && error.message === 'POPUP_CLOSED') {
@@ -61,8 +65,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         try {
             setLoading(true);
             await authService.signOut();
+            setUser(null);
         } catch (error) {
             console.error('Error signing out:', error);
+            setUser(null);
             throw error;
         } finally {
             setLoading(false);
