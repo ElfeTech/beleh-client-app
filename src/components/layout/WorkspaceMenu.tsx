@@ -1,11 +1,16 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
+import type { DataSourceResponse, ChatSessionRead } from '../../types/api';
 import { toast } from 'sonner';
 import type { DataSourceResponse, ChatSessionRead } from '../../types/api';
 import { useDatasource } from '../../context/DatasourceContext';
 import { useChatSession } from '../../context/ChatSessionContext';
+import { useChatSession } from '../../context/ChatSessionContext';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
+import { authService } from '../../services/authService';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { ActionSheet, type ActionSheetItem } from '../common/ActionSheet';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -17,6 +22,10 @@ interface WorkspaceMenuProps {
     onRefresh?: () => void;
 }
 
+// Session cache to avoid refetching
+const sessionCache = new Map<string, { sessions: ChatSessionRead[], timestamp: number }>();
+const CACHE_DURATION = 30000; // 30 seconds
+
 export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceMenuProps) {
     const { user } = useAuth();
     const navigate = useNavigate();
@@ -27,13 +36,21 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
     const [expandedDatasets, setExpandedDatasets] = useState<Set<string>>(new Set());
     const [datasetSessions, setDatasetSessions] = useState<Map<string, ChatSessionRead[]>>(new Map());
     const [loadingSessions, setLoadingSessions] = useState<Set<string>>(new Set());
+    const [expandedDatasets, setExpandedDatasets] = useState<Set<string>>(new Set());
+    const [datasetSessions, setDatasetSessions] = useState<Map<string, ChatSessionRead[]>>(new Map());
+    const [loadingSessions, setLoadingSessions] = useState<Set<string>>(new Set());
     const [contextMenuAnchor, setContextMenuAnchor] = useState<HTMLElement | null>(null);
     const [selectedDatasetForMenu, setSelectedDatasetForMenu] = useState<string | null>(null);
     const [showActionSheet, setShowActionSheet] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [showEditModal, setShowEditModal] = useState(false);
     const [showRenameModal, setShowRenameModal] = useState(false);
+    const [showRenameModal, setShowRenameModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
+    const [isCreatingSession, setIsCreatingSession] = useState(false);
+    const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
+    const [showSessionDeleteConfirm, setShowSessionDeleteConfirm] = useState(false);
+    const [sessionToDelete, setSessionToDelete] = useState<{ id: string; datasourceId: string } | null>(null);
     const [isCreatingSession, setIsCreatingSession] = useState(false);
     const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
     const [showSessionDeleteConfirm, setShowSessionDeleteConfirm] = useState(false);
@@ -306,6 +323,14 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
         setShowRenameModal(true);
     };
 
+    const handlePreview = (datasetId: string) => {
+        navigate(`/workspace/${workspaceId}/datasets/${datasetId}/preview`);
+    };
+
+    const handleRename = () => {
+        setShowRenameModal(true);
+    };
+
     const handleDelete = () => {
         setShowDeleteConfirm(true);
     };
@@ -335,8 +360,10 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
             setShowDeleteConfirm(false);
             setSelectedDatasetForMenu(null);
             toast.success('Dataset deleted successfully');
+            toast.success('Dataset deleted successfully');
         } catch (err) {
             console.error('Failed to delete dataset:', err);
+            toast.error('Failed to delete dataset. Please try again.');
             toast.error('Failed to delete dataset. Please try again.');
         } finally {
             setIsDeleting(false);
@@ -346,6 +373,7 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
     const handleEditSuccess = () => {
         onRefresh?.();
         setShowEditModal(false);
+        setShowRenameModal(false);
         setShowRenameModal(false);
         setSelectedDatasetForMenu(null);
     };
@@ -368,10 +396,39 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
         {
             id: 'rename',
             label: 'Rename',
+            id: 'preview',
+            label: 'Preview Data',
+            icon: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                    <circle cx="12" cy="12" r="3" />
+                </svg>
+            ),
+            variant: 'default' as const,
+            onClick: () => {
+                if (selectedDatasetForMenu) handlePreview(selectedDatasetForMenu);
+            },
+        },
+        {
+            id: 'rename',
+            label: 'Rename',
             icon: (
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+            ),
+            variant: 'default' as const,
+            onClick: handleRename,
+        },
+        {
+            id: 'edit',
+            label: 'Update Dataset',
+            icon: (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="17 8 12 3 7 8" />
+                    <line x1="12" y1="3" x2="12" y2="15" />
                 </svg>
             ),
             variant: 'default' as const,
@@ -414,8 +471,13 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
             </div>
             <div className="dataset-list">
                 {sortedDataSources.map((source) => {
+                {sortedDataSources.map((source) => {
                     const iconInfo = getIconInfo(source.type);
                     const isActive = selectedDatasourceId === source.id;
+                    const isExpanded = expandedDatasets.has(source.id);
+                    const sourceSessions = datasetSessions.get(source.id) || [];
+                    const isLoadingSource = loadingSessions.has(source.id);
+
                     const isExpanded = expandedDatasets.has(source.id);
                     const sourceSessions = datasetSessions.get(source.id) || [];
                     const isLoadingSource = loadingSessions.has(source.id);
@@ -440,9 +502,142 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
                                     tabIndex={0}
                                     aria-pressed={isActive}
                                 >
+                        <div key={source.id} className="dataset-group">
+                            <div className="dataset-item-wrapper">
+                                <button
+                                    className={`dataset-expand-btn ${isExpanded ? 'expanded' : ''}`}
+                                    onClick={(e) => toggleDatasetExpansion(source.id, e)}
+                                    aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                                >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <polyline points="9 18 15 12 9 6" />
+                                    </svg>
+                                </button>
+                                <div
+                                    className={`dataset-item-compact ${isActive ? 'active' : ''}`}
+                                    onClick={() => handleDatasourceClick(source.id)}
+                                    onKeyDown={(e) => handleKeyDown(e, source.id)}
+                                    role="button"
+                                    tabIndex={0}
+                                    aria-pressed={isActive}
+                                >
                                     <span className={`dataset-icon ${iconInfo.class}`}>
                                         {iconInfo.label}
                                     </span>
+                                    <div className="dataset-item-title" title={source.name}>{source.name}</div>
+
+                                    {/* Info button with hover tooltip */}
+                                    <div className="dataset-info-wrapper">
+                                        <button
+                                            className="dataset-info-btn"
+                                            onClick={(e) => e.stopPropagation()}
+                                            aria-label="Dataset info"
+                                        >
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <circle cx="12" cy="12" r="10" />
+                                                <path d="M12 16v-4M12 8h.01" />
+                                            </svg>
+                                        </button>
+                                        <div className="dataset-info-tooltip">
+                                            <div className="tooltip-row">
+                                                <span className="tooltip-label">Status</span>
+                                                <span className="tooltip-value" style={{ color: getStatusColor(source.status) }}>
+                                                    {source.status}
+                                                </span>
+                                            </div>
+                                            <div className="tooltip-row">
+                                                <span className="tooltip-label">Type</span>
+                                                <span className="tooltip-value">{iconInfo.label}</span>
+                                            </div>
+                                            <div className="tooltip-row">
+                                                <span className="tooltip-label">Size</span>
+                                                <span className="tooltip-value">{formatFileSize(source.file_size)}</span>
+                                            </div>
+                                            {source.metadata_json?.row_count && (
+                                                <div className="tooltip-row">
+                                                    <span className="tooltip-label">Rows</span>
+                                                    <span className="tooltip-value">{source.metadata_json.row_count.toLocaleString()}</span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                <button
+                                    ref={(el) => (menuButtonRefs.current[source.id] = el)}
+                                    className="dataset-more-btn"
+                                    onClick={(e) => handleMoreClick(e, source.id)}
+                                    aria-label="More options"
+                                >
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <circle cx="12" cy="12" r="1" />
+                                        <circle cx="12" cy="5" r="1" />
+                                        <circle cx="12" cy="19" r="1" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            {/* Collapsible Sessions Submenu - Only for READY datasets */}
+                            {isExpanded && source.status === 'READY' && (
+                                <div className="session-submenu">
+                                    <div className="session-submenu-header">
+                                        <span className="session-submenu-title">Your Chats</span>
+                                        <button
+                                            className="session-new-btn"
+                                            onClick={(e) => handleNewSession(source.id, e)}
+                                            disabled={isCreatingSession}
+                                            title="New Chat"
+                                        >
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <line x1="12" y1="5" x2="12" y2="19" />
+                                                <line x1="5" y1="12" x2="19" y2="12" />
+                                            </svg>
+                                        </button>
+                                    </div>
+
+                                    {isLoadingSource ? (
+                                        <div className="session-loading">
+                                            <div className="session-loading-spinner"></div>
+                                            <span>Loading chats...</span>
+                                        </div>
+                                    ) : sourceSessions.length === 0 ? (
+                                        <div className="session-empty">
+                                            <span>No chats yet</span>
+                                        </div>
+                                    ) : (
+                                        <div className="session-list-submenu">
+                                            {sourceSessions.map(session => (
+                                                <div
+                                                    key={session.id}
+                                                    className={`session-item-compact ${activeSessionId === session.id && selectedDatasourceId === source.id ? 'active' : ''}`}
+                                                    onClick={() => handleSessionClick(session.id, source.id)}
+                                                >
+                                                    <svg className="session-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                                    </svg>
+                                                    <div className="session-item-info">
+                                                        <span className="session-title">{session.title}</span>
+                                                        <span className="session-time">{formatSessionTime(session.updated_at || session.created_at)}</span>
+                                                    </div>
+                                                    <button
+                                                        className="session-delete-btn"
+                                                        onClick={(e) => handleDeleteSession(session.id, source.id, e)}
+                                                        disabled={deletingSessionId === session.id}
+                                                        title="Delete session"
+                                                    >
+                                                        {deletingSessionId === session.id ? (
+                                                            <div className="session-delete-spinner"></div>
+                                                        ) : (
+                                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                                <path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+                                                            </svg>
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                                     <div className="dataset-item-title" title={source.name}>{source.name}</div>
 
                                     {/* Info button with hover tooltip */}
@@ -614,6 +809,22 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
                 }}
             />
 
+            {/* Session Delete Confirmation Dialog */}
+            <ConfirmDialog
+                isOpen={showSessionDeleteConfirm}
+                title="Delete Chat?"
+                message="This action cannot be undone. This chat and all its messages will be permanently deleted."
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                isLoading={deletingSessionId !== null}
+                onConfirm={handleConfirmSessionDelete}
+                onCancel={() => {
+                    setShowSessionDeleteConfirm(false);
+                    setSessionToDelete(null);
+                }}
+            />
+
             {/* Edit Dataset Modal */}
             {showEditModal && selectedDatasetForMenu && (
                 <DatasourceModal
@@ -622,6 +833,20 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
                     initialName={dataSources.find(ds => ds.id === selectedDatasetForMenu)?.name || ''}
                     onClose={() => {
                         setShowEditModal(false);
+                        setSelectedDatasetForMenu(null);
+                    }}
+                    onSuccess={handleEditSuccess}
+                />
+            )}
+
+            {/* Rename Dataset Modal */}
+            {showRenameModal && selectedDatasetForMenu && (
+                <DatasourceModal
+                    mode="rename"
+                    datasourceId={selectedDatasetForMenu}
+                    initialName={dataSources.find(ds => ds.id === selectedDatasetForMenu)?.name || ''}
+                    onClose={() => {
+                        setShowRenameModal(false);
                         setSelectedDatasetForMenu(null);
                     }}
                     onSuccess={handleEditSuccess}

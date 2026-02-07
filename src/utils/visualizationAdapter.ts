@@ -68,11 +68,16 @@ export function adaptVisualizationData(
   // Extract time grain from backend if available (check both direct property and advanced_spec)
   const timeGrain = visualization.time_grain || (visualization as any).advanced_spec?.time_grain;
 
+  // Extract time grain from backend if available (check both direct property and advanced_spec)
+  const timeGrain = visualization.time_grain || (visualization as any).advanced_spec?.time_grain;
+
   // Create format configurations
   const xFormat = createFormatConfig(
     xField,
     xEncoding.type,
     xSampleValues,
+    xEncoding.format,
+    timeGrain
     xEncoding.format,
     timeGrain
   );

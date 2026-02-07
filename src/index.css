@@ -1,6 +1,12 @@
 /* Enterprise Design System with Theme Support */
+/* Enterprise Design System with Theme Support */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
+/* ===============================================
+   THEME VARIABLES - LIGHT MODE (DEFAULT)
+   =============================================== */
+:root,
+[data-theme="light"] {
 /* ===============================================
    THEME VARIABLES - LIGHT MODE (DEFAULT)
    =============================================== */
@@ -33,9 +39,12 @@
   /* Semantic Colors */
   --success: #10b981;
   --success-light: #d1fae5;
+  --success-light: #d1fae5;
   --warning: #f59e0b;
   --warning-light: #fef3c7;
+  --warning-light: #fef3c7;
   --error: #ef4444;
+  --error-light: #fee2e2;
   --error-light: #fee2e2;
   --info: #3b82f6;
   --info-light: #dbeafe;
@@ -285,6 +294,21 @@ body {
 /* ===============================================
    TYPOGRAPHY
    =============================================== */
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  background-color: var(--bg-secondary);
+  color: var(--text-primary);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ===============================================
+   TYPOGRAPHY
+   =============================================== */
 h1,
 h2,
 h3,
@@ -293,6 +317,7 @@ h5,
 h6 {
   font-weight: 600;
   line-height: 1.25;
+  color: var(--text-primary);
   color: var(--text-primary);
 }
 
@@ -322,10 +347,12 @@ h6 {
 
 p {
   color: var(--text-secondary);
+  color: var(--text-secondary);
   line-height: 1.625;
 }
 
 a {
+  color: var(--text-link);
   color: var(--text-link);
   text-decoration: none;
   transition: color 0.2s ease;
@@ -333,8 +360,12 @@ a {
 
 a:hover {
   color: var(--text-link-hover);
+  color: var(--text-link-hover);
 }
 
+/* ===============================================
+   BUTTONS
+   =============================================== */
 /* ===============================================
    BUTTONS
    =============================================== */
@@ -351,9 +382,11 @@ button {
   justify-content: center;
   gap: var(--spacing-sm);
   color: var(--text-primary);
+  color: var(--text-primary);
 }
 
 button:focus {
+  outline: 2px solid var(--border-focus);
   outline: 2px solid var(--border-focus);
   outline-offset: 2px;
 }
@@ -366,14 +399,22 @@ button:disabled {
 /* ===============================================
    FORM ELEMENTS
    =============================================== */
+/* ===============================================
+   FORM ELEMENTS
+   =============================================== */
 input,
+textarea,
+select {
 textarea,
 select {
   font-family: inherit;
   font-size: 0.875rem;
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--border-primary);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
   background-color: var(--bg-input);
   color: var(--text-primary);
   transition: all 0.2s ease;
@@ -383,7 +424,12 @@ select {
 input:focus,
 textarea:focus,
 select:focus {
+textarea:focus,
+select:focus {
   outline: none;
+  border-color: var(--border-focus);
+  background-color: var(--bg-input-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
   border-color: var(--border-focus);
   background-color: var(--bg-input-focus);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
@@ -392,8 +438,20 @@ select:focus {
 input::placeholder,
 textarea::placeholder {
   color: var(--text-muted);
+  color: var(--text-muted);
 }
 
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background-color: var(--bg-tertiary);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+/* ===============================================
+   LOADING SCREEN
+   =============================================== */
 input:disabled,
 textarea:disabled,
 select:disabled {
@@ -414,11 +472,15 @@ select:disabled {
   gap: var(--spacing-md);
   color: var(--text-tertiary);
   background-color: var(--bg-primary);
+  color: var(--text-tertiary);
+  background-color: var(--bg-primary);
 }
 
 .loading-spinner {
   width: 40px;
   height: 40px;
+  border: 3px solid var(--border-primary);
+  border-top-color: var(--primary-500);
   border: 3px solid var(--border-primary);
   border-top-color: var(--primary-500);
   border-radius: 50%;
@@ -431,6 +493,9 @@ select:disabled {
   }
 }
 
+/* ===============================================
+   UTILITY CLASSES
+   =============================================== */
 /* ===============================================
    UTILITY CLASSES
    =============================================== */

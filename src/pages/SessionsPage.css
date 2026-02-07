@@ -1,3 +1,4 @@
+/* SessionsPage with Theme Support */
 .sessions-page {
   display: flex;
   flex-direction: column;
@@ -32,6 +33,7 @@
 .selected-dataset svg {
   width: 16px;
   height: 16px;
+  color: var(--primary-500);
   color: var(--primary-500);
 }
 
@@ -98,6 +100,10 @@
   border-color: var(--primary-500);
   background: var(--primary-50);
   box-shadow: 0 0 0 1px var(--primary-500);
+}
+
+[data-theme="dark"] .session-card.active {
+  background: rgba(59, 130, 246, 0.1);
 }
 
 [data-theme="dark"] .session-card.active {
