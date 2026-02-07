@@ -69,10 +69,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
             // Extract items from paginated response
             const fetchedWorkspaces = response.items;
-            const response = await apiClient.listWorkspaces(token);
-
-            // Extract items from paginated response
-            const fetchedWorkspaces = response.items;
             setWorkspaces(fetchedWorkspaces);
 
             // Only set default workspace on initial load
@@ -81,8 +77,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
                 let workspaceToSet: WorkspaceResponse | null = null;
 
                 if (savedWorkspaceId) {
-                    workspaceToSet = fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === savedWorkspaceId) || null;
-                    workspaceToSet = fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === savedWorkspaceId) || null;
+workspaceToSet = fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === savedWorkspaceId) || null;
                 }
 
                 if (!workspaceToSet) {

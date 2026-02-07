@@ -53,14 +53,6 @@ export function MainLayout() {
         });
     };
 
-    const handleToggleCollapse = () => {
-        setIsSidebarCollapsed(prev => {
-            const newState = !prev;
-            localStorage.setItem('sidebar-collapsed', String(newState));
-            return newState;
-        });
-    };
-
     return (
         <div className="main-layout">
             {/* Desktop: Show sidebar */}

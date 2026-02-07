@@ -1,6 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'sonner';
-import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import { WorkspaceProvider } from './context/WorkspaceContext';
 import { ChatSessionProvider } from './context/ChatSessionContext';
@@ -16,11 +15,9 @@ import { SignUp } from './pages/SignUp';
 import { Workspace } from './pages/Workspace';
 import DatasetsPage from './pages/DatasetsPage';
 import { DatasetPreviewPage } from './pages/DatasetPreviewPage';
-import { DatasetPreviewPage } from './pages/DatasetPreviewPage';
 import SessionsPage from './pages/SessionsPage';
 import SettingsPage from './pages/SettingsPage';
 import { MainLayout } from './components/layout/MainLayout';
-import FeedbackModal from './components/common/FeedbackModal';
 import FeedbackModal from './components/common/FeedbackModal';
 
 function App() {
