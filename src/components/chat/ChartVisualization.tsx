@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import type { ChatWorkflowResponse, VisualizationRecommendation } from '../../types/api';
+import type { ChatWorkflowResponse } from '../../types/api';
 import { ChartRenderer } from './charts/ChartRenderer';
 import { ChartTypeSelector } from './charts/ChartTypeSelector';
 import {
@@ -56,16 +56,16 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
     }, [fullData, visualization, originalChartType]);
 
     // Create modified visualization with user-selected chart type
-    const modifiedVisualization = useMemo((): VisualizationRecommendation | null => {
+    const modifiedVisualization = useMemo(() => {
         if (!visualization || selectedChartType === originalChartType) {
-            return visualization ?? null;
+            return visualization;
         }
 
-        const backendType = chartTypeToBackendFormat(selectedChartType) as VisualizationRecommendation['type'];
+        // Create a copy with the new chart type
         return {
             ...visualization,
-            type: backendType,
-            visualization_type: backendType,
+            type: chartTypeToBackendFormat(selectedChartType),
+            visualization_type: chartTypeToBackendFormat(selectedChartType),
         };
     }, [visualization, selectedChartType, originalChartType]);
 
