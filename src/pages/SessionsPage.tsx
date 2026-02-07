@@ -1,11 +1,15 @@
 import React, { useContext, useState, useEffect, useCallback } from 'react';
+import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { toast } from 'sonner';
 import { toast } from 'sonner';
 import { ChatSessionContext } from '../context/ChatSessionContext';
 import { DatasourceContext } from '../context/DatasourceContext';
 import { WorkspaceContext } from '../context/WorkspaceContext';
 import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
+import { usePaginatedFetch } from '../hooks/usePaginatedFetch';
+import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { usePaginatedFetch } from '../hooks/usePaginatedFetch';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import './SessionsPage.css';
@@ -19,6 +23,10 @@ const SessionsPage: React.FC = () => {
   const [longPressSession, setLongPressSession] = useState<string | null>(null);
   const [pressTimer, setPressTimer] = useState<number | null>(null);
   const [isCreatingSession, setIsCreatingSession] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -85,6 +93,7 @@ const SessionsPage: React.FC = () => {
 
   const getSessionTitle = (session: { id: string; title: string }) => {
     // Use the actual session title from the API, trimmed for mobile display
+    const title = session.title || `Chat ${session.id.substring(0, 8)}`;
     const title = session.title || `Chat ${session.id.substring(0, 8)}`;
     const maxLength = 50; // Optimal length for mobile display
 
@@ -159,6 +168,7 @@ const SessionsPage: React.FC = () => {
 
   const handleRename = (_sessionId: string) => {
     const newName = prompt('Enter new chat name:');
+    const newName = prompt('Enter new chat name:');
     if (newName) {
       // TODO: Implement rename functionality in context using _sessionId
     }
@@ -168,7 +178,31 @@ const SessionsPage: React.FC = () => {
   const handleDelete = (sessionId: string) => {
     setSessionToDelete(sessionId);
     setShowDeleteConfirm(true);
+    setSessionToDelete(sessionId);
+    setShowDeleteConfirm(true);
     setLongPressSession(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!sessionToDelete) return;
+
+    setIsDeleting(true);
+    try {
+      const token = authService.getAuthToken();
+      if (!token) throw new Error('No auth token');
+
+      await apiClient.deleteChatSession(token, sessionToDelete);
+      removeSession(sessionToDelete);
+      resetPagination();
+      toast.success('Chat deleted successfully');
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+      toast.error('Failed to delete chat. Please try again.');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+      setSessionToDelete(null);
+    }
   };
 
   const handleConfirmDelete = async () => {
@@ -208,6 +242,7 @@ const SessionsPage: React.FC = () => {
   return (
     <div className="sessions-page">
       <div className="sessions-header">
+        <h1>Your Chats</h1>
         <h1>Your Chats</h1>
         {selectedDataset && (
           <p className="selected-dataset">

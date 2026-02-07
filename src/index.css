@@ -399,14 +399,22 @@ button:disabled {
 /* ===============================================
    FORM ELEMENTS
    =============================================== */
+/* ===============================================
+   FORM ELEMENTS
+   =============================================== */
 input,
+textarea,
+select {
 textarea,
 select {
   font-family: inherit;
   font-size: 0.875rem;
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--border-primary);
+  border: 1px solid var(--border-primary);
   border-radius: var(--radius-md);
+  background-color: var(--bg-input);
+  color: var(--text-primary);
   background-color: var(--bg-input);
   color: var(--text-primary);
   transition: all 0.2s ease;
@@ -416,7 +424,12 @@ select {
 input:focus,
 textarea:focus,
 select:focus {
+textarea:focus,
+select:focus {
   outline: none;
+  border-color: var(--border-focus);
+  background-color: var(--bg-input-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
   border-color: var(--border-focus);
   background-color: var(--bg-input-focus);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
@@ -425,8 +438,20 @@ select:focus {
 input::placeholder,
 textarea::placeholder {
   color: var(--text-muted);
+  color: var(--text-muted);
 }
 
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background-color: var(--bg-tertiary);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+/* ===============================================
+   LOADING SCREEN
+   =============================================== */
 input:disabled,
 textarea:disabled,
 select:disabled {
@@ -445,6 +470,8 @@ select:disabled {
   justify-content: center;
   height: 100vh;
   gap: var(--spacing-md);
+  color: var(--text-tertiary);
+  background-color: var(--bg-primary);
   color: var(--text-tertiary);
   background-color: var(--bg-primary);
 }

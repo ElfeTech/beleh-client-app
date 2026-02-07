@@ -49,6 +49,7 @@ export function SignUp() {
 
     const handleGoogleSignUp = async () => {
         let timeoutId: any = null;
+        let timeoutId: any = null;
         try {
             setError(null);
             setAuthLoading(true);
@@ -58,6 +59,9 @@ export function SignUp() {
             timeoutId = setTimeout(() => {
                 setIsSlow(true);
             }, 5000);
+
+            setAuthLoading(true);
+            setIsSlow(false);
 
             // Set a timeout to show "still working" message if it takes longer than 5s
             timeoutId = setTimeout(() => {
@@ -186,6 +190,7 @@ export function SignUp() {
                     <button
                         className="auth-google-btn"
                         onClick={handleGoogleSignUp}
+                        disabled={authLoading}
                         disabled={authLoading}
                     >
                         {authLoading ? (

@@ -1,12 +1,19 @@
 import React, { useState, useRef } from 'react';
 import { useFeedback } from '../../../context/FeedbackContext';
 import { FEEDBACK_TRIGGERS } from '../../../types/feedback';
+import React, { useState, useRef } from 'react';
+import { useFeedback } from '../../../context/FeedbackContext';
+import { FEEDBACK_TRIGGERS } from '../../../types/feedback';
 import { BarChart } from './BarChart';
 import { LineChart } from './LineChart';
 import { PieChart } from './PieChart';
 import { DataTable } from './DataTable';
 import { ChartCard } from './ChartCard';
 import { ExpandedChartModal } from './ExpandedChartModal';
+import { MultiLineChart } from './MultiLineChart';
+import { MultiBarChart } from './MultiBarChart';
+import { ScatterPlotChart } from './ScatterPlotChart';
+import { HeatmapChart } from './HeatmapChart';
 import { MultiLineChart } from './MultiLineChart';
 import { MultiBarChart } from './MultiBarChart';
 import { ScatterPlotChart } from './ScatterPlotChart';
@@ -75,9 +82,60 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
     };
 
     const vizType = normalizeVisualizationType(normalizedVisualization.visualization_type);
+    const { trackVisualizationInteraction, showFeedback } = useFeedback();
+
+    // Normalize visualization object to handle both old and new backend formats
+    const normalizedVisualization = React.useMemo(() => {
+        const viz = { ...visualization };
+
+        // Handle visualization_type vs type
+        const vizTypeValue = viz.type || viz.visualization_type;
+        viz.visualization_type = vizTypeValue;
+
+        // Convert dimensions to encoding if dimensions exists but encoding doesn't
+        if (viz.dimensions && !viz.encoding) {
+            viz.encoding = {
+                x: viz.dimensions.x ? { field: viz.dimensions.x, type: 'categorical' as const, label: viz.dimensions.x } : undefined,
+                y: viz.dimensions.y ? { field: viz.dimensions.y, type: 'quantitative' as const, label: viz.dimensions.y } : undefined,
+                series: viz.dimensions.series ? { field: viz.dimensions.series, type: 'categorical' as const, label: viz.dimensions.series } : undefined,
+                color: viz.dimensions.color ? { field: viz.dimensions.color, type: 'categorical' as const, label: viz.dimensions.color } : undefined,
+                size: viz.dimensions.size ? { field: viz.dimensions.size, type: 'quantitative' as const, label: viz.dimensions.size } : undefined,
+                facet: viz.dimensions.facet ? { field: viz.dimensions.facet, type: 'categorical' as const, label: viz.dimensions.facet } : undefined,
+            };
+        }
+
+        return viz;
+    }, [visualization]);
+
+    // Normalize visualization type from backend format to internal format
+    const normalizeVisualizationType = (type: string | undefined): string => {
+        if (!type) {
+            return 'NONE';
+        }
+        const typeMap: Record<string, string> = {
+            'line': 'LINE_CHART',
+            'multiline': 'MULTI_LINE_CHART',
+            'bar': 'BAR_CHART',
+            'stacked_bar': 'STACKED_BAR_CHART',
+            'heatmap': 'HEATMAP',
+            'scatter': 'SCATTER_PLOT',
+            'pie': 'PIE_CHART',
+            'table': 'TABLE',
+            'auto': 'NONE',
+        };
+        return typeMap[type.toLowerCase()] || type.toUpperCase();
+    };
+
+    const vizType = normalizeVisualizationType(normalizedVisualization.visualization_type);
 
     const handleExpand = () => {
         setIsExpanded(true);
+        // Track visualization interaction for feedback
+        trackVisualizationInteraction();
+        // Show UX feedback after chart interaction (longer delay for user to view chart)
+        setTimeout(() => {
+            showFeedback(FEEDBACK_TRIGGERS.UX);
+        }, 5000); // 5 seconds - give user time to explore the chart
         // Track visualization interaction for feedback
         trackVisualizationInteraction();
         // Show UX feedback after chart interaction (longer delay for user to view chart)
@@ -530,11 +588,13 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
                 return (
                     <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
                         Unsupported visualization type: {normalizedVisualization.type || normalizedVisualization.visualization_type} (normalized: {vizType})
+                        Unsupported visualization type: {normalizedVisualization.type || normalizedVisualization.visualization_type} (normalized: {vizType})
                     </div>
                 );
         }
     };
 
+    const isTable = vizType === 'TABLE';
     const isTable = vizType === 'TABLE';
 
     return (
@@ -546,6 +606,8 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
                     maxWidth: showDataTable && !isTable ? undefined : '100%'
                 }}>
                     <ChartCard
+                        title={normalizedVisualization.title}
+                        description={normalizedVisualization.description}
                         title={normalizedVisualization.title}
                         description={normalizedVisualization.description}
                         onExpand={handleExpand}
@@ -573,6 +635,8 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
 
             {isExpanded && (
                 <ExpandedChartModal
+                    title={normalizedVisualization.title}
+                    description={normalizedVisualization.description}
                     title={normalizedVisualization.title}
                     description={normalizedVisualization.description}
                     onClose={handleClose}

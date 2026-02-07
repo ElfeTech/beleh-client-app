@@ -92,6 +92,7 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
 
     // Handle error state from execution metadata
     if (execution && execution.status === 'FAILED' && execution.message) {
+    if (execution && execution.status === 'FAILED' && execution.message) {
         return (
             <div className="chart-response error">
                 <div className="error-message">
