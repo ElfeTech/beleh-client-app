@@ -9,277 +9,14 @@
     transition: background-color 0.3s ease;
 }
 
+/* Workspace fills the main content area from MainLayout; do not override .sidebar or .main-content */
 .workspace-with-sessions {
     display: flex;
-    height: calc(100vh - 70px);
+    flex: 1;
+    min-height: 0;
     width: 100%;
     gap: 0;
     overflow: hidden;
-}
-
-/* Sidebar */
-.sidebar {
-    width: 240px;
-    background: var(--bg-sidebar);
-    background: var(--bg-sidebar);
-    color: white;
-    display: flex;
-    flex-direction: column;
-    flex-shrink: 0;
-}
-
-.sidebar-header {
-    padding: var(--spacing-lg);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-}
-
-.sidebar-header svg {
-    width: 24px;
-    height: 24px;
-    color: #fbbf24;
-}
-
-.sidebar-header h1 {
-    font-size: 1rem;
-    font-weight: 600;
-    color: white;
-}
-
-/* Sidebar Section */
-.sidebar-section {
-    padding: 0 var(--spacing-md);
-    margin-bottom: var(--spacing-lg);
-}
-
-.sidebar-section-title {
-    font-size: 0.6875rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: rgba(255, 255, 255, 0.5);
-    padding: var(--spacing-sm) var(--spacing-sm);
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-}
-
-.sidebar-section-title svg {
-    width: 14px;
-    height: 14px;
-}
-
-/* Dataset Item */
-.dataset-item {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-sm);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    font-size: 0.875rem;
-}
-
-.dataset-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.dataset-item.active {
-    background: rgba(255, 255, 255, 0.15);
-}
-
-.dataset-icon {
-    width: 20px;
-    height: 20px;
-    border-radius: var(--radius-sm);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.625rem;
-    font-weight: 600;
-}
-
-.dataset-icon.csv {
-    background: #22c55e;
-}
-
-.dataset-icon.xlsx {
-    background: #a855f7;
-}
-
-/* Nav Items */
-.sidebar-nav {
-    padding: 0 var(--spacing-md);
-    flex: 1;
-}
-
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    padding: var(--spacing-sm) var(--spacing-sm);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.8);
-    margin-bottom: var(--spacing-xs);
-}
-
-.nav-item:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-}
-
-.nav-item svg {
-    width: 18px;
-    height: 18px;
-}
-
-/* Sidebar Footer */
-.sidebar-footer {
-    padding: var(--spacing-md);
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.usage-info {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-sm);
-    font-size: 0.8125rem;
-    color: rgba(255, 255, 255, 0.7);
-    margin-bottom: var(--spacing-md);
-}
-
-.usage-info svg {
-    width: 16px;
-    height: 16px;
-}
-
-.upgrade-btn {
-    width: 100%;
-    padding: var(--spacing-sm) var(--spacing-md);
-    background: #0ea5e9;
-    color: white;
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.upgrade-btn:hover {
-    background: #0284c7;
-}
-
-/* Main Content */
-.main-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    background-color: var(--bg-secondary);
-    transition: background-color 0.3s ease;
-    background-color: var(--bg-secondary);
-    transition: background-color 0.3s ease;
-}
-
-/* Top Header */
-.top-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--spacing-lg) var(--spacing-xl);
-    background: var(--bg-primary);
-    border-bottom: 1px solid var(--border-primary);
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-    background: var(--bg-primary);
-    border-bottom: 1px solid var(--border-primary);
-    transition: background-color 0.3s ease, border-color 0.3s ease;
-}
-
-.welcome-section h2 {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    color: var(--text-primary);
-    margin-bottom: var(--spacing-xs);
-}
-
-.welcome-section p {
-    font-size: 0.875rem;
-    color: var(--text-tertiary);
-    color: var(--text-tertiary);
-}
-
-.header-actions {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-md);
-}
-
-.notification-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: var(--text-tertiary);
-    color: var(--text-tertiary);
-    transition: all 0.2s ease;
-}
-
-.notification-btn:hover {
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-    background: var(--bg-tertiary);
-    color: var(--text-primary);
-}
-
-.notification-btn svg {
-    width: 20px;
-    height: 20px;
-}
-
-.user-avatar {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, #60a5fa, #a78bfa);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: 600;
-    cursor: pointer;
-    overflow: hidden;
-}
-
-.user-avatar img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.user-dropdown {
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-xs);
-    cursor: pointer;
-}
-
-.user-dropdown svg {
-    width: 16px;
-    height: 16px;
-    color: var(--text-muted);
-    color: var(--text-muted);
 }
 
 /* Content Area */
@@ -297,6 +34,7 @@
 
 .workspace-with-sessions .content-area {
     flex: 1;
+    min-height: 0;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -778,22 +516,8 @@
 .chat-input-wrapper input::placeholder,
 .chat-input-wrapper textarea::placeholder {
     color: var(--text-muted);
-    line-height: 24px;
-    min-height: 24px;
-    max-height: 96px;
-    /* 4 lines: 24px * 4 */
-    overflow-y: auto;
-    overflow-x: hidden;
-    color: var(--text-primary);
 }
 
-.chat-input-wrapper input::placeholder,
-.chat-input-wrapper textarea::placeholder {
-    color: var(--text-muted);
-}
-
-.chat-input-wrapper input:focus,
-.chat-input-wrapper textarea:focus {
 .chat-input-wrapper input:focus,
 .chat-input-wrapper textarea:focus {
     outline: none;
@@ -899,10 +623,6 @@
 }
 
 @media (max-width: 768px) {
-    .sidebar {
-        display: none;
-    }
-
     .stats-grid {
         grid-template-columns: 1fr;
     }
@@ -917,8 +637,6 @@
 
     /* Mobile workspace layout */
     .workspace-with-sessions {
-        /* Account for 64px bottom nav */
-        height: calc(100vh - 64px);
         flex-direction: column;
     }
 
@@ -952,13 +670,7 @@
         display: none;
     }
 
-    /* Hide AI avatar on mobile to maximize content width */
-    .message-avatar.ai {
-        display: none;
-    }
-
     .message-content {
-        max-width: 100%;
         max-width: 100%;
     }
 
@@ -988,26 +700,11 @@
 
     .chat-input-wrapper input,
     .chat-input-wrapper textarea {
-        font-size: 16px;
-        /* Prevents iOS zoom */
-    .chat-input-wrapper input,
-    .chat-input-wrapper textarea {
-        font-size: 16px;
-        /* Prevents iOS zoom */
+        font-size: 16px; /* Prevents iOS zoom */
         padding: var(--spacing-sm) var(--spacing-md);
     }
 
     .send-btn {
-        padding: 10px;
-        width: 42px;
-        height: 42px;
-        min-width: 42px;
-        border-radius: 50%;
-    }
-
-    .send-icon {
-        width: 22px;
-        height: 22px;
         padding: 10px;
         width: 42px;
         height: 42px;
@@ -1046,8 +743,6 @@
 }
 
 /* New Chat Features */
-.chat-empty-state,
-.chat-loading-state {
 .chat-empty-state,
 .chat-loading-state {
     display: flex;
@@ -1221,38 +916,10 @@
 }
 
 @keyframes fadeInOut {
-
     0%,
     100% {
         opacity: 0.7;
     }
-
-    50% {
-        opacity: 1;
-    }
-}
-
-.loading-status-container {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.loading-status-text {
-    font-size: 0.8125rem;
-    color: rgba(255, 255, 255, 0.9);
-    font-weight: 500;
-    white-space: nowrap;
-    animation: fadeInOut 2s ease-in-out infinite;
-}
-
-@keyframes fadeInOut {
-
-    0%,
-    100% {
-        opacity: 0.7;
-    }
-
     50% {
         opacity: 1;
     }
@@ -1275,19 +942,12 @@
 }
 
 @keyframes typing {
-
-    0%,
-    60%,
-    100% {
-
     0%,
     60%,
     100% {
         opacity: 0.3;
         transform: translateY(0);
     }
-
-
     30% {
         opacity: 1;
         transform: translateY(-4px);

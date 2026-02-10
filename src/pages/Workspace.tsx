@@ -5,7 +5,6 @@ import { useDatasource } from '../context/DatasourceContext';
 import { useChatSession } from '../context/ChatSessionContext';
 import { useUsage } from '../context/UsageContext';
 import { useFeedback } from '../context/FeedbackContext';
-import { useFeedback } from '../context/FeedbackContext';
 import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
 import type { ChatWorkflowResponse, ChatMessageRead } from '../types/api';
@@ -37,8 +36,6 @@ interface Message {
     timestamp: Date;
     isLoading?: boolean;
     status?: 'sending' | 'sent' | 'error';
-    isLoading?: boolean;
-    status?: 'sending' | 'sent' | 'error';
 }
 
 export function Workspace() {
@@ -57,9 +54,6 @@ export function Workspace() {
     const [isInitialChatLoading, setIsInitialChatLoading] = useState(true);
     const [initialSyncError, setInitialSyncError] = useState<string | null>(null);
     const [processingStatus, setProcessingStatus] = useState('');
-    const [isInitialChatLoading, setIsInitialChatLoading] = useState(true);
-    const [initialSyncError, setInitialSyncError] = useState<string | null>(null);
-    const [processingStatus, setProcessingStatus] = useState('');
     const [isCreatingSession, setIsCreatingSession] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [showUploadModal, setShowUploadModal] = useState(false);
@@ -70,9 +64,6 @@ export function Workspace() {
     const [demoMessages, setDemoMessages] = useState<Message[]>([]);
     const demoMessagesEndRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
-    const messagesTopRef = useRef<HTMLDivElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const chatMessagesContainerRef = useRef<HTMLDivElement>(null);
     const messagesTopRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatMessagesContainerRef = useRef<HTMLDivElement>(null);
@@ -101,14 +92,6 @@ export function Workspace() {
     const previousScrollTopRef = useRef<number>(0);
     const isLoadingOlderMessagesRef = useRef<boolean>(false);
 
-    // Pagination state for messages
-    const [currentPage, setCurrentPage] = useState(1);
-    const [hasMoreMessages, setHasMoreMessages] = useState(false);
-    const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
-    const previousScrollHeightRef = useRef<number>(0);
-    const previousScrollTopRef = useRef<number>(0);
-    const isLoadingOlderMessagesRef = useRef<boolean>(false);
-
     // Use datasources from WorkspaceContext instead of local state
     const dataSources = workspaceContext.datasources;
     const isLoadingDataSources = workspaceContext.loading;
@@ -125,24 +108,6 @@ export function Workspace() {
         return "Ask a question about your data...";
     };
 
-    const scrollToBottom = (instant = false) => {
-        messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
-    };
-
-    // Auto-resize textarea based on content
-    const adjustTextareaHeight = () => {
-        const textarea = textareaRef.current;
-        if (!textarea) return;
-
-        // Reset height to auto to get the correct scrollHeight
-        textarea.style.height = 'auto';
-
-        // Calculate new height (limited to 3 lines)
-        const lineHeight = 24; // Approximate line height in pixels
-        const maxHeight = lineHeight * 3; // 3 lines
-        const newHeight = Math.min(textarea.scrollHeight, maxHeight);
-
-        textarea.style.height = `${newHeight}px`;
     const scrollToBottom = (instant = false) => {
         messagesEndRef.current?.scrollIntoView({ behavior: instant ? 'auto' : 'smooth' });
     };
@@ -191,15 +156,6 @@ export function Workspace() {
         }
     }, [workspaceId, workspaces, currentWorkspace?.id, setCurrentWorkspace]);
 
-    // Check if we should show returning user feedback
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            showFeedback(FEEDBACK_TRIGGERS.RETURNING_USER);
-        }, 2000); // Show after 2 seconds of being on the page
-
-        return () => clearTimeout(timer);
-    }, [showFeedback]);
-
     // Load sessions when datasource changes
     useEffect(() => {
         if (selectedDatasourceId) {
@@ -227,8 +183,6 @@ export function Workspace() {
             }
         } else {
             loadedDatasourceRef.current = null;
-            // setSessions([]) is handled by context if we wanted, but here we can force clear
-            // Actually, if we clear datasource, we should probably clear sessions locally or let context handle it
             setSessions([]);
             setActiveSessionId(null);
             setMessages([]);
@@ -250,27 +204,9 @@ export function Workspace() {
 
             const response = await apiClient.getSessionMessagesPaginated(token, sessionId, { page, page_size: 20 });
             const messagesData = response.items;
-            const response = await apiClient.getSessionMessagesPaginated(token, sessionId, { page, page_size: 20 });
-            const messagesData = response.items;
 
             // Convert API messages to UI messages
             const uiMessages: Message[] = messagesData.map((msg: ChatMessageRead) => {
-                // Determine message content, with validation for failed queries
-                let messageContent = msg.content;
-
-                // For AI messages, check if execution failed and override content if needed
-                if (msg.role === 'assistant' && msg.message_metadata) {
-                    const execution = msg.message_metadata.execution;
-                    const insight = msg.message_metadata.insight;
-
-                    // If query failed with no results, show the error message
-                    if (execution?.status === 'FAILED' && execution?.row_count === 0) {
-                        messageContent = execution?.message || 'Query execution failed. Please try rephrasing your question.';
-                    } else if (!messageContent || messageContent === 'Here are the results:') {
-                        // Fallback to insight summary if content is generic or empty
-                        messageContent = insight?.summary || messageContent;
-                    }
-                }
                 // Determine message content, with validation for failed queries
                 let messageContent = msg.content;
 
@@ -291,7 +227,6 @@ export function Workspace() {
                 const uiMessage: Message = {
                     id: msg.id,
                     type: msg.role === 'user' ? 'user' : 'ai',
-                    content: messageContent,
                     content: messageContent,
                     response: msg.role === 'assistant' && msg.message_metadata ? {
                         intent: msg.message_metadata.intent,
@@ -430,7 +365,6 @@ export function Workspace() {
 
                 // Check abort
                 if (abortController.signal.aborted) {
-                    setIsInitialChatLoading(false);
                     setIsInitialChatLoading(false);
                     return;
                 }
@@ -643,13 +577,10 @@ export function Workspace() {
                 loadedSessionRef.current = activeSessionId;
                 // Reset scroll flag when loading new session
                 initialScrollDoneRef.current = false;
-                // Reset scroll flag when loading new session
-                initialScrollDoneRef.current = false;
                 loadSessionMessages(activeSessionId);
             }
         } else {
             loadedSessionRef.current = null;
-            initialScrollDoneRef.current = false;
             initialScrollDoneRef.current = false;
             setMessages([]);
         }
@@ -657,13 +588,7 @@ export function Workspace() {
     }, [activeSessionId]);
 
     // Auto-scroll to bottom when messages change (for new messages during chat)
-    // Auto-scroll to bottom when messages change (for new messages during chat)
     useEffect(() => {
-        // Only smooth scroll for new messages added during chat session
-        // Initial load scrolling is handled in loadSessionMessages
-        if (initialScrollDoneRef.current && messages.length > 0) {
-            scrollToBottom();
-        }
         // Only smooth scroll for new messages added during chat session
         // Initial load scrolling is handled in loadSessionMessages
         if (initialScrollDoneRef.current && messages.length > 0) {
@@ -744,7 +669,6 @@ export function Workspace() {
         } catch (err) {
             console.error('[Workspace] Failed to create session:', err);
             setError('Failed to create new chat');
-            setError('Failed to create new chat');
             return null;
         } finally {
             setIsCreatingSession(false);
@@ -763,17 +687,14 @@ export function Workspace() {
         // Determine which session to use
         let sessionIdToUse = activeSessionId;
 
-
         // Create a new session if none exists
         if (!sessionIdToUse) {
             const newSessionId = await handleNewSession();
             if (!newSessionId) {
                 setError('Failed to create chat. Please try again.');
-                setError('Failed to create chat. Please try again.');
                 return;
             }
             sessionIdToUse = newSessionId;
-        }
         }
 
         setInputValue('');
@@ -786,15 +707,7 @@ export function Workspace() {
 
         // Add user message immediately with 'sending' status
         const userMessageId = Date.now().toString();
-        // Reset textarea height after sending
-        if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-        }
-
-        // Add user message immediately with 'sending' status
-        const userMessageId = Date.now().toString();
         const userMessage: Message = {
-            id: userMessageId,
             id: userMessageId,
             type: 'user',
             content: question,
@@ -810,36 +723,10 @@ export function Workspace() {
             content: '',
             timestamp: new Date(),
             isLoading: true
-            status: 'sending'
         };
-
-        // Add a temporary AI "thinking" message
-        const aiLoadingMessageId = (Date.now() + 1).toString();
-        const aiLoadingMessage: Message = {
-            id: aiLoadingMessageId,
-            type: 'ai',
-            content: '',
-            timestamp: new Date(),
-            isLoading: true
-        };
-
-        setMessages(prev => [...prev, userMessage, aiLoadingMessage]);
 
         setMessages(prev => [...prev, userMessage, aiLoadingMessage]);
         setIsLoading(true);
-        setProcessingStatus('Analyzing your request...');
-
-        // Status update intervals
-        const statusUpdates = [
-            { time: 1500, status: 'Fetching your data...' },
-            { time: 3500, status: 'Performing AI calculations...' },
-            { time: 6000, status: 'Generating insights...' },
-            { time: 8500, status: 'Finalizing visualization...' }
-        ];
-
-        const timerIds = statusUpdates.map(update =>
-            setTimeout(() => setProcessingStatus(update.status), update.time)
-        );
         setProcessingStatus('Analyzing your request...');
 
         // Status update intervals
@@ -868,68 +755,6 @@ export function Workspace() {
                 selectedDatasourceId
             );
 
-
-            // Determine AI message content based on execution status
-            let aiMessageContent: string;
-
-            if (response.execution?.status === 'FAILED' && response.execution?.row_count === 0) {
-                // Show the error message from execution when query fails
-                aiMessageContent = response.execution?.message || 'Query execution failed. Please try rephrasing your question.';
-            } else {
-                // Show the insight summary or default message
-                aiMessageContent = response.insight?.summary || 'Here are the results:';
-            }
-
-            setMessages(prev => prev.map(msg => {
-                if (msg.id === userMessageId) {
-                    return { ...msg, status: 'sent' as const };
-                }
-                if (msg.id === aiLoadingMessageId) {
-                    return {
-                        ...msg,
-                        id: (Date.now() + 2).toString(),
-                        type: 'ai',
-                        content: aiMessageContent,
-                        response: response,
-                        timestamp: new Date(),
-                        isLoading: false
-                    };
-                }
-                return msg;
-            }));
-
-            // Track chat query for feedback
-            trackChatQuery();
-
-            // Check if this was a complex query (GROUP BY, FILTER, RANK, aggregations, etc.)
-            const isComplexQuery =
-                question.toLowerCase().includes('group') ||
-                question.toLowerCase().includes('filter') ||
-                question.toLowerCase().includes('rank') ||
-                question.toLowerCase().includes('top') ||
-                question.toLowerCase().includes('bottom') ||
-                question.toLowerCase().includes('average') ||
-                question.toLowerCase().includes('sum') ||
-                question.toLowerCase().includes('count') ||
-                (response.execution?.visualization_hint &&
-                    ['bar', 'line', 'pie'].includes(response.execution.visualization_hint));
-
-            if (isComplexQuery) {
-                trackComplexQuery();
-                // Show accuracy feedback after complex query (longer delay so user can review)
-                setTimeout(() => {
-                    showFeedback(FEEDBACK_TRIGGERS.ACCURACY);
-                }, 8000); // 8 seconds - give user time to review results
-            } else {
-                // Show data understanding feedback after dataset upload + 3 queries
-                setTimeout(() => {
-                    showFeedback(FEEDBACK_TRIGGERS.DATA_UNDERSTANDING);
-                }, 5000); // 5 seconds - give user time to see results
-            }
-
-            // Update usage immediately with optimistic update, then force refresh for accurate data
-            decrementQueryCount(); // Instant UI feedback
-            refreshUsageAfterAction(); // Force refresh to get real usage data
             // Determine AI message content based on execution status
             let aiMessageContent: string;
 
@@ -1025,49 +850,14 @@ export function Workspace() {
                 }
                 return msg;
             }));
-            setMessages(prev => prev.map(msg => {
-                if (msg.id === userMessageId) {
-                    return { ...msg, status: 'error' as const };
-                }
-                if (msg.id === aiLoadingMessageId) {
-                    return {
-                        ...msg,
-                        id: (Date.now() + 2).toString(),
-                        type: 'ai',
-                        content: 'Sorry, I encountered an error processing your request.',
-                        response: {
-                            execution: {
-                                status: 'ERROR',
-                                execution_time_ms: 0,
-                                row_count: 0,
-                                columns: [],
-                                rows: [],
-                                cache_hit: false,
-                                visualization_hint: null,
-                                error_type: 'SYSTEM_ERROR',
-                                message: err instanceof Error ? err.message : 'Unknown error occurred'
-                            },
-                            visualization: null,
-                            insight: null,
-                        },
-                        timestamp: new Date(),
-                        isLoading: false
-                    };
-                }
-                return msg;
-            }));
         } finally {
             setIsLoading(false);
-            setProcessingStatus('');
-            // Clear any pending status update timers
-            timerIds.forEach(id => clearTimeout(id));
             setProcessingStatus('');
             // Clear any pending status update timers
             timerIds.forEach(id => clearTimeout(id));
         }
     };
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
@@ -1292,7 +1082,6 @@ export function Workspace() {
     return (
         <div className="workspace-with-sessions">
             {/* Sessions are now managed in the left sidebar WorkspaceMenu */}
-            {/* Sessions are now managed in the left sidebar WorkspaceMenu */}
 
             <div className={`content-area ${isMobile ? 'mobile' : ''}`}>
                 {/* Mobile: Show sticky header with selectors */}
@@ -1402,52 +1191,11 @@ export function Workspace() {
                                     </div>
                                 )}
 
-                                {/* Sentinel element for loading older messages at the top */}
-                                {hasMoreMessages && (
-                                    <div ref={messagesTopRef} style={{ height: '20px', margin: '10px 0' }}>
-                                        {isLoadingMoreMessages && (
-                                            <div className="loading-more-indicator" style={{
-                                                textAlign: 'center',
-                                                padding: '10px',
-                                                color: '#666',
-                                                fontSize: '14px'
-                                            }}>
-                                                <div className="typing-indicator" style={{ display: 'inline-flex', gap: '4px' }}>
-                                                    <span style={{
-                                                        width: '8px',
-                                                        height: '8px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#666',
-                                                        animation: 'pulse 1.4s infinite ease-in-out both',
-                                                        animationDelay: '-0.32s'
-                                                    }}></span>
-                                                    <span style={{
-                                                        width: '8px',
-                                                        height: '8px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#666',
-                                                        animation: 'pulse 1.4s infinite ease-in-out both',
-                                                        animationDelay: '-0.16s'
-                                                    }}></span>
-                                                    <span style={{
-                                                        width: '8px',
-                                                        height: '8px',
-                                                        borderRadius: '50%',
-                                                        backgroundColor: '#666',
-                                                        animation: 'pulse 1.4s infinite ease-in-out both'
-                                                    }}></span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
                                 {messages.map(message => (
                                     <ErrorBoundary key={message.id}>
                                         <ChatMessage
                                             message={message}
                                             userInitials={initials}
-                                            processingStatus={processingStatus}
                                             processingStatus={processingStatus}
                                         />
                                     </ErrorBoundary>
@@ -1460,8 +1208,6 @@ export function Workspace() {
                     {/* Chat Input */}
                     <div className="chat-input-container">
                         <div className="chat-input-wrapper">
-                            <textarea
-                                ref={textareaRef}
                             <textarea
                                 ref={textareaRef}
                                 placeholder={getInputPlaceholder()}
@@ -1477,16 +1223,7 @@ export function Workspace() {
                                     onClick={handleSendMessage}
                                     disabled={isLoading || isInitialChatLoading || !!initialSyncError || !inputValue.trim() || !selectedDatasourceId}
                                     aria-label={isLoading ? 'Sending message' : 'Send message'}
-                                    disabled={isLoading || isInitialChatLoading || !!initialSyncError || !inputValue.trim() || !selectedDatasourceId}
-                                    aria-label={isLoading ? 'Sending message' : 'Send message'}
                                 >
-                                    {isMobile ? (
-                                        <svg className="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                            <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-                                        </svg>
-                                    ) : (
-                                        isLoading ? 'Sending...' : 'Send'
-                                    )}
                                     {isMobile ? (
                                         <svg className="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                             <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />

@@ -431,7 +431,6 @@ html[data-theme="dark"] .sidebar-collapse-btn:hover {
 }
 
 [data-theme="dark"] .workspace-option.active {
-[data-theme="dark"] .workspace-option.active {
     background: rgba(255, 255, 255, 0.15);
     color: white;
 }
