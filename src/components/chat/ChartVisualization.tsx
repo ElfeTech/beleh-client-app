@@ -1,5 +1,14 @@
+import { useState, useMemo } from 'react';
 import type { ChatWorkflowResponse } from '../../types/api';
 import { ChartRenderer } from './charts/ChartRenderer';
+import { ChartTypeSelector } from './charts/ChartTypeSelector';
+import {
+    analyzeDataCharacteristics,
+    getCompatibleChartTypes,
+    backendToChartType,
+    chartTypeToBackendFormat,
+    type ChartType,
+} from '../../utils/chartCompatibility';
 import './ChartVisualization.css';
 
 interface ChartVisualizationProps {
@@ -7,13 +16,64 @@ interface ChartVisualizationProps {
 }
 
 export function ChartVisualization({ response }: ChartVisualizationProps) {
-
     const { visualization, insight, execution, intent } = response;
+
+    // Get the original chart type from the API response
+    const originalChartType = useMemo(() => {
+        const vizType = visualization?.type || visualization?.visualization_type || 'table';
+        return backendToChartType(vizType);
+    }, [visualization]);
+
+    // State for user-selected chart type (defaults to API recommendation)
+    const [selectedChartType, setSelectedChartType] = useState<ChartType>(originalChartType);
+
+    // Reset selected chart type when response changes
+    useMemo(() => {
+        setSelectedChartType(originalChartType);
+    }, [originalChartType]);
 
     // Check if we have results to show alongside clarification
     const hasResults = execution && execution.row_count > 0;
     const needsClarification = intent?.clarification_needed && intent.clarification_message;
     const isExecutionFailed = execution?.status === 'FAILED' || execution?.status === 'ERROR';
+
+    // Use the full dataset from execution.rows instead of data_preview
+    const fullData = execution?.rows || [];
+    const columnNames = execution?.columns?.map(col => col.name) || [];
+
+    // Analyze data characteristics and get compatible chart types
+    const compatibleChartTypes = useMemo(() => {
+        if (!fullData || fullData.length === 0) {
+            return [];
+        }
+
+        const xField = visualization?.encoding?.x?.field || visualization?.dimensions?.x;
+        const yField = visualization?.encoding?.y?.field || visualization?.dimensions?.y;
+        const seriesField = visualization?.encoding?.series?.field || visualization?.dimensions?.series;
+
+        const characteristics = analyzeDataCharacteristics(fullData, xField, yField, seriesField);
+        return getCompatibleChartTypes(characteristics, originalChartType);
+    }, [fullData, visualization, originalChartType]);
+
+    // Create modified visualization with user-selected chart type
+    const modifiedVisualization = useMemo(() => {
+        if (!visualization || selectedChartType === originalChartType) {
+            return visualization;
+        }
+
+        // Create a copy with the new chart type
+        const newType = chartTypeToBackendFormat(selectedChartType) as typeof visualization.type;
+        return {
+            ...visualization,
+            type: newType,
+            visualization_type: newType,
+        };
+    }, [visualization, selectedChartType, originalChartType]);
+
+    // Handle chart type change
+    const handleChartTypeChange = (newType: ChartType) => {
+        setSelectedChartType(newType);
+    };
 
     // Handle clarification request - show ONLY clarification if no results OR execution failed
     if (needsClarification && (!hasResults || isExecutionFailed)) {
@@ -54,10 +114,6 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
 
     const { encoding } = visualization;
 
-    // Use the full dataset from execution.rows instead of data_preview
-    const fullData = execution?.rows || [];
-    const columnNames = execution?.columns?.map(col => col.name) || [];
-
     // Safety check for execution data
     if (!fullData || !Array.isArray(fullData) || fullData.length === 0) {
         return null;
@@ -79,7 +135,18 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
                 </div>
             )}
 
-            <ChartRenderer data={fullData} visualization={visualization} columns={columns} />
+            {/* Chart Type Selector */}
+            {compatibleChartTypes.length > 1 && (
+                <div className="chart-type-selector-wrapper">
+                    <ChartTypeSelector
+                        options={compatibleChartTypes}
+                        selectedType={selectedChartType}
+                        onTypeChange={handleChartTypeChange}
+                    />
+                </div>
+            )}
+
+            <ChartRenderer data={fullData} visualization={modifiedVisualization!} columns={columns} />
 
             {/* Insights Section */}
             {insight && (

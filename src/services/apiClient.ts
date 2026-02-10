@@ -57,6 +57,20 @@ class APIClient {
       headers['Content-Type'] = 'application/json';
     }
 
+    // Never send invalid auth: fix missing or invalid Bearer token before request
+    const auth = headers['Authorization'];
+    const isProtectedRoute = url.includes('/api/') && !url.includes('/login') && !url.includes('/register');
+    const isInvalidAuth = !auth || auth === 'Bearer undefined' || auth === 'Bearer null' || (typeof auth === 'string' && auth.trim() === 'Bearer');
+    if (isProtectedRoute && isInvalidAuth) {
+      const { authService } = await import('./authService');
+      const token = authService.getAuthToken() || await authService.refreshToken();
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      } else {
+        throw new Error('Authentication required. Please sign in again.');
+      }
+    }
+
     const config: RequestInit = {
       ...options,
       headers,
@@ -122,6 +136,27 @@ class APIClient {
           console.error('[API] Error during token refresh:', refreshError);
           window.location.href = '/signin';
           throw new Error('Authentication session expired. Please sign in again.');
+        }
+      }
+
+      // Handle 403 Forbidden - often means token not yet accepted (e.g. right after login); retry once after delay with fresh token
+      if (response.status === 403 && !isRetry) {
+        try {
+          const { authService } = await import('./authService');
+          await new Promise((r) => setTimeout(r, 500));
+          const newToken = await authService.refreshToken();
+          if (newToken) {
+            const updatedHeaders = {
+              ...headers,
+              'Authorization': `Bearer ${newToken}`,
+            };
+            return this.request<T>(endpoint, {
+              ...options,
+              headers: updatedHeaders,
+            }, true);
+          }
+        } catch {
+          // Fall through to normal error handling
         }
       }
 

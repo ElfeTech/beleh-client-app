@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
@@ -10,11 +10,44 @@ export function SignIn() {
     const [error, setError] = useState<string | null>(null);
     const [authLoading, setAuthLoading] = useState(false);
     const [isSlow, setIsSlow] = useState(false);
-    const { signInWithGoogle } = useAuth();
+    const { user, loading: authLoadingState, signInWithGoogle } = useAuth();
     const navigate = useNavigate();
 
+    // If user is already logged in, redirect to their workspace (don't show login again)
+    useEffect(() => {
+        if (authLoadingState || !user) return;
+
+        const token = authService.getAuthToken();
+        if (!token) return;
+
+        let cancelled = false;
+        apiClient.getDefaultWorkspace(token).then(
+            (workspace) => {
+                if (!cancelled) navigate(`/workspace/${workspace.id}`, { replace: true });
+            },
+            () => {
+                if (!cancelled) navigate('/', { replace: true });
+            }
+        );
+        return () => { cancelled = true; };
+    }, [user, authLoadingState, navigate]);
+
+    // Don't show login form if user is already logged in (redirect in progress)
+    if (!authLoadingState && user) {
+        return (
+            <div className="auth-split-page" style={{ alignItems: 'center', justifyContent: 'center' }}>
+                <div className="auth-form-panel" style={{ maxWidth: '360px' }}>
+                    <div className="form-content" style={{ textAlign: 'center' }}>
+                        <div className="btn-spinner" style={{ margin: '0 auto 1rem' }} />
+                        <p className="form-subtitle">Taking you to your workspace...</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const handleGoogleSignIn = async () => {
-        let timeoutId: any = null;
+        let timeoutId: ReturnType<typeof setTimeout> | null = null;
         try {
             setError(null);
             setAuthLoading(true);

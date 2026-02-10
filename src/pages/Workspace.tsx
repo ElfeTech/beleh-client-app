@@ -9,6 +9,7 @@ import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
 import type { ChatWorkflowResponse, ChatMessageRead } from '../types/api';
 import { ChatMessage } from '../components/chat/ChatMessage';
+import { ChatWelcome } from '../components/chat/ChatWelcome';
 import { EmptyStateDashboard } from '../components/workspace/EmptyStateDashboard';
 import { UploadModal } from '../components/layout/UploadModal';
 import MobileChatHeader from '../components/layout/MobileChatHeader';
@@ -17,6 +18,14 @@ import { WorkspaceModal } from '../components/layout/WorkspaceModal';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { FEEDBACK_TRIGGERS } from '../types/feedback';
+import {
+    hasCompletedDemo,
+    isNewUserForDemo,
+    setDemoCompleted,
+    DEMO_PROMPTS,
+    getDemoResponse,
+    matchDemoPromptId,
+} from '../constants/demoData';
 import './Workspace.css';
 
 interface Message {
@@ -34,9 +43,10 @@ export function Workspace() {
     const navigate = useNavigate();
     const { id: workspaceId } = useParams<{ id: string }>();
     const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
-    const { setSessions, activeSessionId, setActiveSessionId, addSession } = useChatSession();
+    const { setSessions, activeSessionId, setActiveSessionId, addSession, loadSessions: loadSessionsContext } = useChatSession();
     const { decrementQueryCount, refreshUsageAfterAction } = useUsage();
     const workspaceContext = useWorkspace();
+    const { workspaces, currentWorkspace, setCurrentWorkspace } = workspaceContext;
     const { trackChatQuery, trackComplexQuery, showFeedback } = useFeedback();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputValue, setInputValue] = useState('');
@@ -50,6 +60,9 @@ export function Workspace() {
     const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
     const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
     const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+    const [isDemoMode, setIsDemoMode] = useState(false);
+    const [demoMessages, setDemoMessages] = useState<Message[]>([]);
+    const demoMessagesEndRef = useRef<HTMLDivElement>(null);
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesTopRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -61,6 +74,12 @@ export function Workspace() {
 
     // Ref to track if initial messages have been loaded (for scroll on page refresh)
     const initialScrollDoneRef = useRef<boolean>(false);
+
+    // Ref to track if we're currently hydrating from workspace context (to prevent saving during load)
+    const isHydratingRef = useRef<boolean>(false);
+
+    // Ref to track the last hydration timestamp (to prevent duplicate hydration in React StrictMode)
+    const hydratedWorkspaceRef = useRef<number | null>(null);
 
     // AbortController for workspace switching to prevent race conditions
     const workspaceSwitchAbortController = useRef<AbortController | null>(null);
@@ -76,6 +95,9 @@ export function Workspace() {
     // Use datasources from WorkspaceContext instead of local state
     const dataSources = workspaceContext.datasources;
     const isLoadingDataSources = workspaceContext.loading;
+
+    // Get the currently selected datasource for ChatWelcome
+    const selectedDatasource = dataSources.find(ds => ds.id === selectedDatasourceId) || null;
 
     const initials = user?.displayName
         ? user.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
@@ -125,60 +147,48 @@ export function Workspace() {
         return () => clearTimeout(timer);
     }, [showFeedback]);
 
-    const loadSessions = useCallback(async () => {
-        if (!selectedDatasourceId) {
-            setIsInitialChatLoading(false);
-            return;
+    // Sync WorkspaceContext currentWorkspace with URL so datasources and last-active state load for the viewed workspace
+    useEffect(() => {
+        if (!workspaceId || !workspaces?.length) return;
+        const workspace = workspaces.find((w: { id: string }) => w.id === workspaceId);
+        if (workspace && currentWorkspace?.id !== workspaceId) {
+            setCurrentWorkspace(workspace);
         }
+    }, [workspaceId, workspaces, currentWorkspace?.id, setCurrentWorkspace]);
 
-        try {
-            setIsInitialChatLoading(true);
-            setInitialSyncError(null);
-            const token = authService.getAuthToken();
-            if (!token) {
-                setIsInitialChatLoading(false);
-                return;
+    // Load sessions when datasource changes
+    useEffect(() => {
+        if (selectedDatasourceId) {
+            // Only load if we haven't already loaded for this datasource
+            if (loadedDatasourceRef.current !== selectedDatasourceId) {
+                loadedDatasourceRef.current = selectedDatasourceId;
+
+                // Use the context function which handles deduplication
+                setIsInitialChatLoading(true);
+                loadSessionsContext(selectedDatasourceId)
+                    .then(sessions => {
+                        // Sessions are set in context
+                        // Handle active session logic if needed
+                        if (sessions.length > 0 && !activeSessionId) {
+                            setActiveSessionId(sessions[0].id);
+                        } else if (sessions.length === 0) {
+                            setIsInitialChatLoading(false);
+                        }
+                    })
+                    .catch(err => {
+                        console.error('[Workspace] Failed to load sessions:', err);
+                        setInitialSyncError(err.message || 'We had trouble loading your chat sessions. Please try again.');
+                        setIsInitialChatLoading(false);
+                    });
             }
-
-            const response = await apiClient.listChatSessions(token, selectedDatasourceId);
-            const sessionList = response.items;
-            setSessions(sessionList);
-
-            // Try to restore the last active session from workspace state or localStorage
-            let sessionToActivate: string | null = null;
-
-            // First, try to load from workspace state
-            if (workspaceId) {
-                const context = await workspaceContext.loadWorkspaceContext(workspaceId);
-                if (context?.state?.last_active_session_id &&
-                    sessionList.some(s => s.id === context.state.last_active_session_id)) {
-                    sessionToActivate = context.state.last_active_session_id;
-                }
-            }
-
-            // Fallback to localStorage if no state found
-            if (!sessionToActivate) {
-                const savedActiveSession = localStorage.getItem(`activeSession_${selectedDatasourceId}`);
-                if (savedActiveSession && sessionList.some(s => s.id === savedActiveSession)) {
-                    sessionToActivate = savedActiveSession;
-                }
-            }
-
-            // Set active session or default to first session
-            if (sessionToActivate) {
-                setActiveSessionId(sessionToActivate);
-            } else if (sessionList.length > 0) {
-                setActiveSessionId(sessionList[0].id);
-            } else {
-                // No sessions at all, so we're not loading messages
-                setIsInitialChatLoading(false);
-            }
-        } catch (err: any) {
-            console.error('[Workspace] Failed to load sessions:', err);
-            setInitialSyncError(err.message || 'We had trouble loading your chat sessions. Please try again.');
-            setIsInitialChatLoading(false);
+        } else {
+            loadedDatasourceRef.current = null;
+            setSessions([]);
+            setActiveSessionId(null);
+            setMessages([]);
         }
-    }, [selectedDatasourceId, workspaceId, workspaceContext, setSessions, setActiveSessionId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDatasourceId]);
 
     const loadSessionMessages = useCallback(async (sessionId: string, page: number = 1) => {
         try {
@@ -315,10 +325,21 @@ export function Workspace() {
         });
     }, [messages]);
 
-    // Load workspace preferences when workspace changes
+    // Hydrate workspace data in parallel to avoid waterfall (runs when user + workspaceId are available)
     useEffect(() => {
-        const loadPreferences = async () => {
-            if (!workspaceId) return;
+        const hydrateWorkspace = async () => {
+            if (!workspaceId || !user) return;
+
+            // Skip if we've already hydrated this workspace in the last 2 seconds
+            // This prevents double-call in React StrictMode but allows re-hydration on page refresh
+            const now = Date.now();
+            const lastHydrationTime = hydratedWorkspaceRef.current;
+            if (lastHydrationTime && (now - lastHydrationTime) < 2000) {
+                console.log('[Workspace] Skipping duplicate hydration (too soon)');
+                return;
+            }
+
+            console.log('[Workspace] Starting workspace hydration for:', workspaceId);
 
             // Abort any pending workspace switch
             if (workspaceSwitchAbortController.current) {
@@ -329,65 +350,224 @@ export function Workspace() {
             workspaceSwitchAbortController.current = abortController;
 
             try {
+                // Mark that we're hydrating to prevent auto-save during initial load
+                isHydratingRef.current = true;
+                hydratedWorkspaceRef.current = now;
+
                 setIsInitialChatLoading(true);
                 setInitialSyncError(null);
+
+                // 1. Fetch Context first to know what to load (use user token so it's available after login)
+                const token = await user.getIdToken();
+                if (!token) throw new Error('Authentication token not found');
+
                 const context = await workspaceContext.loadWorkspaceContext(workspaceId);
 
-                // Check if this request was aborted
+                // Check abort
                 if (abortController.signal.aborted) {
                     setIsInitialChatLoading(false);
                     return;
                 }
 
-                if (context?.state) {
-                    // Set the active dataset from state
-                    if (context.state.last_active_dataset_id) {
-                        setSelectedDatasourceId(context.state.last_active_dataset_id);
-                    }
-                    // Active session will be set when sessions are loaded
-                } else if (!context) {
-                    // Context load returned null (already logged in WorkspaceContext)
+                if (!context || !context.state) {
                     setInitialSyncError('Failed to synchronize workspace settings.');
-                }
-            } catch (error: any) {
-                console.error('[Workspace] Failed to load workspace context:', error);
-                setInitialSyncError(error.message || 'Failed to synchronize workspace settings.');
-            } finally {
-                // Ensure we don't stay in loading state if context load fails
-                // but only if we don't have a datasource that will trigger loadSessions
-                // or if an error occurred
-                if (!selectedDatasourceId || initialSyncError) {
                     setIsInitialChatLoading(false);
+                    return;
                 }
+
+                // 2. Ensure datasources are loaded before proceeding
+                // This is critical for mobile - we need datasources to auto-select
+                let availableDatasources = workspaceContext.datasources;
+
+                // If datasources are not loaded yet, fetch them directly
+                if (availableDatasources.length === 0) {
+                    console.log('[Workspace] Datasources not loaded, fetching directly...');
+                    try {
+                        // Fetch datasources directly using the same cache manager
+                        const response = await apiClient.listWorkspaceDatasources(token, workspaceId);
+                        availableDatasources = response.items;
+                        console.log('[Workspace] Fetched datasources:', availableDatasources.length);
+
+                        // Update context so UI (sidebar, selectedDatasource) has data without hard refresh
+                        workspaceContext.setDatasources(availableDatasources);
+
+                        // Also trigger context refresh in background so cache stays in sync
+                        workspaceContext.refreshDatasources().catch(err => {
+                            console.error('[Workspace] Background datasource refresh failed:', err);
+                        });
+                    } catch (err) {
+                        console.error('[Workspace] Failed to fetch datasources:', err);
+                        availableDatasources = [];
+                    }
+                } else {
+                    console.log('[Workspace] Using cached datasources:', availableDatasources.length);
+                }
+
+                // 3. Prepare data based on context
+                let datasetId = context.state.last_active_dataset_id;
+                let sessionId = context.state.last_active_session_id;
+
+                // Auto-select latest datasource if none is active (best UX for mobile users)
+                if (!datasetId && availableDatasources.length > 0) {
+                    // Sort by most recent (updated_at or created_at)
+                    const sortedDatasources = [...availableDatasources].sort((a, b) => {
+                        const dateA = new Date(a.updated_at || a.created_at).getTime();
+                        const dateB = new Date(b.updated_at || b.created_at).getTime();
+                        return dateB - dateA;
+                    });
+
+                    // Select the most recent datasource
+                    const latestDatasource = sortedDatasources[0];
+                    if (latestDatasource && latestDatasource.status === 'READY') {
+                        datasetId = latestDatasource.id;
+                        console.log('[Workspace] Auto-selected latest datasource:', latestDatasource.name);
+                    }
+                }
+
+                // Update basic state immediately
+                if (datasetId) setSelectedDatasourceId(datasetId);
+
+                // Step 1: Fetch sessions first if we have a dataset
+                let loadedSessions: any[] = [];
+                if (datasetId) {
+                    console.log('[Workspace] Loading sessions for datasetId:', datasetId);
+                    try {
+                        // ChatSessionContext handles deduplication
+                        loadedSessions = await loadSessionsContext(datasetId);
+                        loadedDatasourceRef.current = datasetId;
+                        console.log('[Workspace] Loaded sessions count:', loadedSessions.length);
+
+                        // Auto-select latest session if none is active (best UX for mobile users)
+                        if (!sessionId && loadedSessions && loadedSessions.length > 0) {
+                            // Sessions are already sorted by most recent in the API response
+                            sessionId = loadedSessions[0].id;
+                            console.log('[Workspace] Auto-selected latest session:', loadedSessions[0].title, 'ID:', sessionId);
+                        } else if (!sessionId) {
+                            console.log('[Workspace] ⚠️  No sessions available to auto-select');
+                        } else {
+                            console.log('[Workspace] Using session from context:', sessionId);
+                        }
+                    } catch (err) {
+                        console.error('[Workspace] Failed to load sessions:', err);
+                    }
+                } else {
+                    console.log('[Workspace] ⚠️  No datasetId, skipping session load');
+                }
+
+                // Step 2: Now fetch messages with the final sessionId (from context or auto-selected)
+                console.log('[Workspace] About to load messages - sessionId:', sessionId, 'hasToken:', !!token);
+
+                if (sessionId) {
+                    console.log('[Workspace] ✅ Fetching messages for session:', sessionId);
+                    try {
+                        const messagesResponse = await apiClient.getSessionMessagesPaginated(token, sessionId, { page: 1, page_size: 20 });
+                        const messagesData = messagesResponse.items;
+
+                        // Process messages (using same logic as loadSessionMessages)
+                        const uiMessages: Message[] = messagesData.map((msg: ChatMessageRead) => {
+                            let messageContent = msg.content;
+                            if (msg.role === 'assistant' && msg.message_metadata) {
+                                const execution = msg.message_metadata.execution;
+                                const insight = msg.message_metadata.insight;
+                                if (execution?.status === 'FAILED' && execution?.row_count === 0) {
+                                    messageContent = execution?.message || 'Query execution failed.';
+                                } else if (!messageContent || messageContent === 'Here are the results:') {
+                                    messageContent = insight?.summary || messageContent;
+                                }
+                            }
+                            return {
+                                id: msg.id,
+                                type: msg.role === 'user' ? 'user' : 'ai',
+                                content: messageContent,
+                                response: msg.role === 'assistant' && msg.message_metadata ? {
+                                    intent: msg.message_metadata.intent,
+                                    execution: msg.message_metadata.execution,
+                                    visualization: msg.message_metadata.visualization || null,
+                                    insight: msg.message_metadata.insight || null,
+                                    session_id: msg.message_metadata.session_id,
+                                    message_id: msg.message_metadata.message_id,
+                                } : undefined,
+                                timestamp: new Date(msg.created_at),
+                            };
+                        });
+
+                        const reversedMessages = [...uiMessages].reverse();
+                        setMessages(reversedMessages);
+                        setCurrentPage(1);
+                        setHasMoreMessages(messagesResponse.has_next);
+                        setActiveSessionId(sessionId);
+                        loadedSessionRef.current = sessionId;
+
+                        // Handle scroll
+                        if (reversedMessages.length > 0) {
+                            setTimeout(() => scrollToBottom(true), 50);
+                            setTimeout(() => scrollToBottom(true), 300);
+                            initialScrollDoneRef.current = true;
+                        }
+
+                        console.log('[Workspace] ✅ Loaded messages for session:', sessionId, '- Count:', reversedMessages.length);
+                    } catch (msgErr) {
+                        console.error('[Workspace] ❌ Failed to load messages:', msgErr);
+                        // Still set the active session even if messages fail
+                        setActiveSessionId(sessionId);
+                        loadedSessionRef.current = sessionId;
+                    }
+                } else {
+                    console.log('[Workspace] ⚠️  SKIPPING message load - no sessionId available');
+                }
+
+                // Check if we need to save auto-selected or context-loaded state to backend
+                const needsStateSave = (context.state.last_active_dataset_id !== datasetId ||
+                                       context.state.last_active_session_id !== sessionId) &&
+                                      (datasetId || sessionId);
+
+                console.log('[Workspace] State save check:', {
+                    needsStateSave,
+                    contextDataset: context.state.last_active_dataset_id,
+                    currentDataset: datasetId,
+                    contextSession: context.state.last_active_session_id,
+                    currentSession: sessionId
+                });
+
+                if (needsStateSave) {
+                    // Save state to backend (either auto-selected or restored from context)
+                    console.log('[Workspace] ✅ SAVING workspace state to backend:', { workspaceId, datasetId, sessionId });
+
+                    // Save immediately (debouncing handled by WorkspaceContext)
+                    workspaceContext.saveWorkspaceState(workspaceId, datasetId, sessionId);
+
+                    // Clear the hydrating flag after a delay to ensure save is queued
+                    // The save is debounced for 500ms in WorkspaceContext, so we wait 600ms
+                    setTimeout(() => {
+                        isHydratingRef.current = false;
+                        console.log('[Workspace] Hydration complete, auto-save now enabled');
+                    }, 600);
+                } else {
+                    console.log('[Workspace] ⏭️  SKIPPING state save - state unchanged');
+                    // Clear the hydrating flag immediately if no save needed
+                    isHydratingRef.current = false;
+                }
+
+            } catch (error: any) {
+                console.error('[Workspace] Failed to hydrate workspace:', error);
+                setInitialSyncError(error.message || 'Failed to synchronize workspace settings.');
+                // Clear hydrating flag on error too
+                isHydratingRef.current = false;
+            } finally {
+                setIsInitialChatLoading(false);
             }
         };
 
-        loadPreferences();
+        hydrateWorkspace();
 
         return () => {
-            // Cleanup on unmount or workspace change
             if (workspaceSwitchAbortController.current) {
                 workspaceSwitchAbortController.current.abort();
             }
         };
-    }, [workspaceId, workspaceContext, setSelectedDatasourceId]);
-
-    // Load sessions when datasource changes
-    useEffect(() => {
-        if (selectedDatasourceId) {
-            // Only load if we haven't already loaded for this datasource
-            if (loadedDatasourceRef.current !== selectedDatasourceId) {
-                loadedDatasourceRef.current = selectedDatasourceId;
-                loadSessions();
-            }
-        } else {
-            loadedDatasourceRef.current = null;
-            setSessions([]);
-            setActiveSessionId(null);
-            setMessages([]);
-        }
+        // Run when user is available (e.g. after login) and when workspaceId changes
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [selectedDatasourceId]);
+    }, [workspaceId, user]);
 
     // Load messages when active session changes
     useEffect(() => {
@@ -416,24 +596,28 @@ export function Workspace() {
         }
     }, [messages]);
 
-    // Persist active session in localStorage
-    useEffect(() => {
-        if (activeSessionId && selectedDatasourceId) {
-            localStorage.setItem(`activeSession_${selectedDatasourceId}`, activeSessionId);
-        }
-    }, [activeSessionId, selectedDatasourceId]);
-
     // Auto-save workspace state when dataset or session changes
+    // Note: workspaceContext.saveWorkspaceState is stable and doesn't need to be in dependencies
     useEffect(() => {
         if (!workspaceId) return;
 
+        // Skip saving during initial hydration to prevent redundant API calls
+        // (we just loaded this state from the server, no need to save it back)
+        if (isHydratingRef.current) {
+            console.log('[Workspace] Skipping state save during hydration');
+            return;
+        }
+
         // Save state in the background (non-blocking)
+        // This is debounced in WorkspaceContext (500ms), so rapid changes only result in one API call
+        console.log('[Workspace] Auto-saving workspace state:', { workspaceId, selectedDatasourceId, activeSessionId });
         workspaceContext.saveWorkspaceState(
             workspaceId,
             selectedDatasourceId,
             activeSessionId
         );
-    }, [workspaceId, selectedDatasourceId, activeSessionId, workspaceContext]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [workspaceId, selectedDatasourceId, activeSessionId]);
 
     // IntersectionObserver for lazy loading older messages when scrolling to top
     useEffect(() => {
@@ -503,7 +687,6 @@ export function Workspace() {
         // Determine which session to use
         let sessionIdToUse = activeSessionId;
 
-
         // Create a new session if none exists
         if (!sessionIdToUse) {
             const newSessionId = await handleNewSession();
@@ -571,7 +754,6 @@ export function Workspace() {
                 question,
                 selectedDatasourceId
             );
-
 
             // Determine AI message content based on execution status
             let aiMessageContent: string;
@@ -688,7 +870,68 @@ export function Workspace() {
         adjustTextareaHeight();
     };
 
+    // Handle clicking on a sample prompt from ChatWelcome
+    const handlePromptClick = (prompt: string) => {
+        setInputValue(prompt);
+        // Focus the textarea so user can edit or send
+        textareaRef.current?.focus();
+    };
+
     const handleAddDataset = () => {
+        setShowUploadModal(true);
+    };
+
+    const handleStartDemo = () => {
+        setIsDemoMode(true);
+        setDemoMessages([]);
+    };
+
+    const handleDemoPromptClick = (promptText: string, promptId: string) => {
+        const userMsg: Message = {
+            id: `demo-user-${Date.now()}`,
+            type: 'user',
+            content: promptText,
+            timestamp: new Date(),
+        };
+        const loadingId = `demo-ai-loading-${Date.now()}`;
+        const loadingMsg: Message = {
+            id: loadingId,
+            type: 'ai',
+            content: '',
+            timestamp: new Date(),
+            isLoading: true,
+        };
+        setDemoMessages(prev => [...prev, userMsg, loadingMsg]);
+
+        const response = getDemoResponse(promptId);
+        const aiMsg: Message = {
+            id: `demo-ai-${Date.now()}`,
+            type: 'ai',
+            content: response.insight?.summary || 'Here are the results:',
+            response,
+            timestamp: new Date(),
+        };
+
+        setTimeout(() => {
+            setDemoMessages(prev =>
+                prev.map(m => (m.id === loadingId ? aiMsg : m))
+            );
+            demoMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 900);
+    };
+
+    const handleDemoSend = () => {
+        const question = inputValue.trim();
+        if (!question) return;
+        const promptId = matchDemoPromptId(question);
+        handleDemoPromptClick(question, promptId);
+        setInputValue('');
+    };
+
+    const handleExitDemo = () => {
+        setDemoCompleted();
+        setIsDemoMode(false);
+        setDemoMessages([]);
         setShowUploadModal(true);
     };
 
@@ -699,13 +942,130 @@ export function Workspace() {
 
     // Determine if workspace is empty
     const isWorkspaceEmpty = !isLoadingDataSources && dataSources.length === 0;
+    const showDemoCta = isNewUserForDemo() && !hasCompletedDemo();
 
-    // If workspace is empty, show the empty state dashboard
+    // If workspace is empty and user is in demo mode, show demo chat
+    if (isWorkspaceEmpty && isDemoMode) {
+        return (
+            <div className="workspace-with-sessions">
+                <div className={`content-area ${isMobile ? 'mobile' : ''}`}>
+                    <div className="demo-banner">
+                        <span className="demo-badge">Demo</span>
+                        <span className="demo-banner-text">Sample visualizations — try asking below</span>
+                    </div>
+                    <div className="chat-section">
+                        <div className="chat-messages demo-chat-messages" ref={chatMessagesContainerRef}>
+                            {demoMessages.length === 0 ? (
+                                <div className="chat-welcome demo-welcome">
+                                    <div className="chat-welcome-header">
+                                        <div className="chat-welcome-icon demo-icon">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09z" />
+                                            </svg>
+                                        </div>
+                                        <h2 className="chat-welcome-title">
+                                            Try a sample question
+                                        </h2>
+                                        <p className="chat-welcome-subtitle">
+                                            Click any prompt to see how Beleh turns your question into a chart and insights. This uses sample data — upload your own to analyze real data.
+                                        </p>
+                                    </div>
+                                    <div className="chat-welcome-prompts">
+                                        <p className="prompts-label">Example prompts:</p>
+                                        <div className="prompts-grid">
+                                            {DEMO_PROMPTS.map((prompt) => (
+                                                <button
+                                                    key={prompt.id}
+                                                    className="prompt-suggestion"
+                                                    onClick={() => handleDemoPromptClick(prompt.text, prompt.id)}
+                                                >
+                                                    <span className="prompt-icon">{prompt.icon}</span>
+                                                    <span className="prompt-text">{prompt.text}</span>
+                                                    <svg className="prompt-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                                                    </svg>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <>
+                                    {demoMessages.map((message) => (
+                                        <ErrorBoundary key={message.id}>
+                                            <ChatMessage
+                                                message={message}
+                                                userInitials={initials}
+                                                processingStatus=""
+                                            />
+                                        </ErrorBoundary>
+                                    ))}
+                                    <div className="demo-upload-cta">
+                                        <p>Ready to use your own data?</p>
+                                        <button type="button" className="demo-upload-btn" onClick={handleExitDemo}>
+                                            Upload your dataset
+                                        </button>
+                                    </div>
+                                    <div ref={demoMessagesEndRef} />
+                                </>
+                            )}
+                        </div>
+                        <div className="chat-input-container">
+                            <div className="chat-input-wrapper">
+                                <textarea
+                                    ref={textareaRef}
+                                    placeholder="Ask another demo question or type your own..."
+                                    value={inputValue}
+                                    onChange={(e) => setInputValue(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter' && !e.shiftKey) {
+                                            e.preventDefault();
+                                            handleDemoSend();
+                                        }
+                                    }}
+                                    rows={1}
+                                />
+                                <div className="input-actions">
+                                    <button
+                                        className="send-btn"
+                                        onClick={handleDemoSend}
+                                        disabled={!inputValue.trim()}
+                                        aria-label="Send demo message"
+                                    >
+                                        {isMobile ? (
+                                            <svg className="send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                                            </svg>
+                                        ) : (
+                                            'Send'
+                                        )}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {showUploadModal && workspaceId && (
+                    <UploadModal
+                        workspaceId={workspaceId}
+                        onClose={() => setShowUploadModal(false)}
+                        onSuccess={handleUploadSuccess}
+                    />
+                )}
+            </div>
+        );
+    }
+
+    // If workspace is empty (and not in demo), show the empty state dashboard
     if (isWorkspaceEmpty) {
         return (
             <div className="workspace-with-sessions">
                 <div className="content-area" style={{ flex: 1 }}>
-                    <EmptyStateDashboard onAddDataset={handleAddDataset} />
+                    <EmptyStateDashboard
+                        onAddDataset={handleAddDataset}
+                        onStartDemo={handleStartDemo}
+                        showDemoCta={showDemoCta}
+                    />
                 </div>
 
                 {showUploadModal && workspaceId && (
@@ -767,25 +1127,28 @@ export function Workspace() {
                                 <h3>Synchronization failed</h3>
                                 <p>{initialSyncError}</p>
                                 <button
-                                    className="retry-sync-btn"
-                                    onClick={() => activeSessionId ? loadSessionMessages(activeSessionId) : loadSessions()}
+                                    onClick={() => activeSessionId ? loadSessionMessages(activeSessionId) : (selectedDatasourceId && loadSessionsContext(selectedDatasourceId))}
                                 >
                                     Retry Synchronization
                                 </button>
                             </div>
                         ) : messages.length === 0 ? (
-                            <div className="chat-empty-state">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                                </svg>
-                                <h3>Start a conversation</h3>
-                                <p>Ask questions about your data and get AI-powered insights with visualizations</p>
-                                {!selectedDatasourceId ? (
-                                    <p className="warning-text">⚠️ Please select a datasource to get started</p>
-                                ) : !activeSessionId ? (
-                                    <p className="warning-text">Click "New Chat" to start</p>
-                                ) : null}
-                            </div>
+                            selectedDatasourceId ? (
+                                <ChatWelcome
+                                    datasource={selectedDatasource}
+                                    onPromptClick={handlePromptClick}
+                                    userName={user?.displayName || undefined}
+                                />
+                            ) : (
+                                <div className="chat-empty-state">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                                    </svg>
+                                    <h3>Start a conversation</h3>
+                                    <p>Ask questions about your data and get AI-powered insights with visualizations</p>
+                                    <p className="warning-text">Please select a datasource to get started</p>
+                                </div>
+                            )
                         ) : (
                             <>
                                 {/* Sentinel element for loading older messages at the top */}
@@ -851,7 +1214,7 @@ export function Workspace() {
                                 value={inputValue}
                                 onChange={handleInputChange}
                                 onKeyDown={handleKeyDown}
-                                disabled={isLoading || isInitialChatLoading || !!initialSyncError || !selectedDatasourceId}
+                                disabled={isInitialChatLoading || !!initialSyncError || !selectedDatasourceId}
                                 rows={1}
                             />
                             <div className="input-actions">

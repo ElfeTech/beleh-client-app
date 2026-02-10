@@ -217,6 +217,13 @@
     font-style: italic;
 }
 
+/* Chart Type Selector Wrapper */
+.chart-type-selector-wrapper {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 0.75rem;
+}
+
 /* Mobile optimizations for wider chart display */
 @media (max-width: 768px) {
     .chart-response {

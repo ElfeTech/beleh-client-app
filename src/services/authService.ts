@@ -7,10 +7,19 @@ import {
 } from 'firebase/auth';
 import { auth, googleProvider } from '../lib/firebase';
 import { apiClient } from './apiClient';
+import { apiCacheManager } from '../utils/apiCacheManager';
 
 const TOKEN_KEY = 'firebase_auth_token';
 const USER_KEY = 'firebase_user';
 const BACKEND_USER_KEY = 'backend_user';
+
+// User-specific localStorage keys to clear on sign out (so new account doesn't see old data)
+const SESSION_STORAGE_KEYS = [
+  'activeWorkspaceId',
+  'activeSessionId',
+  'beleh_has_completed_demo',
+  'beleh_is_new_user',
+];
 
 export const authService = {
   async signInWithGoogle(): Promise<UserCredential> {
@@ -134,6 +143,8 @@ export const authService = {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(BACKEND_USER_KEY);
+    SESSION_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    apiCacheManager.clearAll();
   },
 
   async refreshToken(): Promise<string | null> {

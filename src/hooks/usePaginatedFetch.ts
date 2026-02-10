@@ -64,7 +64,9 @@ export function usePaginatedFetch<T>({
 
   // Fetch data function
   const fetchData = useCallback(async (currentPage: number, isFirstLoad: boolean) => {
-    if (!enabled || isFetchingRef.current) return;
+    if (!enabled || isFetchingRef.current) {
+      return;
+    }
 
     // Prevent duplicate requests
     isFetchingRef.current = true;
@@ -148,17 +150,19 @@ export function usePaginatedFetch<T>({
     observerRef.current.observe(node);
   }, [hasMore, enabled, loadMore]);
 
-  // Initial fetch
-  useEffect(() => {
-    if (enabled) {
-      fetchData(INITIAL_PAGE, true);
-    }
-  }, [enabled]);
-
   // Reset when dependencies change
   useEffect(() => {
-    reset();
-  }, resetDeps);
+    if (resetDeps.length > 0) {
+      reset();
+    }
+  }, resetDeps); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Initial fetch after mount or reset
+  useEffect(() => {
+    if (enabled && items.length === 0 && !isLoading && !error) {
+      fetchData(INITIAL_PAGE, true);
+    }
+  }, [enabled, items.length, isLoading, error, fetchData]);
 
   // Cleanup on unmount
   useEffect(() => {

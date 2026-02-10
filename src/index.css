@@ -82,7 +82,7 @@
   /* Chat Colors */
   --chat-user-bg: linear-gradient(135deg, #3b82f6, #2563eb);
   --chat-user-text: #ffffff;
-  --chat-ai-bg: #f3f4f6;
+  --chat-ai-bg: #e5e7eb;
   --chat-ai-text: #1f2937;
   --chat-input-bg: #f9fafb;
   --chat-input-border: #e5e7eb;
@@ -220,6 +220,36 @@
 
   /* Color scheme */
   color-scheme: dark;
+}
+
+/* ===============================================
+   MOBILE TEXT COLOR OVERRIDES
+   =============================================== */
+@media (max-width: 768px) {
+  :root,
+  [data-theme="light"] {
+    /* Mobile light mode: darker text for better readability on smaller screens */
+    --text-primary: #111827;
+    --text-primary-mobile: #111827;
+  }
+
+  [data-theme="dark"] {
+    /* Mobile dark mode: keep the same light text */
+    --text-primary: #2477ca;
+    --text-primary-mobile: #3172b3;
+  }
+}
+
+/* Desktop-specific text variable (for components that need explicit desktop styling) */
+@media (min-width: 769px) {
+  :root,
+  [data-theme="light"] {
+    --text-primary-desktop: #111827;
+  }
+
+  [data-theme="dark"] {
+    --text-primary-desktop: #f9fafb;
+  }
 }
 
 /* ===============================================
