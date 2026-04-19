@@ -8,6 +8,7 @@ import type {
   QuotaCheckResponse,
   UsageContextValue,
   UsageWarning,
+  HistoricalUsageResponse,
 } from '../types/usage';
 
 const UsageContext = createContext<UsageContextValue | undefined>(undefined);

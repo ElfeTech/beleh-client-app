@@ -184,7 +184,7 @@ export interface DataSourceMetadata {
 // Chat API Types
 export interface IntentRequest {
   prompt: string;
-  dataset_id: string;
+  dataset_id: string | null;
 }
 
 export interface ChatWorkflowResponse {
