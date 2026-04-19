@@ -204,7 +204,7 @@ export function SecuritySection() {
 
       {/* 2FA Setup Modal */}
       {show2FASetup && (
-        <div className="modal-backdrop" onClick={() => setShow2FASetup(false)}>
+        <div className="modal-backdrop">
           <div className="tfa-setup-modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2>Set Up Two-Factor Authentication</h2>

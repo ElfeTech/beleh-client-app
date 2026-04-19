@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from '../context/useAuth';
+import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
 import type {
     DatasetTable,
     DatasetTablePreviewResponse
@@ -22,6 +23,10 @@ export const DatasetPreviewPage: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(50);
+
+    // Selection UI state
+    const [showTableActionSheet, setShowTableActionSheet] = useState(false);
+    const [showPageSizeActionSheet, setShowPageSizeActionSheet] = useState(false);
 
     // Track if this is the initial load to prevent duplicate preview calls
     const isInitialLoadRef = useRef(true);
@@ -65,9 +70,7 @@ export const DatasetPreviewPage: React.FC = () => {
                 setSelectedTable(firstTable);
                 setLoading(false);
                 // Fetch preview for the first table immediately after tables are loaded
-                // This ensures the correct sequence: tables → preview (no 404s)
                 await fetchPreview(firstTable, currentPage, pageSize);
-                // Mark that initial load is complete
                 isInitialLoadRef.current = false;
             } else {
                 setError('No tables found in this dataset.');
@@ -80,7 +83,7 @@ export const DatasetPreviewPage: React.FC = () => {
         }
     }, [user, datasetId, fetchPreview, pageSize]);
 
-    // Reset state when dataset id changes to avoid race conditions with old state
+    // Reset state when dataset id changes
     useEffect(() => {
         setTables([]);
         setSelectedTable('');
@@ -88,7 +91,7 @@ export const DatasetPreviewPage: React.FC = () => {
         setError(null);
         setCurrentPage(1);
         setLoading(true);
-        isInitialLoadRef.current = true; // Reset initial load flag
+        isInitialLoadRef.current = true;
     }, [datasetId]);
 
     useEffect(() => {
@@ -98,16 +101,10 @@ export const DatasetPreviewPage: React.FC = () => {
         }
     }, [datasetId, fetchDatasetInfo, fetchTables]);
 
-    // Only fetch preview when user manually changes table, page, or page size
-    // Initial preview is fetched directly from fetchTables to ensure correct sequence
     useEffect(() => {
-        // Skip if this is the initial load (handled by fetchTables)
         if (isInitialLoadRef.current) return;
-
-        // Skip if we're still loading tables or if there are no tables
         if (loading || tables.length === 0) return;
 
-        // Only fetch if the selected table exists in the current tables list
         const tableExists = tables.some(t => t.table_name === selectedTable);
         if (selectedTable && tableExists) {
             fetchPreview(selectedTable, currentPage, pageSize);
@@ -116,16 +113,6 @@ export const DatasetPreviewPage: React.FC = () => {
 
     const handleBack = () => {
         navigate(`/workspace/${workspaceId}`);
-    };
-
-    const handleTableChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setSelectedTable(e.target.value);
-        setCurrentPage(1);
-    };
-
-    const handlePageSizeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setPageSize(Number(e.target.value));
-        setCurrentPage(1);
     };
 
     const handlePrevPage = () => {
@@ -140,45 +127,60 @@ export const DatasetPreviewPage: React.FC = () => {
         }
     };
 
+    const tableItems: ActionSheetItem[] = tables.map(table => ({
+        id: table.table_name,
+        label: `${table.table_name} (${table.row_count.toLocaleString()} rows)`,
+        onClick: () => {
+            setSelectedTable(table.table_name);
+            setCurrentPage(1);
+            setShowTableActionSheet(false);
+        }
+    }));
+
+    const pageSizeItems: ActionSheetItem[] = [50, 100, 200].map(size => ({
+        id: size.toString(),
+        label: `${size} rows per page`,
+        onClick: () => {
+            setPageSize(size);
+            setCurrentPage(1);
+            setShowPageSizeActionSheet(false);
+        }
+    }));
+
     const renderSkeleton = () => (
         <div className="skeleton-container">
-            <div className="skeleton-header" />
-            {[...Array(15)].map((_, i) => (
+            {[...Array(12)].map((_, i) => (
                 <div key={i} className="skeleton-row" />
             ))}
         </div>
     );
 
     return (
-        <div className="preview-page">
+        <div className="preview-page app-page-root app-page-root--scroll">
             <header className="preview-page-header">
                 <div className="header-main">
-                    <button className="back-btn" onClick={handleBack} title="Back to Chat">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <button className="back-btn" onClick={handleBack} title="Back">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                             <path d="M19 12H5M12 19l-7-7 7-7" />
                         </svg>
                         <span>Back</span>
                     </button>
                     <div className="header-info">
-                        <h1>{datasetName || 'Dataset Preview'}</h1>
-                        <span className="dataset-id-tag">ID: {datasetId}</span>
+                        <h1>{datasetName || 'Preview'}</h1>
+                        <span className="dataset-id-tag">{datasetId}</span>
                     </div>
 
                     {tables.length > 0 && (
                         <div className="table-selector-section">
-                            <label htmlFor="table-select" className="table-select-label">Table:</label>
-                            <select
-                                id="table-select"
-                                value={selectedTable}
-                                onChange={handleTableChange}
-                                className="table-select"
+                            <button
+                                className="table-select-trigger"
+                                onClick={() => setShowTableActionSheet(true)}
                             >
-                                {tables.map(table => (
-                                    <option key={table.table_name} value={table.table_name}>
-                                        {table.table_name} ({table.row_count.toLocaleString()} rows)
-                                    </option>
-                                ))}
-                            </select>
+                                <span>{selectedTable}</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                    <path d="M6 9l6 6 6-6" />
+                                </svg>
+                            </button>
                         </div>
                     )}
                 </div>
@@ -188,7 +190,7 @@ export const DatasetPreviewPage: React.FC = () => {
                 {loading ? (
                     <div className="loading-state">
                         <div className="spinner" />
-                        <p>Loading dataset tables...</p>
+                        <p>Scanning tables...</p>
                     </div>
                 ) : error ? (
                     <div className="error-state">
@@ -196,7 +198,7 @@ export const DatasetPreviewPage: React.FC = () => {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                         <p>{error}</p>
-                        <button className="primary-btn" onClick={fetchTables}>Try Again</button>
+                        <button className="primary-btn" onClick={fetchTables}>Retry</button>
                     </div>
                 ) : (
                     <div className="data-grid-container">
@@ -207,7 +209,7 @@ export const DatasetPreviewPage: React.FC = () => {
                                         <tr>
                                             <th className="sticky-col index-col">#</th>
                                             {previewData.columns.map((col, i) => (
-                                                <th key={i} title={`Type: ${col.type}`}>
+                                                <th key={i}>
                                                     <div className="col-header">
                                                         <span className="col-name">{col.name}</span>
                                                         <span className="col-type">{col.type}</span>
@@ -232,7 +234,7 @@ export const DatasetPreviewPage: React.FC = () => {
                             </div>
                         ) : (
                             <div className="empty-state">
-                                <p>No data available for this table.</p>
+                                <p>No records found.</p>
                             </div>
                         )}
                     </div>
@@ -243,50 +245,58 @@ export const DatasetPreviewPage: React.FC = () => {
                 <div className="footer-left">
                     {previewData && (
                         <div className="pagination-info">
-                            Showing <strong>{(currentPage - 1) * pageSize + 1}</strong> - <strong>{Math.min(currentPage * pageSize, previewData.total_rows)}</strong> of <strong>{previewData.total_rows.toLocaleString()}</strong> rows
+                            <strong>{((currentPage - 1) * pageSize + 1).toLocaleString()}</strong> - <strong>{Math.min(currentPage * pageSize, previewData.total_rows).toLocaleString()}</strong> of <strong>{previewData.total_rows.toLocaleString()}</strong>
                         </div>
                     )}
                 </div>
 
                 <div className="footer-right">
-                    <div className="pagination-group">
-                        <div className="page-size-selector">
-                            <span>Rows per page:</span>
-                            <select value={pageSize} onChange={handlePageSizeChange}>
-                                <option value={50}>50</option>
-                                <option value={100}>100</option>
-                                <option value={200}>200</option>
-                            </select>
-                        </div>
+                    <button
+                        className="page-size-trigger"
+                        onClick={() => setShowPageSizeActionSheet(true)}
+                    >
+                        {pageSize} / page
+                    </button>
 
-                        <div className="page-navigation">
-                            <button
-                                onClick={handlePrevPage}
-                                disabled={currentPage === 1 || dataLoading}
-                                className="nav-btn"
-                                aria-label="Previous Page"
-                            >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M15 19l-7-7 7-7" />
-                                </svg>
-                            </button>
-                            <span className="page-indicator">
-                                Page <strong>{currentPage}</strong> of <strong>{previewData?.total_pages || 1}</strong>
-                            </span>
-                            <button
-                                onClick={handleNextPage}
-                                disabled={!previewData || currentPage >= previewData.total_pages || dataLoading}
-                                className="nav-btn"
-                                aria-label="Next Page"
-                            >
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M9 5l7 7-7 7" />
-                                </svg>
-                            </button>
-                        </div>
+                    <div className="page-navigation">
+                        <button
+                            onClick={handlePrevPage}
+                            disabled={currentPage === 1 || dataLoading}
+                            className="nav-btn"
+                            aria-label="Previous"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M15 19l-7-7 7-7" />
+                            </svg>
+                        </button>
+                        <span className="page-indicator">{currentPage} / {previewData?.total_pages || 1}</span>
+                        <button
+                            onClick={handleNextPage}
+                            disabled={!previewData || currentPage >= previewData.total_pages || dataLoading}
+                            className="nav-btn"
+                            aria-label="Next"
+                        >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                <path d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
                     </div>
                 </div>
             </footer>
+
+            <ActionSheet
+                isOpen={showTableActionSheet}
+                title="Select Table"
+                items={tableItems}
+                onClose={() => setShowTableActionSheet(false)}
+            />
+
+            <ActionSheet
+                isOpen={showPageSizeActionSheet}
+                title="Rows per page"
+                items={pageSizeItems}
+                onClose={() => setShowPageSizeActionSheet(false)}
+            />
         </div>
     );
 };

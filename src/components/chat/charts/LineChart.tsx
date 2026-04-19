@@ -36,65 +36,78 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export function LineChart({ data, visualization, isExpanded = false }: LineChartProps) {
-    if (data.length === 0) {
+    if (!data || data.length === 0) {
         return <div className="chart-error">No data available</div>;
     }
 
-    // Use the visualization adapter to format data
-    const formattedData = adaptLineChartData(visualization, data);
-    const { chartData, yLabel, yFormat } = formattedData;
+    try {
+        // Use the visualization adapter to format data
+        const formattedData = adaptLineChartData(visualization, data);
+        if (!formattedData || !formattedData.chartData) {
+            throw new Error('Failed to format line chart data');
+        }
 
-    const height = isExpanded ? 500 : 350;
+        const { chartData, yLabel, yFormat } = formattedData;
 
-    // Y-axis tick formatter
-    const formatYAxis = (value: number) => formatValue(value, yFormat);
+        const height = isExpanded ? 500 : 350;
 
-    return (
-        <div className="modern-line-chart">
-            <ResponsiveContainer width="100%" height={height}>
-                <RechartsLineChart
-                    data={chartData}
-                    margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
-                >
-                    <defs>
-                        <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
-                            <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
-                            <stop offset="100%" stopColor="#8b5cf6" stopOpacity={1} />
-                        </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis
-                        dataKey="name"
-                        tick={{ fill: '#6b7280', fontSize: 12 }}
-                        axisLine={{ stroke: '#d1d5db' }}
-                        tickLine={{ stroke: '#d1d5db' }}
-                    />
-                    <YAxis
-                        tickFormatter={formatYAxis}
-                        tick={{ fill: '#6b7280', fontSize: 12 }}
-                        axisLine={{ stroke: '#d1d5db' }}
-                        tickLine={{ stroke: '#d1d5db' }}
-                        label={{
-                            value: yLabel,
-                            angle: -90,
-                            position: 'insideLeft',
-                            style: { fill: '#374151', fontSize: 13, fontWeight: 500 }
-                        }}
-                    />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Line
-                        type="monotone"
-                        dataKey="value"
-                        name={yLabel}
-                        stroke="url(#lineGradient)"
-                        strokeWidth={3}
-                        dot={{ fill: '#3b82f6', r: 5, strokeWidth: 2, stroke: '#fff' }}
-                        activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
-                        animationDuration={1000}
-                        animationEasing="ease-out"
-                    />
-                </RechartsLineChart>
-            </ResponsiveContainer>
-        </div>
-    );
+        // Y-axis tick formatter
+        const formatYAxis = (value: number) => formatValue(value, yFormat);
+
+        return (
+            <div className="modern-line-chart">
+                <ResponsiveContainer width="100%" height={height}>
+                    <RechartsLineChart
+                        data={chartData}
+                        margin={{ top: 20, right: 30, left: 20, bottom: 20 }}
+                    >
+                        <defs>
+                            <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+                                <stop offset="0%" stopColor="#3b82f6" stopOpacity={1} />
+                                <stop offset="100%" stopColor="#8b5cf6" stopOpacity={1} />
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis
+                            dataKey="name"
+                            tick={{ fill: '#6b7280', fontSize: 12 }}
+                            axisLine={{ stroke: '#d1d5db' }}
+                            tickLine={{ stroke: '#d1d5db' }}
+                        />
+                        <YAxis
+                            tickFormatter={formatYAxis}
+                            tick={{ fill: '#6b7280', fontSize: 12 }}
+                            axisLine={{ stroke: '#d1d5db' }}
+                            tickLine={{ stroke: '#d1d5db' }}
+                            label={{
+                                value: yLabel,
+                                angle: -90,
+                                position: 'insideLeft',
+                                style: { fill: '#374151', fontSize: 13, fontWeight: 500 }
+                            }}
+                        />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Line
+                            type="monotone"
+                            dataKey="value"
+                            name={yLabel}
+                            stroke="url(#lineGradient)"
+                            strokeWidth={3}
+                            dot={{ fill: '#3b82f6', r: 5, strokeWidth: 2, stroke: '#fff' }}
+                            activeDot={{ r: 7, strokeWidth: 2, stroke: '#fff' }}
+                            animationDuration={1000}
+                            animationEasing="ease-out"
+                        />
+                    </RechartsLineChart>
+                </ResponsiveContainer>
+            </div>
+        );
+    } catch (error) {
+        console.error('LineChart rendering error:', error, { visualization, data });
+        return (
+            <div className="chart-error">
+                <p>Unable to render line chart: {error instanceof Error ? error.message : 'Unknown error'}</p>
+            </div>
+        );
+    }
 }

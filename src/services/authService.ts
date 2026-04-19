@@ -8,6 +8,7 @@ import {
 import { auth, googleProvider } from '../lib/firebase';
 import { apiClient } from './apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
+import { clearAllSelectedDatasetStorage } from '../lib/selectedDatasourceStorage';
 
 const TOKEN_KEY = 'firebase_auth_token';
 const USER_KEY = 'firebase_user';
@@ -144,6 +145,7 @@ export const authService = {
     localStorage.removeItem(USER_KEY);
     localStorage.removeItem(BACKEND_USER_KEY);
     SESSION_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+    clearAllSelectedDatasetStorage();
     apiCacheManager.clearAll();
   },
 
@@ -165,9 +167,12 @@ export const authService = {
   onAuthStateChange(callback: (user: User | null) => void): () => void {
     return onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const token = await user.getIdToken();
+        // Force refresh on auth state change to ensure we have a fresh, valid token
+        // especially after a logout/login cycle
+        const token = await user.getIdToken(true);
         this.storeAuthToken(token);
         this.storeUserData(user);
+        apiCacheManager.clearAll(); // Clear cache as user might have changed or permissions updated
       } else {
         this.clearAuthData();
       }

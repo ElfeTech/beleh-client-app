@@ -20,18 +20,6 @@ const FeedbackModal = () => {
     }
   }, [isVisible]);
 
-  // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isVisible && !isSubmitting) {
-        dismissFeedback();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [isVisible, isSubmitting, dismissFeedback]);
-
   // Disable body scroll when modal is open
   useEffect(() => {
     if (isVisible) {
@@ -62,8 +50,8 @@ const FeedbackModal = () => {
   }
 
   const modalContent = (
-    <div className="feedback-modal-backdrop" onClick={dismissFeedback}>
-      <div className="feedback-modal-content" onClick={(e) => e.stopPropagation()}>
+    <div className="feedback-modal-backdrop">
+      <div className="feedback-modal-content">
         {showSuccess ? (
           <div className="feedback-success">
             <div className="feedback-success-icon">✓</div>

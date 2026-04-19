@@ -382,7 +382,7 @@ export function DatasourceModal({ mode, workspaceId, datasourceId, initialName =
     };
 
     const modalContent = (
-        <div className="modal-backdrop" onClick={(uploadStatus === 'IDLE' || uploadStatus === 'FAILED' || uploadStatus === 'NEEDS_INPUT') ? handleClose : undefined} style={{ zIndex: 10001 }}>
+        <div className="modal-backdrop" style={{ zIndex: 10001 }}>
             <div className="modal-container large" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2>{mode === 'add' ? 'Add New Dataset' : mode === 'rename' ? 'Rename Dataset' : 'Update Dataset'}</h2>

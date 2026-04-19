@@ -26,23 +26,9 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !isLoading) {
-      onCancel();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape' && !isLoading) {
-      onCancel();
-    }
-  };
-
   const dialogContent = (
     <div
       className="confirm-dialog-backdrop"
-      onClick={handleBackdropClick}
-      onKeyDown={handleKeyDown}
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"

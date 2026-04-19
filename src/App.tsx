@@ -17,6 +17,7 @@ import DatasetsPage from './pages/DatasetsPage';
 import { DatasetPreviewPage } from './pages/DatasetPreviewPage';
 import SessionsPage from './pages/SessionsPage';
 import SettingsPage from './pages/SettingsPage';
+import UsageStatisticsPage from './pages/UsageStatisticsPage';
 import { MainLayout } from './components/layout/MainLayout';
 import FeedbackModal from './components/common/FeedbackModal';
 
@@ -51,6 +52,7 @@ function App() {
                         <Route path="/workspace/:id/datasets" element={<DatasetsPage />} />
                         <Route path="/workspace/:id/datasets/:datasetId/preview" element={<DatasetPreviewPage />} />
                         <Route path="/workspace/:id/sessions" element={<SessionsPage />} />
+                        <Route path="/workspace/:id/statistics" element={<UsageStatisticsPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/settings/general" element={<SettingsPage />} />
                         <Route path="/settings/security" element={<SettingsPage />} />

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import './SettingsSidebar.css';
 
 export type SettingsSection =
@@ -13,8 +13,6 @@ export type SettingsSection =
   | 'about';
 
 interface SettingsSidebarProps {
-  activeSection: SettingsSection | null;
-  onSectionChange: (section: SettingsSection) => void;
   onSignOut: () => void;
 }
 
@@ -117,19 +115,17 @@ const menuItems: MenuItem[] = [
   },
 ];
 
-export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
-  activeSection,
-  onSectionChange,
-  onSignOut,
-}) => {
-  // Group menu items by category
-  const groupedItems = menuItems.reduce((acc, item) => {
-    if (!acc[item.category]) {
-      acc[item.category] = [];
-    }
-    acc[item.category].push(item);
-    return acc;
-  }, {} as Record<string, MenuItem[]>);
+export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ onSignOut }) => {
+  const groupedItems = menuItems.reduce(
+    (acc, item) => {
+      if (!acc[item.category]) {
+        acc[item.category] = [];
+      }
+      acc[item.category].push(item);
+      return acc;
+    },
+    {} as Record<string, MenuItem[]>
+  );
 
   return (
     <div className="settings-sidebar-container">
@@ -143,25 +139,27 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({
             <div className="settings-sidebar-section-title">{category}</div>
             <div className="settings-sidebar-menu">
               {items.map((item) => (
-                <Link
+                <NavLink
                   key={item.id}
                   to={`/settings/${item.id}`}
-                  className={`settings-sidebar-item ${activeSection === item.id ? 'active' : ''}`}
-                  onClick={() => onSectionChange(item.id)}
+                  end
+                  className={({ isActive }) =>
+                    `settings-sidebar-item${isActive ? ' active' : ''}`
+                  }
                 >
                   <div className="sidebar-item-icon">{item.icon}</div>
                   <div className="sidebar-item-content">
                     <div className="sidebar-item-title">{item.title}</div>
                     <div className="sidebar-item-subtitle">{item.subtitle}</div>
                   </div>
-                </Link>
+                </NavLink>
               ))}
             </div>
           </div>
         ))}
 
         <div className="settings-sidebar-section">
-          <button className="settings-sidebar-signout" onClick={onSignOut}>
+          <button type="button" className="settings-sidebar-signout" onClick={onSignOut}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>

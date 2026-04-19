@@ -82,12 +82,6 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, 
     }
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   const handleMoreClick = (e: React.MouseEvent, workspaceId: string) => {
     e.stopPropagation();
     setSelectedWorkspaceForMenu(workspaceId);
@@ -189,7 +183,7 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, 
   if (!isOpen) return null;
 
   return (
-    <div className="bottom-sheet-backdrop" onClick={handleBackdropClick}>
+    <div className="bottom-sheet-backdrop">
       <div className="bottom-sheet-container">
         <div className="bottom-sheet-header">
           <div className="bottom-sheet-handle" />
@@ -294,8 +288,8 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, 
 
       {/* Edit Workspace Modal */}
       {showEditModal && (
-        <div className="modal-backdrop" onClick={() => setShowEditModal(false)} style={{ zIndex: 10001 }}>
-          <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-backdrop" style={{ zIndex: 10001 }}>
+          <div className="modal-container">
             <div className="modal-header">
               <h2>Edit Workspace</h2>
               <button className="close-btn" onClick={() => setShowEditModal(false)}>

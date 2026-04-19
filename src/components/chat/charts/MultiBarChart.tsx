@@ -48,220 +48,233 @@ export const MultiBarChart: React.FC<MultiBarChartProps> = ({
   isExpanded = false,
   mode = 'grouped',
 }) => {
-  // Transform data to group by x-axis and series
-  const seriesMap = new Map<string, any[]>();
-  const allXValues = new Set<string>();
+  if (!data || data.length === 0) {
+    return <div className="chart-error">No data available</div>;
+  }
 
-  data.forEach((row) => {
-    const seriesValue = row[seriesField];
-    const xValue = row[xField];
-    const yValue = row[yField];
+  try {
+    // Transform data to group by x-axis and series
+    const seriesMap = new Map<string, any[]>();
+    const allXValues = new Set<string>();
 
-    if (!seriesMap.has(seriesValue)) {
-      seriesMap.set(seriesValue, []);
-    }
+    data.forEach((row) => {
+      const seriesValue = row[seriesField];
+      const xValue = row[xField];
+      const yValue = row[yField];
 
-    allXValues.add(xValue);
-    seriesMap.get(seriesValue)!.push({
-      x: xValue,
-      y: yValue,
-    });
-  });
-
-  // Create unified data structure for Recharts
-  const sortedXValues = Array.from(allXValues).sort();
-  const chartData = sortedXValues.map((xValue) => {
-    const dataPoint: any = {
-      name: xValue,
-      // Store formatted label for display
-      displayLabel: formatTimeLabel(xValue, timeGrain),
-      // Store raw value for tooltip
-      rawValue: xValue,
-    };
-    seriesMap.forEach((seriesData, seriesKey) => {
-      const point = seriesData.find((d) => d.x === xValue);
-      dataPoint[seriesKey] = point ? point.y : 0;
-    });
-    return dataPoint;
-  });
-
-  // Create legend items
-  const seriesKeys = Array.from(seriesMap.keys());
-  const legendItems: LegendItem[] = seriesKeys.map((key, index) => ({
-    key,
-    label: String(key),
-    color: COLOR_PALETTE[index % COLOR_PALETTE.length],
-  }));
-
-  const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
-
-  const handleLegendToggle = (key: string) => {
-    setHiddenSeries((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(key)) {
-        newSet.delete(key);
-      } else {
-        // Don't hide all series
-        if (newSet.size < seriesKeys.length - 1) {
-          newSet.add(key);
-        }
+      if (!seriesMap.has(seriesValue)) {
+        seriesMap.set(seriesValue, []);
       }
-      return newSet;
+
+      allXValues.add(xValue);
+      seriesMap.get(seriesValue)!.push({
+        x: xValue,
+        y: yValue,
+      });
     });
-  };
 
-  const height = isExpanded ? 500 : 350;
+    // Create unified data structure for Recharts
+    const sortedXValues = Array.from(allXValues).sort();
+    const chartData = sortedXValues.map((xValue) => {
+      const dataPoint: any = {
+        name: xValue,
+        // Store formatted label for display
+        displayLabel: formatTimeLabel(xValue, timeGrain),
+        // Store raw value for tooltip
+        rawValue: xValue,
+      };
+      seriesMap.forEach((seriesData, seriesKey) => {
+        const point = seriesData.find((d) => d.x === xValue);
+        dataPoint[seriesKey] = point ? point.y : 0;
+      });
+      return dataPoint;
+    });
 
-  // Custom tooltip
-  const CustomTooltip = ({ active, payload }: any) => {
-    if (!active || !payload || payload.length === 0) return null;
+    // Create legend items
+    const seriesKeys = Array.from(seriesMap.keys());
+    const legendItems: LegendItem[] = seriesKeys.map((key, index) => ({
+      key,
+      label: String(key),
+      color: COLOR_PALETTE[index % COLOR_PALETTE.length],
+    }));
 
-    // Get the raw value from payload for proper formatting
-    const dataPoint = payload[0]?.payload;
-    const formattedTimeLabel = formatTimeLabelTooltip(dataPoint?.rawValue || dataPoint?.name, timeGrain);
+    const [hiddenSeries, setHiddenSeries] = useState<Set<string>>(new Set());
 
-    return (
-      <div
-        style={{
-          backgroundColor: 'rgba(0, 0, 0, 0.85)',
-          border: 'none',
-          borderRadius: '8px',
-          padding: '12px',
-          color: 'white',
-          fontSize: '13px',
-        }}
-      >
-        <div style={{ marginBottom: '8px', fontWeight: '600' }}>
-          {formattedTimeLabel}
-        </div>
-        {payload
-          .filter((p: any) => !hiddenSeries.has(p.dataKey))
-          .map((p: any, idx: number) => (
+    const handleLegendToggle = (key: string) => {
+      setHiddenSeries((prev) => {
+        const newSet = new Set(prev);
+        if (newSet.has(key)) {
+          newSet.delete(key);
+        } else {
+          // Don't hide all series
+          if (newSet.size < seriesKeys.length - 1) {
+            newSet.add(key);
+          }
+        }
+        return newSet;
+      });
+    };
+
+    const height = isExpanded ? 500 : 350;
+
+    // Custom tooltip
+    const CustomTooltip = ({ active, payload }: any) => {
+      if (!active || !payload || payload.length === 0) return null;
+
+      // Get the raw value from payload for proper formatting
+      const dataPoint = payload[0]?.payload;
+      const formattedTimeLabel = formatTimeLabelTooltip(dataPoint?.rawValue || dataPoint?.name, timeGrain);
+
+      return (
+        <div
+          style={{
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            border: 'none',
+            borderRadius: '8px',
+            padding: '12px',
+            color: 'white',
+            fontSize: '13px',
+          }}
+        >
+          <div style={{ marginBottom: '8px', fontWeight: '600' }}>
+            {formattedTimeLabel}
+          </div>
+          {payload
+            .filter((p: any) => !hiddenSeries.has(p.dataKey))
+            .map((p: any, idx: number) => (
+              <div
+                key={idx}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginTop: '4px',
+                }}
+              >
+                <span
+                  style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '2px',
+                    backgroundColor: p.color,
+                    display: 'inline-block',
+                  }}
+                />
+                <span>
+                  {p.name}: {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
+                </span>
+              </div>
+            ))}
+          {mode === 'stacked' && (
             <div
-              key={idx}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                marginTop: '4px',
+                marginTop: '8px',
+                paddingTop: '8px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.2)',
+                fontWeight: '600',
               }}
             >
-              <span
-                style={{
-                  width: '10px',
-                  height: '10px',
-                  borderRadius: '2px',
-                  backgroundColor: p.color,
-                  display: 'inline-block',
-                }}
-              />
-              <span>
-                {p.name}: {typeof p.value === 'number' ? p.value.toLocaleString() : p.value}
-              </span>
+              Total:{' '}
+              {payload
+                .filter((p: any) => !hiddenSeries.has(p.dataKey))
+                .reduce((sum: number, p: any) => sum + (p.value || 0), 0)
+                .toLocaleString()}
             </div>
-          ))}
-        {mode === 'stacked' && (
-          <div
-            style={{
-              marginTop: '8px',
-              paddingTop: '8px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.2)',
-              fontWeight: '600',
-            }}
+          )}
+        </div>
+      );
+    };
+
+    // Check if we have too many series
+    if (seriesKeys.length > 15) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-600)' }}>
+          <p>Too many series to display ({seriesKeys.length} series detected).</p>
+          <p>Please narrow down your data to 15 or fewer series for optimal visualization.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ width: '100%' }}>
+        <ChartLegend
+          items={legendItems}
+          onToggle={handleLegendToggle}
+          layout="horizontal"
+          interactive={true}
+        />
+        <ResponsiveContainer width="100%" height={height}>
+          <BarChart
+            data={chartData}
+            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
           >
-            Total:{' '}
-            {payload
-              .filter((p: any) => !hiddenSeries.has(p.dataKey))
-              .reduce((sum: number, p: any) => sum + (p.value || 0), 0)
-              .toLocaleString()}
-          </div>
-        )}
+            <defs>
+              {seriesKeys.map((key, index) => (
+                <linearGradient
+                  key={`gradient-${key}`}
+                  id={`bar-gradient-${index}`}
+                  x1="0"
+                  y1="0"
+                  x2="0"
+                  y2="1"
+                >
+                  <stop
+                    offset="0%"
+                    stopColor={COLOR_PALETTE[index % COLOR_PALETTE.length]}
+                    stopOpacity={0.9}
+                  />
+                  <stop
+                    offset="100%"
+                    stopColor={COLOR_PALETTE[index % COLOR_PALETTE.length]}
+                    stopOpacity={0.7}
+                  />
+                </linearGradient>
+              ))}
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+            <XAxis
+              dataKey="displayLabel"
+              label={{
+                value: xLabel,
+                position: 'insideBottom',
+                offset: -10,
+                style: { fill: '#6b7280', fontSize: '14px' },
+              }}
+              tick={{ fill: '#6b7280', fontSize: '12px' }}
+              angle={-45}
+              textAnchor="end"
+              height={80}
+            />
+            <YAxis
+              label={{
+                value: yLabel,
+                angle: -90,
+                position: 'insideLeft',
+                style: { fill: '#6b7280', fontSize: '14px', textAnchor: 'middle' },
+              }}
+              tick={{ fill: '#6b7280', fontSize: '12px' }}
+            />
+            <Tooltip content={<CustomTooltip />} />
+            {seriesKeys.map((key, index) => (
+              <Bar
+                key={key}
+                dataKey={key}
+                fill={`url(#bar-gradient-${index})`}
+                hide={hiddenSeries.has(key)}
+                stackId={mode === 'stacked' ? 'stack' : undefined}
+                radius={mode === 'stacked' ? undefined : [4, 4, 0, 0]}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     );
-  };
-
-  // Check if we have too many series
-  if (seriesKeys.length > 15) {
+  } catch (error) {
+    console.error('MultiBarChart rendering error:', error, { data, seriesField, xField, yField });
     return (
-      <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--gray-600)' }}>
-        <p>Too many series to display ({seriesKeys.length} series detected).</p>
-        <p>Please narrow down your data to 15 or fewer series for optimal visualization.</p>
+      <div className="chart-error">
+        <p>Unable to render multi-bar chart: {error instanceof Error ? error.message : 'Unknown error'}</p>
       </div>
     );
   }
-
-  return (
-    <div style={{ width: '100%' }}>
-      <ChartLegend
-        items={legendItems}
-        onToggle={handleLegendToggle}
-        layout="horizontal"
-        interactive={true}
-      />
-      <ResponsiveContainer width="100%" height={height}>
-        <BarChart
-          data={chartData}
-          margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-        >
-          <defs>
-            {seriesKeys.map((key, index) => (
-              <linearGradient
-                key={`gradient-${key}`}
-                id={`bar-gradient-${index}`}
-                x1="0"
-                y1="0"
-                x2="0"
-                y2="1"
-              >
-                <stop
-                  offset="0%"
-                  stopColor={COLOR_PALETTE[index % COLOR_PALETTE.length]}
-                  stopOpacity={0.9}
-                />
-                <stop
-                  offset="100%"
-                  stopColor={COLOR_PALETTE[index % COLOR_PALETTE.length]}
-                  stopOpacity={0.7}
-                />
-              </linearGradient>
-            ))}
-          </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis
-            dataKey="displayLabel"
-            label={{
-              value: xLabel,
-              position: 'insideBottom',
-              offset: -10,
-              style: { fill: '#6b7280', fontSize: '14px' },
-            }}
-            tick={{ fill: '#6b7280', fontSize: '12px' }}
-            angle={-45}
-            textAnchor="end"
-            height={80}
-          />
-          <YAxis
-            label={{
-              value: yLabel,
-              angle: -90,
-              position: 'insideLeft',
-              style: { fill: '#6b7280', fontSize: '14px', textAnchor: 'middle' },
-            }}
-            tick={{ fill: '#6b7280', fontSize: '12px' }}
-          />
-          <Tooltip content={<CustomTooltip />} />
-          {seriesKeys.map((key, index) => (
-            <Bar
-              key={key}
-              dataKey={key}
-              fill={`url(#bar-gradient-${index})`}
-              hide={hiddenSeries.has(key)}
-              stackId={mode === 'stacked' ? 'stack' : undefined}
-              radius={mode === 'stacked' ? undefined : [4, 4, 0, 0]}
-            />
-          ))}
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  );
 };

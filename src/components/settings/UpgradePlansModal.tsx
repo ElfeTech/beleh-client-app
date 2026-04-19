@@ -67,18 +67,6 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose();
-    }
-  };
-
   const getPrice = (plan: Plan) => {
     return billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
   };
@@ -96,7 +84,7 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
   };
 
   const modalContent = (
-    <div className="upgrade-modal-backdrop" onClick={handleBackdropClick} onKeyDown={handleKeyDown} role="dialog" aria-modal="true" tabIndex={-1}>
+    <div className="upgrade-modal-backdrop" role="dialog" aria-modal="true" tabIndex={-1}>
       <div className="upgrade-modal-container">
         {/* Header */}
         <div className="upgrade-modal-header">

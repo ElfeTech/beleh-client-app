@@ -15,27 +15,17 @@ export function ExpandedChartModal({
     children,
     onClose
 }: ExpandedChartModalProps) {
-    // Handle escape key
     useEffect(() => {
-        const handleEscape = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                onClose();
-            }
-        };
-
-        document.addEventListener('keydown', handleEscape);
-        // Prevent body scroll when modal is open
         document.body.style.overflow = 'hidden';
 
         return () => {
-            document.removeEventListener('keydown', handleEscape);
             document.body.style.overflow = '';
         };
-    }, [onClose]);
+    }, []);
 
     const modalContent = (
-        <div className="expanded-chart-modal-backdrop" onClick={onClose}>
-            <div className="expanded-chart-modal-container" onClick={(e) => e.stopPropagation()}>
+        <div className="expanded-chart-modal-backdrop">
+            <div className="expanded-chart-modal-container">
                 {/* Header */}
                 <div className="expanded-chart-modal-header">
                     <div>

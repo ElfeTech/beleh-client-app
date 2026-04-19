@@ -7,6 +7,24 @@
   max-width: 800px;
 }
 
+.general-section__banner {
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.general-section__banner--error {
+  background: var(--error-light);
+  color: var(--error);
+  border: 1px solid color-mix(in srgb, var(--error) 35%, transparent);
+}
+
+html[data-theme='dark'] .general-section__banner--error {
+  background: color-mix(in srgb, var(--error) 14%, var(--bg-card));
+  border-color: color-mix(in srgb, var(--error) 45%, var(--border-primary));
+}
+
 /* Section Header */
 .section-header {
   display: flex;
@@ -19,7 +37,7 @@
   width: 48px;
   height: 48px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+  background: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-700) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -83,9 +101,19 @@
   color: var(--primary-600);
 }
 
-[data-theme="dark"] .card-badge {
-  background: rgba(59, 130, 246, 0.15);
+html[data-theme='dark'] .card-badge {
+  background: color-mix(in srgb, var(--primary-500) 16%, transparent);
   color: var(--primary-400);
+}
+
+.card-badge--muted {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+}
+
+html[data-theme='dark'] .card-badge--muted {
+  background: color-mix(in srgb, var(--ds-surface-muted) 88%, var(--primary-500) 12%);
+  color: var(--text-secondary);
 }
 
 .card-badge.danger {
@@ -111,7 +139,11 @@
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bg-sidebar) 55%, var(--primary-500) 45%) 0%,
+    var(--primary-600) 100%
+  );
   display: flex;
   align-items: center;
   justify-content: center;
@@ -152,6 +184,15 @@
   height: 14px;
 }
 
+.avatar-hint {
+  margin: 0;
+  max-width: 200px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--text-muted);
+  text-align: center;
+}
+
 /* Profile Form */
 .profile-form {
   flex: 1;
@@ -184,8 +225,8 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  border-color: var(--primary-500);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-500) 18%, transparent);
 }
 
 .form-group input.disabled {
@@ -212,7 +253,11 @@
   gap: 4px;
   font-size: 12px;
   font-weight: 500;
-  color: var(--success);
+  color: var(--primary-600);
+}
+
+html[data-theme='dark'] .verified-badge {
+  color: var(--primary-400);
 }
 
 .verified-badge svg {
@@ -236,6 +281,21 @@
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
+.card-footer--split {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.card-footer-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+  flex: 1;
+  min-width: 200px;
+}
+
 .save-btn {
   display: flex;
   align-items: center;
@@ -252,7 +312,7 @@
 }
 
 .save-btn:hover:not(:disabled) {
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--primary-500) 28%, transparent);
   transform: translateY(-1px);
 }
 
@@ -262,7 +322,8 @@
 }
 
 .save-btn.success {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  background: var(--btn-primary-hover);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-400) 45%, transparent);
 }
 
 .save-btn svg {
@@ -277,6 +338,24 @@
   border-top-color: white;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+}
+
+.save-btn--secondary {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-primary);
+  box-shadow: none;
+}
+
+.save-btn--secondary:hover:not(:disabled) {
+  background: var(--bg-card-hover);
+  box-shadow: none;
+  transform: none;
+}
+
+.spinner-small--dark {
+  border-color: color-mix(in srgb, var(--text-muted) 55%, transparent);
+  border-top-color: var(--text-primary);
 }
 
 @keyframes spin {
@@ -360,7 +439,7 @@
 
 .preference-select:focus {
   outline: none;
-  border-color: var(--border-focus);
+  border-color: var(--primary-500);
 }
 
 /* Danger Zone */
@@ -469,6 +548,12 @@
     align-items: flex-start;
     flex-direction: row;
     gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .avatar-hint {
+    text-align: left;
+    max-width: 100%;
   }
 
   .avatar-large {

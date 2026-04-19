@@ -2,17 +2,42 @@
 .sessions-page {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  flex: 1;
   height: 100%;
   padding: var(--spacing-md);
   gap: var(--spacing-md);
   position: relative;
-  overflow: hidden;
+  background: transparent;
 }
 
 .sessions-header {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  padding: clamp(1rem, 2.5vw, 1.35rem) clamp(1rem, 2.5vw, 1.25rem);
+  border-radius: 1.15rem;
+  border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 85%, var(--primary-500) 8%);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ds-surface) 92%, transparent) 0%,
+    color-mix(in srgb, var(--ds-surface) 78%, var(--primary-50) 22%) 100%
+  );
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset,
+    0 18px 40px -28px rgba(15, 23, 42, 0.18);
+}
+
+html[data-theme='dark'] .sessions-header {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--ds-surface) 88%, #1e3a5f 12%) 0%,
+    color-mix(in srgb, var(--ds-surface) 75%, #0f172a 25%) 100%
+  );
+  border-color: color-mix(in srgb, var(--border-primary) 90%, var(--primary-500) 15%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 20px 48px -24px rgba(0, 0, 0, 0.45);
 }
 
 .sessions-header h1 {
@@ -80,8 +105,8 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border-primary);
+  background: color-mix(in srgb, var(--ds-surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 88%, var(--primary-500) 8%);
   border-radius: 12px;
   padding: 16px;
   text-align: left;
@@ -89,6 +114,14 @@
   transition: all 0.2s;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: var(--ds-shadow-card, 0 1px 2px rgba(15, 23, 42, 0.06));
+}
+
+html[data-theme='dark'] .session-card {
+  background: color-mix(in srgb, var(--ds-surface) 78%, transparent);
+  border-color: color-mix(in srgb, var(--border-primary) 92%, var(--primary-500) 12%);
 }
 
 .session-card:active {
@@ -98,16 +131,14 @@
 
 .session-card.active {
   border-color: var(--primary-500);
-  background: var(--primary-50);
-  box-shadow: 0 0 0 1px var(--primary-500);
+  background: color-mix(in srgb, var(--primary-50) 65%, var(--ds-surface) 35%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-500) 45%, transparent);
 }
 
-[data-theme="dark"] .session-card.active {
-  background: rgba(59, 130, 246, 0.1);
-}
-
-[data-theme="dark"] .session-card.active {
-  background: rgba(59, 130, 246, 0.1);
+html[data-theme='dark'] .session-card.active {
+  background: color-mix(in srgb, var(--primary-500) 16%, var(--ds-surface) 84%);
+  border-color: color-mix(in srgb, var(--primary-500) 55%, var(--border-primary) 45%);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-500) 35%, transparent);
 }
 
 .session-icon {
