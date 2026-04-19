@@ -2,29 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  AreaChart, Area, Legend 
+  AreaChart, Area 
 } from 'recharts';
 import { 
   Activity, 
   Database, 
   Zap, 
   TrendingUp, 
-  Calendar, 
   ArrowUpRight, 
-  AlertCircle,
   BarChart3,
   Layers,
-  LayoutGrid
 } from 'lucide-react';
 import { useUsage } from '../context/UsageContext';
-import { format, parseISO, subDays } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { cn } from '../lib/utils';
-import type { HistoricalUsageResponse, DailyUsage } from '../types/usage';
+import type { HistoricalUsageResponse } from '../types/usage';
 import './UsageStatisticsPage.css';
 
 const UsageStatisticsPage: React.FC = () => {
   const { id: workspaceId } = useParams<{ id: string }>();
-  const { currentUsage, getHistoricalUsage, isLoading: usageLoading } = useUsage();
+  const { currentUsage, getHistoricalUsage } = useUsage();
   const [history, setHistory] = useState<HistoricalUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState(30);
