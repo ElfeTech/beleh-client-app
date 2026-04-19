@@ -33,12 +33,6 @@ export function ActionSheet({ isOpen, title, items, onClose }: ActionSheetProps)
 
   if (!isOpen) return null;
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   const handleItemClick = (item: ActionSheetItem) => {
     if (!item.disabled) {
       item.onClick();
@@ -47,7 +41,7 @@ export function ActionSheet({ isOpen, title, items, onClose }: ActionSheetProps)
   };
 
   const actionSheetContent = (
-    <div className="action-sheet-backdrop" onClick={handleBackdropClick}>
+    <div className="action-sheet-backdrop">
       <div className="action-sheet-container">
         <div className="action-sheet-handle" />
 

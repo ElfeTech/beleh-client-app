@@ -112,21 +112,27 @@ export interface QuotaCheckResponse {
 // Historical Usage
 export interface DailyUsage {
   date: string;
-  queries_count: number;
-  unique_users: number;
+  queries: number;
+  llm_tokens: number;
+  rows_scanned: number;
+  chart_renders: number;
 }
 
-export interface MonthlyAggregate {
-  month: string;
-  queries_total: number;
-  queries_average_per_day: number;
-  unique_users: number;
+export interface MonthlyUsage {
+  period_start: string;
+  period_end: string;
+  total_queries: number;
+  total_llm_tokens: number;
+  total_rows_scanned: number;
+  total_chart_renders: number;
 }
 
 export interface HistoricalUsageResponse {
-  daily_usage: DailyUsage[];
-  monthly_aggregates: MonthlyAggregate[];
+  user_id: string;
   workspace_id: string | null;
+  daily_usage: DailyUsage[];
+  monthly_usage: MonthlyUsage[];
+  total_period: MonthlyUsage | null;
 }
 
 // Local State Types
@@ -143,6 +149,7 @@ export interface UsageContextValue extends UsageState {
   refreshUsage: () => Promise<void>;
   checkQuota: (operation: 'query' | 'datasource' | 'member') => Promise<QuotaCheckResponse>;
   hasWarning: (level: 'warning' | 'critical') => boolean;
+  getHistoricalUsage: (days?: number, workspaceId?: string) => Promise<HistoricalUsageResponse | null>;
   canExecuteQuery: boolean;
   decrementQueryCount: () => void;
   refreshUsageAfterAction: () => Promise<void>;

@@ -293,8 +293,8 @@ export function WorkspacesPage() {
 
             {/* Edit Workspace Modal */}
             {showEditModal && (
-                <div className="modal-backdrop" onClick={() => setShowEditModal(false)} style={{ zIndex: 10001 }}>
-                    <div className="modal-container" onClick={(e) => e.stopPropagation()}>
+                <div className="modal-backdrop" style={{ zIndex: 10001 }}>
+                    <div className="modal-container">
                         <div className="modal-header">
                             <h2>Edit Workspace</h2>
                             <button className="close-btn" onClick={() => setShowEditModal(false)}>

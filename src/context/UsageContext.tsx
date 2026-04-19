@@ -232,6 +232,21 @@ export function UsageProvider({ children }: { children: ReactNode }) {
   // Derived value: can execute query
   const canExecuteQuery = remaining?.can_execute_query ?? true;
 
+  // Get historical usage data
+  const getHistoricalUsage = useCallback(
+    async (days: number = 30, workspaceId?: string): Promise<HistoricalUsageResponse | null> => {
+      if (!user) return null;
+      try {
+        const token = await user.getIdToken();
+        return await apiClient.getHistoricalUsage(token, workspaceId, days);
+      } catch (err) {
+        console.error('[Usage] Error fetching historical usage:', err);
+        return null;
+      }
+    },
+    [user]
+  );
+
   // Initial fetch when user authenticates
   useEffect(() => {
     if (user) {
@@ -275,6 +290,7 @@ export function UsageProvider({ children }: { children: ReactNode }) {
         refreshUsage,
         checkQuota,
         hasWarning,
+        getHistoricalUsage,
         canExecuteQuery,
         decrementQueryCount,
         refreshUsageAfterAction,

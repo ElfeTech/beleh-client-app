@@ -1,11 +1,25 @@
 /* Desktop Master-Detail Layout with Theme Support */
 .settings-page-container {
   display: flex;
-  height: calc(100vh - 70px);
+  flex: 1;
+  min-height: 0;
+  height: 100%;
   width: 100%;
-  background: var(--bg-secondary);
+  background: transparent;
   overflow: hidden;
   transition: background-color 0.3s ease;
+}
+
+/*
+ * Root also uses .app-page-root (column flex for other pages). That column direction
+ * stacks the settings sidebar above the content and lets the sidebar's height:100%
+ * consume the full column — the detail pane collapses to 0 height (blank on desktop).
+ * Force horizontal master/detail on settings only.
+ */
+.settings-page-container.app-page-root {
+  flex-direction: row;
+  align-items: stretch;
+  min-height: 0;
 }
 
 /* Desktop Content Area */
@@ -14,6 +28,7 @@
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
   background: var(--bg-secondary);
   transition: background-color 0.3s ease;
@@ -21,10 +36,29 @@
 
 .settings-header-bar {
   padding: var(--spacing-lg) var(--spacing-xl);
-  background: var(--bg-primary);
-  border-bottom: 1px solid var(--border-primary);
   flex-shrink: 0;
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ds-surface) 92%, transparent) 0%,
+    color-mix(in srgb, var(--ds-surface) 78%, var(--primary-50) 22%) 100%
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--ds-border-subtle) 85%, var(--primary-500) 8%);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset,
+    0 12px 32px -22px rgba(15, 23, 42, 0.12);
+}
+
+html[data-theme='dark'] .settings-header-bar {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--ds-surface) 90%, var(--bg-sidebar) 10%) 0%,
+    color-mix(in srgb, var(--ds-surface) 78%, var(--bg-sidebar) 22%) 100%
+  );
+  border-bottom-color: color-mix(in srgb, var(--border-primary) 90%, var(--primary-500) 15%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 14px 40px -18px rgba(0, 0, 0, 0.4);
 }
 
 .settings-user-info {
@@ -37,7 +71,11 @@
   width: 48px;
   height: 48px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #60a5fa, #a78bfa);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--bg-sidebar) 55%, var(--primary-500) 45%) 0%,
+    var(--primary-600) 100%
+  );
   display: flex;
   align-items: center;
   justify-content: center;
@@ -69,8 +107,17 @@
 
 .settings-content-wrapper {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--spacing-xl);
+  -webkit-overflow-scrolling: touch;
+}
+
+.settings-content-container {
+  width: 100%;
+  min-height: 0;
+  flex: 1;
 }
 
 /* Welcome State (no section selected) */
@@ -79,9 +126,18 @@
   align-items: center;
   justify-content: center;
   min-height: 400px;
-  background: var(--bg-card);
+  background: color-mix(in srgb, var(--ds-surface) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ds-border-subtle) 88%, var(--primary-500) 8%);
   border-radius: var(--radius-lg);
-  transition: background-color 0.3s ease;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--ds-shadow-card, 0 1px 2px rgba(15, 23, 42, 0.06));
+}
+
+html[data-theme='dark'] .settings-welcome {
+  background: color-mix(in srgb, var(--ds-surface) 72%, transparent);
+  border-color: color-mix(in srgb, var(--border-primary) 92%, var(--primary-500) 12%);
 }
 
 .settings-welcome-content {
@@ -115,8 +171,13 @@
 
 /* Mobile Layout */
 @media (max-width: 768px) {
+  .settings-page-container.app-page-root {
+    flex-direction: column;
+  }
+
   .settings-page-container {
-    height: 100vh;
+    height: 100%;
+    min-height: 0;
     flex-direction: column;
   }
 
@@ -125,7 +186,7 @@
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: var(--bg-secondary);
+    background: transparent;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -150,7 +211,11 @@
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--bg-sidebar) 55%, var(--primary-500) 45%) 0%,
+      var(--primary-600) 100%
+    );
     display: flex;
     align-items: center;
     justify-content: center;
@@ -306,21 +371,37 @@
 
   /* Mobile Detail View */
   .settings-mobile-detail {
+    flex: 1;
+    min-height: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
-    background: var(--bg-secondary);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    background: transparent;
+    overflow: hidden;
     animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
 
   .settings-mobile-header {
     padding: var(--spacing-md);
-    background: var(--bg-primary);
-    border-bottom: 1px solid var(--border-primary);
     flex-shrink: 0;
-    transition: background-color 0.3s ease, border-color 0.3s ease;
+    transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    background: linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--ds-surface) 92%, transparent) 0%,
+      color-mix(in srgb, var(--ds-surface) 78%, var(--primary-50) 22%) 100%
+    );
+    border-bottom: 1px solid color-mix(in srgb, var(--ds-border-subtle) 85%, var(--primary-500) 8%);
+    box-shadow: 0 1px 0 color-mix(in srgb, #fff 55%, transparent) inset;
+  }
+
+  html[data-theme='dark'] .settings-mobile-header {
+    background: linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--ds-surface) 90%, var(--bg-sidebar) 10%) 0%,
+      color-mix(in srgb, var(--ds-surface) 78%, var(--bg-sidebar) 22%) 100%
+    );
+    border-bottom-color: color-mix(in srgb, var(--border-primary) 90%, var(--primary-500) 15%);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
   }
 
   .back-to-menu-btn {
@@ -349,9 +430,15 @@
     height: 20px;
   }
 
-  .settings-content-container {
+  .settings-mobile-detail .settings-content-container {
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
     padding: var(--spacing-md);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
   }
 
   @keyframes slideInRight {

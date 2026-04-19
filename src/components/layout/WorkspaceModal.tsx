@@ -43,7 +43,7 @@ export function WorkspaceModal({ onClose, onSuccess }: WorkspaceModalProps) {
     };
 
     const modalContent = (
-        <div className="modal-backdrop" onClick={onClose} style={{ zIndex: 10001 }}>
+        <div className="modal-backdrop" style={{ zIndex: 10001 }}>
             <div className="modal-container" onClick={(e) => e.stopPropagation()}>
                 <div className="modal-header">
                     <h2>Create New Workspace</h2>

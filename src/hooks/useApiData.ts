@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiCacheManager, type CacheConfig } from '../utils/apiCacheManager';
+import { useAuth } from '../context/useAuth';
 
 export interface UseApiDataOptions<T> extends CacheConfig {
     /**
@@ -120,8 +121,9 @@ export function useApiData<T>(
         }
     }, [immediate, ...dependencies]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Cleanup on unmount
+    // Track mount so StrictMode remounts can receive fetch results (ref must be true after remount).
     useEffect(() => {
+        isMountedRef.current = true;
         return () => {
             isMountedRef.current = false;
         };
@@ -177,30 +179,61 @@ export function useSessions(datasourceId: string | null) {
  * ```
  */
 export function useMessages(sessionId: string | null, initialPage: number = 1) {
+    const { user } = useAuth();
     const [page, setPage] = useState(initialPage);
     const [allMessages, setAllMessages] = useState<any[]>([]);
     const [hasMore, setHasMore] = useState(false);
+    const pageRef = useRef(page);
+    pageRef.current = page;
 
-    const { loading, error, refetch } = useApiData(
-        'messages',
-        async (token: string, sId: string, p: number) => {
+    const canFetchMessages =
+        !!sessionId && sessionId !== 'undefined' && sessionId !== '1';
+
+    // Reset pagination when switching sessions; clear rows only when leaving or changing chat
+    useEffect(() => {
+        setPage(1);
+        setAllMessages([]);
+        setHasMore(false);
+    }, [sessionId]);
+
+    const fetchMessages = useCallback(
+        async (sId: string, p: number) => {
+            if (!user) {
+                throw new Error('Not authenticated');
+            }
+            const token = await user.getIdToken();
             const { apiClient } = await import('../services/apiClient');
-            return apiClient.getSessionMessagesPaginated(token, sId, { page: p, page_size: 20 });
+            return apiClient.getSessionMessagesPaginated(token, sId, {
+                page: p,
+                page_size: 20,
+            });
         },
-        sessionId ? [sessionId, page] : [],
+        [user]
+    );
+
+    const { loading, error, refetch, invalidate } = useApiData(
+        'messages',
+        fetchMessages,
+        canFetchMessages ? [sessionId, page] : [],
         {
-            immediate: !!sessionId,
-            dependencies: [sessionId, page],
+            immediate: canFetchMessages && !!user,
+            dependencies: [sessionId, page, user],
             onSuccess: (response) => {
                 setHasMore(response.has_next);
-                if (page === 1) {
+                if (pageRef.current === 1) {
                     setAllMessages(response.items);
                 } else {
-                    setAllMessages(prev => [...response.items, ...prev]);
+                    setAllMessages((prev) => [...response.items, ...prev]);
                 }
             },
         }
     );
+
+    /** Bypass stale cache (e.g. after POST) so history matches the server. */
+    const refetchFresh = useCallback(async () => {
+        invalidate();
+        return refetch();
+    }, [invalidate, refetch]);
 
     const loadMore = useCallback(() => {
         if (hasMore && !loading) {
@@ -221,7 +254,7 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
         hasMore,
         loadMore,
         reset,
-        refetch,
+        refetch: refetchFresh,
     };
 }
 
@@ -241,9 +274,9 @@ export function useDatasources(workspaceId: string | null) {
             const response = await apiClient.listWorkspaceDatasources(token, wId);
             return response.items;
         },
-        workspaceId ? [workspaceId] : [],
+        workspaceId && workspaceId !== 'undefined' ? [workspaceId] : [],
         {
-            immediate: !!workspaceId,
+            immediate: !!workspaceId && workspaceId !== 'undefined',
             dependencies: [workspaceId],
         }
     );
@@ -272,9 +305,9 @@ export function useWorkspaceContext(workspaceId: string | null) {
             const { apiClient } = await import('../services/apiClient');
             return apiClient.getWorkspaceContext(token, wId);
         },
-        workspaceId ? [workspaceId] : [],
+        workspaceId && workspaceId !== 'undefined' ? [workspaceId] : [],
         {
-            immediate: !!workspaceId,
+            immediate: !!workspaceId && workspaceId !== 'undefined',
             dependencies: [workspaceId],
         }
     );

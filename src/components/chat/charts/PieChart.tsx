@@ -77,93 +77,106 @@ const renderCustomLabel = ({
 };
 
 export function PieChart({ data, visualization, isExpanded = false }: PieChartProps) {
-    if (data.length === 0) {
+    if (!data || data.length === 0) {
         return <div className="chart-error">No data available</div>;
     }
 
-    // Use the visualization adapter to format data
-    const formattedData = adaptPieChartData(visualization, data, 10);
-    const { chartData: chartDataWithPercent } = formattedData;
+    try {
+        // Use the visualization adapter to format data
+        const formattedData = adaptPieChartData(visualization, data, 10);
+        if (!formattedData || !formattedData.chartData) {
+            throw new Error('Failed to format pie chart data');
+        }
 
-    // Color palette - vibrant gradient colors
-    const colors = [
-        '#3b82f6', // blue-500
-        '#8b5cf6', // violet-500
-        '#ec4899', // pink-500
-        '#f59e0b', // amber-500
-        '#10b981', // emerald-500
-        '#06b6d4', // cyan-500
-        '#6366f1', // indigo-500
-        '#f97316', // orange-500
-        '#14b8a6', // teal-500
-        '#a855f7', // purple-500
-    ];
+        const { chartData: chartDataWithPercent } = formattedData;
 
-    const size = isExpanded ? 650 : 450;
+        // Color palette - vibrant gradient colors
+        const colors = [
+            '#3b82f6', // blue-500
+            '#8b5cf6', // violet-500
+            '#ec4899', // pink-500
+            '#f59e0b', // amber-500
+            '#10b981', // emerald-500
+            '#06b6d4', // cyan-500
+            '#6366f1', // indigo-500
+            '#f97316', // orange-500
+            '#14b8a6', // teal-500
+            '#a855f7', // purple-500
+        ];
 
-    return (
-        <div className="modern-pie-chart">
-            <ResponsiveContainer width="100%" height={size}>
-                <RechartsPieChart margin={{ top: 20, right: 20, bottom: 60, left: 20 }}>
-                    <defs>
-                        {colors.map((color, index) => (
-                            <linearGradient
-                                key={`gradient-${index}`}
-                                id={`pieGradient${index}`}
-                                x1="0"
-                                y1="0"
-                                x2="1"
-                                y2="1"
-                            >
-                                <stop offset="0%" stopColor={color} stopOpacity={1} />
-                                <stop offset="100%" stopColor={color} stopOpacity={0.7} />
-                            </linearGradient>
-                        ))}
-                    </defs>
-                    <Pie
-                        data={chartDataWithPercent}
-                        cx="50%"
-                        cy="45%"
-                        labelLine={false}
-                        label={renderCustomLabel}
-                        outerRadius={isExpanded ? 180 : 115}
-                        innerRadius={isExpanded ? 110 : 65}
-                        paddingAngle={1}
-                        dataKey="value"
-                        animationDuration={1000}
-                        animationEasing="ease-out"
-                    >
-                        {chartDataWithPercent.map((_, index) => (
-                            <Cell
-                                key={`cell-${index}`}
-                                fill={`url(#pieGradient${index % colors.length})`}
-                                stroke="#fff"
-                                strokeWidth={2}
-                            />
-                        ))}
-                    </Pie>
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend
-                        verticalAlign="bottom"
-                        height={36}
-                        iconType="circle"
-                        formatter={(value, entry: any) => {
-                            const truncated = truncateLabel(value, 25);
-                            return `${truncated} (${entry.payload.percentDisplay}%)`;
-                        }}
-                        wrapperStyle={{
-                            fontSize: '0.875rem',
-                            paddingTop: '1rem'
-                        }}
-                    />
-                </RechartsPieChart>
-            </ResponsiveContainer>
+        const size = isExpanded ? 650 : 450;
 
-            {data.length > 10 && (
-                <div className="chart-note">
-                    Showing top 10 of {data.length} items
-                </div>
-            )}
-        </div>
-    );
+        return (
+            <div className="modern-pie-chart">
+                <ResponsiveContainer width="100%" height={size}>
+                    <RechartsPieChart margin={{ top: 20, right: 20, bottom: 60, left: 20 }}>
+                        <defs>
+                            {colors.map((color, index) => (
+                                <linearGradient
+                                    key={`gradient-${index}`}
+                                    id={`pieGradient${index}`}
+                                    x1="0"
+                                    y1="0"
+                                    x2="1"
+                                    y2="1"
+                                >
+                                    <stop offset="0%" stopColor={color} stopOpacity={1} />
+                                    <stop offset="100%" stopColor={color} stopOpacity={0.7} />
+                                </linearGradient>
+                            ))}
+                        </defs>
+                        <Pie
+                            data={chartDataWithPercent}
+                            cx="50%"
+                            cy="45%"
+                            labelLine={false}
+                            label={renderCustomLabel}
+                            outerRadius={isExpanded ? 180 : 115}
+                            innerRadius={isExpanded ? 110 : 65}
+                            paddingAngle={1}
+                            dataKey="value"
+                            animationDuration={1000}
+                            animationEasing="ease-out"
+                        >
+                            {chartDataWithPercent.map((_, index) => (
+                                <Cell
+                                    key={`cell-${index}`}
+                                    fill={`url(#pieGradient${index % colors.length})`}
+                                    stroke="#fff"
+                                    strokeWidth={2}
+                                />
+                            ))}
+                        </Pie>
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend
+                            verticalAlign="bottom"
+                            height={36}
+                            iconType="circle"
+                            formatter={(value, entry: any) => {
+                                const truncated = truncateLabel(value, 25);
+                                return `${truncated} (${entry.payload.percentDisplay}%)`;
+                            }}
+                            wrapperStyle={{
+                                fontSize: '0.875rem',
+                                paddingTop: '1rem'
+                            }}
+                        />
+                    </RechartsPieChart>
+                </ResponsiveContainer>
+
+                {data.length > 10 && (
+                    <div className="chart-note">
+                        Showing top 10 of {data.length} items
+                    </div>
+                )}
+            </div>
+        );
+    } catch (error) {
+        console.error('PieChart rendering error:', error, { visualization, data });
+        return (
+            <div className="chart-error">
+                <p>Unable to render pie chart: {error instanceof Error ? error.message : 'Unknown error'}</p>
+            </div>
+        );
+    }
 }

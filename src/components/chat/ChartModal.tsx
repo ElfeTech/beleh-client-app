@@ -114,16 +114,10 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
     setPosition({ x: 0, y: 0 });
   };
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
   if (!isOpen || !visualization) return null;
 
   return (
-    <div className="chart-modal-backdrop" onClick={handleBackdropClick}>
+    <div className="chart-modal-backdrop">
       <div className="chart-modal-container">
         <div className="chart-modal-header">
           <h2>{title || 'Chart Visualization'}</h2>

@@ -236,11 +236,14 @@ class ApiCacheManager {
         cacheKey: string,
         config: Required<CacheConfig>
     ): Promise<T> {
-        const abortController = this.createAbortController(endpoint, cacheKey);
+        void this.createAbortController(endpoint, cacheKey);
 
         const requestPromise = (async (): Promise<T> => {
             try {
-                const data = await fetchFn(...args, abortController.signal);
+                // IMPORTANT: We only pass the args provided. 
+                // We don't automatically append the signal unless we refactor all call sites.
+                // For now, most fetch functions in this app don't take a signal as the last arg.
+                const data = await fetchFn(...args);
 
                 // Store in cache
                 this.setCache(endpoint, cacheKey, data, config.ttl);

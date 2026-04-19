@@ -5,6 +5,8 @@ import type {
   IntentRequest,
   UserCreate,
   UserResponse,
+  UserMeResponse,
+  UserMePatch,
   WorkspaceCreate,
   WorkspaceResponse,
   ChatSessionCreate,
@@ -18,6 +20,10 @@ import type {
   DataSourceRecoveryResponse,
   DatasetTablesResponse,
   DatasetTablePreviewResponse,
+  ConnectorCreate,
+  ConnectorResponse,
+  ConnectionTestRequest,
+  ConnectionTestResponse,
 } from '../types/api';
 import type {
   CurrentUsageResponse,
@@ -61,13 +67,25 @@ class APIClient {
     const auth = headers['Authorization'];
     const isProtectedRoute = url.includes('/api/') && !url.includes('/login') && !url.includes('/register');
     const isInvalidAuth = !auth || auth === 'Bearer undefined' || auth === 'Bearer null' || (typeof auth === 'string' && auth.trim() === 'Bearer');
+    
     if (isProtectedRoute && isInvalidAuth) {
       const { authService } = await import('./authService');
-      const token = authService.getAuthToken() || await authService.refreshToken();
+      let token = authService.getAuthToken();
+      
+      // If no stored token, try to get it from Firebase directly
+      if (!token) {
+        const user = authService.getCurrentUser();
+        if (user) {
+          token = await user.getIdToken();
+          authService.storeAuthToken(token);
+        }
+      }
+
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       } else {
-        throw new Error('Authentication required. Please sign in again.');
+        // Only throw if we are absolutely sure we can't get a token
+        console.warn(`[API] Missing token for protected route: ${url}`);
       }
     }
 
@@ -107,14 +125,15 @@ class APIClient {
 
       // Handle 401 Unauthorized - token expired
       if (response.status === 401 && !isRetry) {
-
+        console.warn(`[API] 401 Unauthorized on ${url}. Attempting token refresh...`);
+        
         try {
           // Attempt to refresh the token
           const { authService } = await import('./authService');
           const newToken = await authService.refreshToken();
 
           if (newToken) {
-
+            console.log('[API] Token refreshed successfully, retrying request...');
             // Update the Authorization header with the new token
             const updatedHeaders = {
               ...headers,
@@ -128,7 +147,7 @@ class APIClient {
             }, true); // Mark as retry to prevent infinite loop
           } else {
             // Refresh failed, redirect to sign-in
-            console.error('[API] Token refresh failed, redirecting to sign-in');
+            console.error('[API] Token refresh failed (no user or token), redirecting to sign-in');
             window.location.href = '/signin';
             throw new Error('Authentication session expired. Please sign in again.');
           }
@@ -200,6 +219,25 @@ class APIClient {
     return this.request<UserResponse>('/api/auth/login', {
       method: 'POST',
       body: JSON.stringify(payload),
+    });
+  }
+
+  async getUserMe(authToken: string): Promise<UserMeResponse> {
+    return this.request<UserMeResponse>('/api/users/me', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async patchUserMe(authToken: string, body: UserMePatch): Promise<UserMeResponse> {
+    return this.request<UserMeResponse>('/api/users/me', {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
     });
   }
 
@@ -458,6 +496,29 @@ class APIClient {
     });
   }
 
+  async createWorkspaceSession(
+    authToken: string,
+    workspaceId: string,
+    title?: string,
+    datasetId?: string
+  ): Promise<ChatSessionRead> {
+    if (!workspaceId || workspaceId === 'undefined') {
+        throw new Error('Workspace ID is required to create a session');
+    }
+    const payload: ChatSessionCreate & { dataset_id?: string } = {
+      title,
+      dataset_id: datasetId,
+    };
+
+    return this.request<ChatSessionRead>(`/api/workspaces/${workspaceId}/sessions`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+
   async listChatSessions(
     authToken: string,
     datasetId: string
@@ -490,10 +551,51 @@ class APIClient {
     );
   }
 
+  async listWorkspaceSessions(
+    authToken: string,
+    workspaceId: string
+  ): Promise<PaginatedResponse<ChatSessionRead>> {
+    if (!workspaceId || workspaceId === 'undefined') {
+        throw new Error('Workspace ID is required to list sessions');
+    }
+    return this.request<PaginatedResponse<ChatSessionRead>>(`/api/workspaces/${workspaceId}/sessions`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async listWorkspaceSessionsPaginated(
+    authToken: string,
+    workspaceId: string,
+    params: PaginationParams
+  ): Promise<PaginatedResponse<ChatSessionRead>> {
+    if (!workspaceId || workspaceId === 'undefined') {
+        throw new Error('Workspace ID is required to list sessions');
+    }
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+
+    return this.request<PaginatedResponse<ChatSessionRead>>(
+      `/api/workspaces/${workspaceId}/sessions?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+      }
+    );
+  }
+
   async getSessionMessages(
     authToken: string,
     sessionId: string
   ): Promise<PaginatedResponse<ChatMessageRead>> {
+    if (!sessionId || sessionId === 'undefined') {
+        throw new Error('Session ID is required to get messages');
+    }
     return this.request<PaginatedResponse<ChatMessageRead>>(`/api/sessions/${sessionId}/messages`, {
       method: 'GET',
       headers: {
@@ -507,6 +609,9 @@ class APIClient {
     sessionId: string,
     params: PaginationParams
   ): Promise<PaginatedResponse<ChatMessageRead>> {
+    if (!sessionId || sessionId === 'undefined') {
+        throw new Error('Session ID is required to get messages');
+    }
     const queryParams = new URLSearchParams();
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
     if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
@@ -526,11 +631,14 @@ class APIClient {
     authToken: string,
     sessionId: string,
     prompt: string,
-    datasetId: string
+    datasetId: string | null
   ): Promise<ChatWorkflowResponse> {
+    if (!sessionId || sessionId === 'undefined') {
+        throw new Error('Session ID is required to send a message');
+    }
     const payload: IntentRequest = {
       prompt,
-      dataset_id: datasetId,
+      dataset_id: datasetId || null,
     };
 
     return this.request<ChatWorkflowResponse>(`/api/sessions/${sessionId}/messages`, {
@@ -551,6 +659,20 @@ class APIClient {
       headers: {
         'Authorization': `Bearer ${authToken}`,
       },
+    });
+  }
+
+  async updateChatSession(
+    authToken: string,
+    sessionId: string,
+    payload: { title: string }
+  ): Promise<ChatSessionRead> {
+    return this.request<ChatSessionRead>(`/api/sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(payload),
     });
   }
 
@@ -729,6 +851,60 @@ class APIClient {
         },
       }
     );
+  }
+
+  // Connector Methods
+  async createPostgresConnector(
+    authToken: string,
+    workspaceId: string,
+    payload: ConnectorCreate
+  ): Promise<ConnectorResponse> {
+    return this.request<ConnectorResponse>(`/api/connectors/workspaces/${workspaceId}/postgresql`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async testPostgresConnection(
+    authToken: string,
+    workspaceId: string,
+    payload: ConnectionTestRequest
+  ): Promise<ConnectionTestResponse> {
+    return this.request<ConnectionTestResponse>(`/api/connectors/workspaces/${workspaceId}/postgresql/test`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async listConnectors(
+    authToken: string,
+    workspaceId: string
+  ): Promise<ConnectorResponse[]> {
+    return this.request<ConnectorResponse[]>(`/api/connectors/workspaces/${workspaceId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async deleteConnector(
+    authToken: string,
+    workspaceId: string,
+    connectorId: string
+  ): Promise<void> {
+    return this.request<void>(`/api/connectors/workspaces/${workspaceId}/${connectorId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${authToken}`,
+      },
+    });
   }
 }
 

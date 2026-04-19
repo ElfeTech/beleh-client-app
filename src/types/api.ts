@@ -13,6 +13,20 @@ export interface UserResponse {
   updated_at: string;
 }
 
+/** GET/PATCH `/api/users/me` — profile + merged UI preferences (JSON). */
+export interface UserMeResponse {
+  uid: string;
+  email: string;
+  display_name: string | null;
+  photo_url: string | null;
+  preferences: Record<string, unknown>;
+}
+
+export interface UserMePatch {
+  display_name?: string | null;
+  preferences?: Record<string, unknown>;
+}
+
 export interface HTTPValidationError {
   detail?: ValidationError[];
 }
@@ -255,11 +269,13 @@ export interface InsightResponse {
 // Chat Session Types
 export interface ChatSessionCreate {
   title?: string;
+  dataset_id?: string;
 }
 
 export interface ChatSessionRead {
   id: string;
   dataset_id: string;
+  connector_id?: string | null;
   title: string;
   created_at: string;
   updated_at: string;
@@ -368,4 +384,43 @@ export interface DatasetTablePreviewResponse {
   total_pages: number;
   columns: DatasetTableColumn[];
   rows: any[][];
+}
+
+// Connector Types
+export type ConnectorStatus = 'ACTIVE' | 'INACTIVE' | 'FAILED' | 'SYNCING';
+export type MetadataStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
+
+export interface PostgreSQLConfig {
+  host: string;
+  port: number;
+  database: string;
+  username: string;
+  password: string;
+  ssl: boolean;
+}
+
+export interface ConnectorCreate {
+  name: string;
+  type: 'postgresql';
+  config: PostgreSQLConfig;
+}
+
+export interface ConnectorResponse {
+  id: string;
+  name: string;
+  type: string;
+  status: ConnectorStatus;
+  metadata_status: MetadataStatus;
+  last_sync_at: string | null;
+  workspace_id: string;
+  created_at: string;
+  updated_at: string | null;
+}
+
+export interface ConnectionTestRequest extends PostgreSQLConfig { }
+
+export interface ConnectionTestResponse {
+  success: boolean;
+  message: string;
+  db_info?: Record<string, any>;
 }

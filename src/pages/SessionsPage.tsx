@@ -34,11 +34,11 @@ const SessionsPage: React.FC = () => {
 
   // Paginated fetch for sessions
   const fetchSessions = useCallback(async (page: number, pageSize: number) => {
-    if (!selectedDatasourceId) throw new Error('No datasource selected');
+    if (!workspaceId) throw new Error('No workspace selected');
     const token = authService.getAuthToken();
     if (!token) throw new Error('No auth token found');
-    return apiClient.listChatSessionsPaginated(token, selectedDatasourceId, { page, page_size: pageSize });
-  }, [selectedDatasourceId]);
+    return apiClient.listWorkspaceSessionsPaginated(token, workspaceId, { page, page_size: pageSize });
+  }, [workspaceId]);
 
   const {
     items: sessions,
@@ -50,8 +50,8 @@ const SessionsPage: React.FC = () => {
     reset: resetPagination
   } = usePaginatedFetch({
     fetchFn: fetchSessions,
-    enabled: !!selectedDatasourceId,
-    resetDeps: [selectedDatasourceId]
+    enabled: !!workspaceId,
+    resetDeps: [workspaceId]
   });
 
   // Restore last active session when sessions are loaded
@@ -62,11 +62,6 @@ const SessionsPage: React.FC = () => {
       // If we really want to restore "last active", it should come from backend
     }
   }, [sessions, activeSessionId, setActiveSessionId]);
-
-  // Filter sessions by selected dataset
-  const datasetSessions = sessions.filter(
-    session => session.dataset_id === selectedDatasourceId
-  );
 
   const formatTimestamp = (date: Date) => {
     const now = new Date();
@@ -95,11 +90,7 @@ const SessionsPage: React.FC = () => {
   };
 
   const handleNewChat = async () => {
-    if (!selectedDatasourceId) {
-      // Navigate to datasets if none selected
-      navigate(`/workspace/${workspaceId}/datasets`);
-      return;
-    }
+    if (!workspaceId) return;
 
     if (isCreatingSession) return;
 
@@ -112,9 +103,9 @@ const SessionsPage: React.FC = () => {
       }
 
       // Create session on backend (matching desktop behavior)
-      const newSession = await apiClient.createChatSession(
+      const newSession = await apiClient.createWorkspaceSession(
         token,
-        selectedDatasourceId,
+        workspaceId,
         `Chat ${new Date().toLocaleDateString()}`
       );
 
@@ -205,7 +196,7 @@ const SessionsPage: React.FC = () => {
   }, [pressTimer]);
 
   return (
-    <div className="sessions-page">
+    <div className="sessions-page app-page-root app-page-root--scroll">
       <div className="sessions-header">
         <h1>Your Chats</h1>
         {selectedDataset && (
@@ -221,7 +212,7 @@ const SessionsPage: React.FC = () => {
       <button
         className="new-chat-btn"
         onClick={handleNewChat}
-        disabled={isCreatingSession || !selectedDatasourceId}
+        disabled={isCreatingSession}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -229,18 +220,7 @@ const SessionsPage: React.FC = () => {
         {isCreatingSession ? 'Creating...' : 'New Chat'}
       </button>
 
-      {!selectedDatasourceId ? (
-        <div className="sessions-empty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-          </svg>
-          <h3>No dataset selected</h3>
-          <p>Select a dataset to view or create chats</p>
-          <button className="goto-datasets-btn" onClick={() => navigate(`/workspace/${workspaceId}/datasets`)}>
-            Go to Datasets
-          </button>
-        </div>
-      ) : sessionsError ? (
+      {sessionsError ? (
         <div className="sessions-empty error-state">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" className="error-icon">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
@@ -254,12 +234,12 @@ const SessionsPage: React.FC = () => {
             Retry
           </button>
         </div>
-      ) : isLoadingSessions && datasetSessions.length === 0 ? (
+      ) : isLoadingSessions && sessions.length === 0 ? (
         <div className="sessions-loading">
           <div className="sessions-loading-spinner"></div>
           <p>Loading chats...</p>
         </div>
-      ) : datasetSessions.length === 0 ? (
+      ) : sessions.length === 0 ? (
         <div className="sessions-empty">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -270,7 +250,7 @@ const SessionsPage: React.FC = () => {
       ) : (
         <>
           <div className="sessions-list">
-            {datasetSessions.map((session) => (
+            {sessions.map((session) => (
               <button
                 key={session.id}
                 className={`session-card ${activeSessionId === session.id ? 'active' : ''}`}
@@ -289,7 +269,14 @@ const SessionsPage: React.FC = () => {
 
                 <div className="session-content">
                   <h3 className="session-title-mobile">{getSessionTitle(session)}</h3>
-                  <p className="session-timestamp">{formatTimestamp(new Date(session.created_at))}</p>
+                  <div className="session-meta">
+                    <p className="session-timestamp">{formatTimestamp(new Date(session.created_at))}</p>
+                    {session.dataset_id && (
+                      <span className="session-dataset-tag">
+                        {datasources.find(d => d.id === session.dataset_id)?.name || 'Linked Dataset'}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <svg className="chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -317,8 +304,8 @@ const SessionsPage: React.FC = () => {
 
       {/* Long-press action menu */}
       {longPressSession && (
-        <div className="action-menu-backdrop" onClick={handleBackdropClick}>
-          <div className="action-menu" onClick={(e) => e.stopPropagation()}>
+        <div className="action-menu-backdrop">
+          <div className="action-menu">
             <button className="action-menu-item" onClick={() => handleRename(longPressSession)}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
