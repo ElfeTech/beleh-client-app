@@ -48,12 +48,10 @@ export function SignUp() {
     // Don't show signup form if user is already logged in (redirect in progress)
     if (!authLoadingState && user) {
         return (
-            <div className="auth-split-page" style={{ alignItems: 'center', justifyContent: 'center' }}>
-                <div className="auth-form-panel" style={{ maxWidth: '360px' }}>
-                    <div className="form-content" style={{ textAlign: 'center' }}>
-                        <div className="btn-spinner" style={{ margin: '0 auto 1rem' }} />
-                        <p className="form-subtitle">Taking you to your workspace...</p>
-                    </div>
+            <div className="auth-redirect-screen" role="status" aria-live="polite">
+                <div className="auth-redirect-screen__card">
+                    <div className="btn-spinner" aria-hidden />
+                    <p className="form-subtitle">Taking you to your workspace...</p>
                 </div>
             </div>
         );

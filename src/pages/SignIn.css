@@ -15,6 +15,33 @@
   transition: background-color 0.3s ease;
 }
 
+/* Post-login redirect: full viewport, no auth-form-panel (that panel uses ::before/::after decorations meant for the split layout). */
+.auth-redirect-screen {
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--bg-primary);
+  transition: background-color 0.3s ease;
+}
+
+.auth-redirect-screen__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+}
+
+.auth-redirect-screen__card .btn-spinner {
+  margin-bottom: 1rem;
+}
+
 /* ===============================================
    LEFT PANEL - BRANDED SECTION
    =============================================== */
