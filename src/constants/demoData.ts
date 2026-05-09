@@ -4,9 +4,7 @@
  */
 
 import type { ChatWorkflowResponse } from '../types/api';
-
-const DEMO_STORAGE_KEY = 'beleh_has_completed_demo';
-const DEMO_NEW_USER_KEY = 'beleh_is_new_user';
+import { DEMO_NEW_USER_KEY, DEMO_STORAGE_KEY } from './clientStorageKeys';
 
 export function isNewUserForDemo(): boolean {
     return localStorage.getItem(DEMO_NEW_USER_KEY) !== 'false';

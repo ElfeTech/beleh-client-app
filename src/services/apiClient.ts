@@ -70,21 +70,17 @@ class APIClient {
     
     if (isProtectedRoute && isInvalidAuth) {
       const { authService } = await import('./authService');
-      let token = authService.getAuthToken();
-      
-      // If no stored token, try to get it from Firebase directly
+      let token =
+        (await authService.getValidIdToken(false)) ??
+        (await authService.getValidIdToken(true));
+
       if (!token) {
-        const user = authService.getCurrentUser();
-        if (user) {
-          token = await user.getIdToken();
-          authService.storeAuthToken(token);
-        }
+        token = authService.getAuthToken();
       }
 
       if (token) {
         headers['Authorization'] = `Bearer ${token}`;
       } else {
-        // Only throw if we are absolutely sure we can't get a token
         console.warn(`[API] Missing token for protected route: ${url}`);
       }
     }
@@ -146,14 +142,20 @@ class APIClient {
               headers: updatedHeaders,
             }, true); // Mark as retry to prevent infinite loop
           } else {
-            // Refresh failed, redirect to sign-in
+            // Refresh failed, redirect to sign-in (avoid hijacking OAuth return tab)
             console.error('[API] Token refresh failed (no user or token), redirecting to sign-in');
-            window.location.href = '/signin';
+            const path = typeof window !== 'undefined' ? window.location.pathname : '';
+            if (path !== '/signin' && path !== '/signup' && !path.startsWith('/auth/')) {
+              window.location.href = '/signin';
+            }
             throw new Error('Authentication session expired. Please sign in again.');
           }
         } catch (refreshError) {
           console.error('[API] Error during token refresh:', refreshError);
-          window.location.href = '/signin';
+          const path = typeof window !== 'undefined' ? window.location.pathname : '';
+          if (path !== '/signin' && path !== '/signup' && !path.startsWith('/auth/')) {
+            window.location.href = '/signin';
+          }
           throw new Error('Authentication session expired. Please sign in again.');
         }
       }
