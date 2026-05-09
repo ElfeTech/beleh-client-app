@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import type { FeedbackType, FeedbackTrigger, FeedbackSubmission, FeedbackState } from '../types/feedback';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from './AuthContext';
+import { FEEDBACK_STATE_STORAGE_KEY } from '../constants/clientStorageKeys';
 
 interface FeedbackContextValue {
   showFeedback: (trigger: FeedbackTrigger) => void;
@@ -19,7 +20,7 @@ interface FeedbackContextValue {
 
 const FeedbackContext = createContext<FeedbackContextValue | undefined>(undefined);
 
-const STORAGE_KEY = 'feedback_state';
+const STORAGE_KEY = FEEDBACK_STATE_STORAGE_KEY;
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 const TWO_DAYS_MS = 2 * ONE_DAY_MS;
 const THREE_DAYS_MS = 3 * ONE_DAY_MS;

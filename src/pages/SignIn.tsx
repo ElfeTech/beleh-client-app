@@ -17,18 +17,20 @@ export function SignIn() {
     useEffect(() => {
         if (authLoadingState || !user) return;
 
-        const token = authService.getAuthToken();
-        if (!token) return;
-
         let cancelled = false;
-        apiClient.getDefaultWorkspace(token).then(
-            (workspace) => {
+        (async () => {
+            try {
+                const token =
+                    (await authService.getValidIdToken(false)) ??
+                    (await authService.getValidIdToken(true));
+                if (!token || cancelled) return;
+                const workspace = await apiClient.getDefaultWorkspace(token);
                 if (!cancelled) navigate(`/workspace/${workspace.id}`, { replace: true });
-            },
-            () => {
+            } catch {
                 if (!cancelled) navigate('/', { replace: true });
             }
-        );
+        })();
+
         return () => { cancelled = true; };
     }, [user, authLoadingState, navigate]);
 
@@ -53,44 +55,21 @@ export function SignIn() {
             setAuthLoading(true);
             setIsSlow(false);
 
-            // Set a timeout to show "still working" message if it takes longer than 5s
             timeoutId = setTimeout(() => {
                 setIsSlow(true);
             }, 5000);
 
             await signInWithGoogle();
 
-            // Get auth token and fetch default workspace
-            const token = authService.getAuthToken();
-            if (!token) {
-                setError('Authentication token not found. Please try again.');
-                return;
-            }
-
-            const workspace = await apiClient.getDefaultWorkspace(token);
-
-            // Success - clear timeout before navigating
             if (timeoutId) clearTimeout(timeoutId);
-
-            navigate(`/workspace/${workspace.id}`);
+            setAuthLoading(false);
+            setIsSlow(false);
         } catch (err) {
-            // Clear timeout on error
             if (timeoutId) clearTimeout(timeoutId);
             setAuthLoading(false);
             setIsSlow(false);
 
-            // Don't show error if user just closed the popup
-            if (err instanceof Error && err.message === 'POPUP_CLOSED') {
-                return;
-            }
-
-            // Handle popup blocked
-            if (err instanceof Error && err.message === 'POPUP_BLOCKED') {
-                setError('Please allow popups for this site to sign in with Google.');
-                return;
-            }
-
-            setError('Failed to sign in. Please try again.');
+            setError(err instanceof Error ? err.message : 'Google sign-in failed. Please try again.');
             console.error(err);
         }
     };
@@ -155,6 +134,7 @@ export function SignIn() {
                             <span className="title-dot">.</span>welcome
                         </h2>
                         <p className="form-subtitle">Login in to your account to continue</p>
+                        <p className="form-subtitle form-subtitle--hint">A Google sign-in window will open when you continue.</p>
                     </div>
 
                     {/* Error message */}
@@ -171,6 +151,7 @@ export function SignIn() {
 
                     {/* Google Sign In Button */}
                     <button
+                        type="button"
                         className="auth-google-btn"
                         onClick={handleGoogleSignIn}
                         disabled={authLoading}

@@ -1,5 +1,6 @@
 import { createContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from 'firebase/auth';
+import { FirebaseError } from 'firebase/app';
 import { authService } from '../services/authService';
 
 interface AuthContextType {
@@ -11,6 +12,23 @@ interface AuthContextType {
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+function toAuthFlowError(error: unknown): Error {
+    if (error instanceof FirebaseError) {
+        switch (error.code) {
+            case 'auth/popup-blocked':
+                return new Error(
+                    'Your browser blocked the sign-in popup. Allow pop-ups for this site and try again.'
+                );
+            case 'auth/popup-closed-by-user':
+            case 'auth/cancelled-popup-request':
+                return new Error('Sign-in was cancelled.');
+            default:
+                return new Error(error.message || 'Authentication failed. Please try again.');
+        }
+    }
+    return error instanceof Error ? error : new Error('Authentication failed. Please try again.');
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
@@ -27,50 +45,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const signInWithGoogle = async () => {
         try {
-            setLoading(true);
-            const result = await authService.signInWithGoogle();
-            // Set user immediately so navigation to workspace sees user (avoids redirect to /signin)
-            setUser(result.user);
+            await authService.signInWithGoogle();
         } catch (error) {
-            // Don't log error if user just cancelled the popup
-            if (error instanceof Error && error.message === 'POPUP_CLOSED') {
-                throw error;
-            }
-            console.error('Error signing in:', error);
-            throw error;
-        } finally {
-            setLoading(false);
+            throw toAuthFlowError(error);
         }
     };
 
     const registerWithGoogle = async () => {
         try {
-            setLoading(true);
-            const result = await authService.registerWithGoogle();
-            // Set user immediately so navigation to workspace sees user (avoids redirect to /signin)
-            setUser(result.user);
+            await authService.registerWithGoogle();
         } catch (error) {
-            // Don't log error if user just cancelled the popup
-            if (error instanceof Error && error.message === 'POPUP_CLOSED') {
-                throw error;
-            }
-            console.error('Error registering:', error);
-            throw error;
-        } finally {
-            setLoading(false);
+            throw toAuthFlowError(error);
         }
     };
 
     const signOut = async () => {
+        setLoading(true);
         try {
-            setLoading(true);
             await authService.signOut();
-            setUser(null);
         } catch (error) {
             console.error('Error signing out:', error);
-            setUser(null);
-            throw error;
         } finally {
+            setUser(null);
             setLoading(false);
         }
     };
@@ -91,5 +87,3 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export { useAuth } from './useAuth';
-
-

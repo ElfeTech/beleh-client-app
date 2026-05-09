@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { authService } from '../services/authService';
+import { authService, GOOGLE_SIGNUP_FLOW_KEY } from '../services/authService';
 import { apiClient } from '../services/apiClient';
 import { setNewUserFlag } from '../constants/demoData';
 import logo from '../assets/logo.webp';
@@ -18,18 +18,30 @@ export function SignUp() {
     useEffect(() => {
         if (authLoadingState || !user) return;
 
-        const token = authService.getAuthToken();
-        if (!token) return;
-
         let cancelled = false;
-        apiClient.getDefaultWorkspace(token).then(
-            (workspace) => {
+        (async () => {
+            try {
+                const token =
+                    (await authService.getValidIdToken(false)) ??
+                    (await authService.getValidIdToken(true));
+                if (!token || cancelled) return;
+
+                try {
+                    if (localStorage.getItem(GOOGLE_SIGNUP_FLOW_KEY) === '1') {
+                        setNewUserFlag(true);
+                        localStorage.removeItem(GOOGLE_SIGNUP_FLOW_KEY);
+                    }
+                } catch {
+                    /* storage disabled */
+                }
+
+                const workspace = await apiClient.getDefaultWorkspace(token);
                 if (!cancelled) navigate(`/workspace/${workspace.id}`, { replace: true });
-            },
-            () => {
+            } catch {
                 if (!cancelled) navigate('/', { replace: true });
             }
-        );
+        })();
+
         return () => { cancelled = true; };
     }, [user, authLoadingState, navigate]);
 
@@ -54,47 +66,26 @@ export function SignUp() {
             setAuthLoading(true);
             setIsSlow(false);
 
-            // Set a timeout to show "still working" message if it takes longer than 5s
             timeoutId = setTimeout(() => {
                 setIsSlow(true);
             }, 5000);
 
             await registerWithGoogle();
 
-            // Get auth token and fetch default workspace
-            const token = authService.getAuthToken();
-            if (!token) {
-                setError('Authentication token not found. Please try again.');
-                return;
-            }
-
-            const workspace = await apiClient.getDefaultWorkspace(token);
-
-            // Mark as new user so we can show "Start Demo" on first visit to empty workspace
-            setNewUserFlag(true);
-
-            // Success - clear timeout before navigating
-            if (timeoutId) clearTimeout(timeoutId);
-
-            navigate(`/workspace/${workspace.id}`);
-        } catch (err) {
-            // Clear timeout on error
             if (timeoutId) clearTimeout(timeoutId);
             setAuthLoading(false);
             setIsSlow(false);
-
-            // Don't show error if user just closed the popup
-            if (err instanceof Error && err.message === 'POPUP_CLOSED') {
-                return;
+        } catch (err) {
+            if (timeoutId) clearTimeout(timeoutId);
+            setAuthLoading(false);
+            setIsSlow(false);
+            try {
+                localStorage.removeItem(GOOGLE_SIGNUP_FLOW_KEY);
+            } catch {
+                /* ignore */
             }
 
-            // Handle popup blocked
-            if (err instanceof Error && err.message === 'POPUP_BLOCKED') {
-                setError('Please allow popups for this site to sign up with Google.');
-                return;
-            }
-
-            setError('Failed to sign up. Please try again.');
+            setError(err instanceof Error ? err.message : 'Google sign-up failed. Please try again.');
             console.error(err);
         }
     };
@@ -158,6 +149,7 @@ export function SignUp() {
                             <span className="title-dot">.</span>create account
                         </h2>
                         <p className="form-subtitle">Sign up to get started with Beleh</p>
+                        <p className="form-subtitle form-subtitle--hint">A Google sign-in window will open when you continue.</p>
                     </div>
 
                     {/* Error message */}
@@ -174,6 +166,7 @@ export function SignUp() {
 
                     {/* Google Sign Up Button */}
                     <button
+                        type="button"
                         className="auth-google-btn"
                         onClick={handleGoogleSignUp}
                         disabled={authLoading}

@@ -1,115 +1,142 @@
 import {
-  signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
+  signInWithPopup,
   type User,
-  type UserCredential
 } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { auth, getGoogleProvider } from '../lib/firebase';
 import { apiClient } from './apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
 import { clearAllSelectedDatasetStorage } from '../lib/selectedDatasourceStorage';
+import { SESSION_CLEAR_LOCALSTORAGE_KEYS } from '../constants/clientStorageKeys';
 
 const TOKEN_KEY = 'firebase_auth_token';
 const USER_KEY = 'firebase_user';
 const BACKEND_USER_KEY = 'backend_user';
 
-// User-specific localStorage keys to clear on sign out (so new account doesn't see old data)
-const SESSION_STORAGE_KEYS = [
-  'activeWorkspaceId',
-  'activeSessionId',
-  'beleh_has_completed_demo',
-  'beleh_is_new_user',
-];
+/** Set before Google sign-up so first-run demo can run after auth. */
+export const GOOGLE_SIGNUP_FLOW_KEY = 'beleh_google_is_signup';
+
+export type GoogleAuthIntent = 'signin' | 'register';
+
+/**
+ * Invariants:
+ * - Firebase `auth.currentUser` is the source of truth for signed-in identity.
+ * - `TOKEN_KEY`, `USER_KEY`, `BACKEND_USER_KEY` mirror the latest ID token and snapshots for API use and reloads.
+ * - `clearSessionLocal` must be safe to call multiple times and from `finally` blocks.
+ */
+
+export async function establishSession(
+  user: User,
+  options?: { forceRefreshToken?: boolean; backendIntent?: GoogleAuthIntent }
+): Promise<void> {
+  const force = options?.forceRefreshToken ?? false;
+  const token = await user.getIdToken(force);
+  persistAuthToken(token);
+  persistUserData(user);
+
+  if (!options?.backendIntent) {
+    return;
+  }
+
+  try {
+    if (options.backendIntent === 'register') {
+      const backendUser = await apiClient.registerUser(token);
+      persistBackendUser(backendUser);
+    } else {
+      const backendUser = await apiClient.loginUser(token);
+      persistBackendUser(backendUser);
+    }
+  } catch (backendError) {
+    console.error('[Auth] Backend login/register failed:', backendError);
+    try {
+      await firebaseSignOut(auth);
+    } catch {
+      /* ignore */
+    }
+    clearSessionLocal();
+    throw backendError;
+  }
+}
+
+export async function completeGoogleSignIn(intent: GoogleAuthIntent): Promise<void> {
+  const provider = getGoogleProvider();
+  const cred = await signInWithPopup(auth, provider);
+  await establishSession(cred.user, { forceRefreshToken: false, backendIntent: intent });
+}
+
+function persistAuthToken(token: string): void {
+  localStorage.setItem(TOKEN_KEY, token);
+}
+
+function persistUserData(user: User): void {
+  const userData = {
+    uid: user.uid,
+    email: user.email,
+    displayName: user.displayName,
+    photoURL: user.photoURL,
+  };
+  localStorage.setItem(USER_KEY, JSON.stringify(userData));
+}
+
+function persistBackendUser(user: unknown): void {
+  localStorage.setItem(BACKEND_USER_KEY, JSON.stringify(user));
+}
+
+export function clearSessionLocal(): void {
+  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(BACKEND_USER_KEY);
+  localStorage.removeItem(GOOGLE_SIGNUP_FLOW_KEY);
+  SESSION_CLEAR_LOCALSTORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
+  clearAllSelectedDatasetStorage();
+  apiCacheManager.clearAll();
+}
+
+async function getValidIdTokenInternal(forceRefresh: boolean): Promise<string | null> {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      return null;
+    }
+    const token = await user.getIdToken(forceRefresh);
+    persistAuthToken(token);
+    return token;
+  } catch (error) {
+    console.error('Error getting ID token:', error);
+    return null;
+  }
+}
 
 export const authService = {
-  async signInWithGoogle(): Promise<UserCredential> {
-    try {
-      const result = await signInWithPopup(auth, googleProvider);
-
-      const token = await result.user.getIdToken();
-
-      this.storeAuthToken(token);
-      this.storeUserData(result.user);
-
-      // Register/login user with backend
-      try {
-        const backendUser = await apiClient.loginUser(token);
-        this.storeBackendUser(backendUser);
-      } catch (backendError) {
-        console.error('[Auth] Backend login failed:', backendError);
-        // Continue with Firebase auth even if backend fails
-        // You can choose to throw here if backend is critical
-      }
-
-
-      return result;
-    } catch (error: unknown) {
-      // Handle popup closed by user - this is not an error, just user cancellation
-      if (error instanceof Error && error.message.includes('auth/popup-closed-by-user')) {
-        throw new Error('POPUP_CLOSED');
-      }
-
-      // Handle popup blocked by browser
-      if (error instanceof Error && error.message.includes('auth/popup-blocked')) {
-        console.error('[Auth] Popup was blocked by browser');
-        throw new Error('POPUP_BLOCKED');
-      }
-
-      console.error('[Auth] Error signing in with Google:', error);
-      throw error;
-    }
+  async signInWithGoogle(): Promise<void> {
+    await completeGoogleSignIn('signin');
   },
 
-  async registerWithGoogle(): Promise<UserCredential> {
+  async registerWithGoogle(): Promise<void> {
     try {
-      const result = await signInWithPopup(auth, googleProvider);
-
-      const token = await result.user.getIdToken();
-
-      this.storeAuthToken(token);
-      this.storeUserData(result.user);
-
-      // Register user with backend
-      try {
-        const backendUser = await apiClient.registerUser(token);
-        this.storeBackendUser(backendUser);
-      } catch (backendError) {
-        console.error('[Auth] Backend registration failed:', backendError);
-        // Continue with Firebase auth even if backend fails
-      }
-
-
-      return result;
-    } catch (error: unknown) {
-      // Handle popup closed by user
-      if (error instanceof Error && error.message.includes('auth/popup-closed-by-user')) {
-        throw new Error('POPUP_CLOSED');
-      }
-
-      // Handle popup blocked by browser
-      if (error instanceof Error && error.message.includes('auth/popup-blocked')) {
-        console.error('[Auth] Popup was blocked by browser');
-        throw new Error('POPUP_BLOCKED');
-      }
-
-      console.error('[Auth] Error signing up with Google:', error);
-      throw error;
+      localStorage.setItem(GOOGLE_SIGNUP_FLOW_KEY, '1');
+    } catch {
+      /* storage full / disabled */
     }
+    await completeGoogleSignIn('register');
   },
+
+  completeGoogleSignIn,
+  establishSession,
 
   async signOut(): Promise<void> {
     try {
       await firebaseSignOut(auth);
-      this.clearAuthData();
     } catch (error) {
       console.error('Error signing out:', error);
-      throw error;
+    } finally {
+      clearSessionLocal();
     }
   },
 
   storeAuthToken(token: string): void {
-    localStorage.setItem(TOKEN_KEY, token);
+    persistAuthToken(token);
   },
 
   getAuthToken(): string | null {
@@ -117,13 +144,7 @@ export const authService = {
   },
 
   storeUserData(user: User): void {
-    const userData = {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-    };
-    localStorage.setItem(USER_KEY, JSON.stringify(userData));
+    persistUserData(user);
   },
 
   getUserData(): User | null {
@@ -132,7 +153,7 @@ export const authService = {
   },
 
   storeBackendUser(user: unknown): void {
-    localStorage.setItem(BACKEND_USER_KEY, JSON.stringify(user));
+    persistBackendUser(user);
   },
 
   getBackendUser(): unknown {
@@ -141,40 +162,24 @@ export const authService = {
   },
 
   clearAuthData(): void {
-    localStorage.removeItem(TOKEN_KEY);
-    localStorage.removeItem(USER_KEY);
-    localStorage.removeItem(BACKEND_USER_KEY);
-    SESSION_STORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
-    clearAllSelectedDatasetStorage();
-    apiCacheManager.clearAll();
+    clearSessionLocal();
+  },
+
+  async getValidIdToken(forceRefresh = false): Promise<string | null> {
+    return getValidIdTokenInternal(forceRefresh);
   },
 
   async refreshToken(): Promise<string | null> {
-    try {
-      const user = auth.currentUser;
-      if (user) {
-        const token = await user.getIdToken(true);
-        this.storeAuthToken(token);
-        return token;
-      }
-      return null;
-    } catch (error) {
-      console.error('Error refreshing token:', error);
-      return null;
-    }
+    return getValidIdTokenInternal(true);
   },
 
   onAuthStateChange(callback: (user: User | null) => void): () => void {
     return onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // Force refresh on auth state change to ensure we have a fresh, valid token
-        // especially after a logout/login cycle
-        const token = await user.getIdToken(true);
-        this.storeAuthToken(token);
-        this.storeUserData(user);
-        apiCacheManager.clearAll(); // Clear cache as user might have changed or permissions updated
+        await establishSession(user, { forceRefreshToken: true });
+        apiCacheManager.clearAll();
       } else {
-        this.clearAuthData();
+        clearSessionLocal();
       }
       callback(user);
     });
@@ -182,5 +187,5 @@ export const authService = {
 
   getCurrentUser(): User | null {
     return auth.currentUser;
-  }
+  },
 };
