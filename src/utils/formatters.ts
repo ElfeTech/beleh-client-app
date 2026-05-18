@@ -440,9 +440,12 @@ export function formatTimeLabelTooltip(
  * Auto-detect format type from field name and sample values
  */
 export function detectFormatType(
-  fieldName: string,
+  fieldName: string | undefined | null,
   sampleValues: any[]
 ): FormatConfig['type'] {
+  if (!fieldName || typeof fieldName !== 'string') {
+    return 'string';
+  }
   const lowerName = fieldName.toLowerCase();
 
   // Check field name patterns
@@ -484,12 +487,15 @@ export function detectFormatType(
  * Create a format config for a field based on encoding and data
  */
 export function createFormatConfig(
-  field: string,
-  fieldType: 'categorical' | 'quantitative' | 'temporal',
+  field: string | undefined | null,
+  fieldType: 'categorical' | 'quantitative' | 'temporal' | undefined,
   sampleValues: any[],
   format?: string,
   timeGrain?: string
 ): FormatConfig {
+  const safeField = field && typeof field === 'string' ? field : 'value';
+  const safeType = fieldType ?? 'quantitative';
+
   // Use explicit format if provided
   if (format) {
     if (format.includes('$')) return { type: 'currency', compact: true };
@@ -498,14 +504,14 @@ export function createFormatConfig(
   }
 
   // Auto-detect based on field type
-  if (fieldType === 'temporal') {
+  if (safeType === 'temporal') {
     // Use backend-provided time grain if available, otherwise auto-detect
     const granularity = timeGrain ? mapGrainToGranularity(timeGrain) : detectTimeGranularity(sampleValues);
     return { type: 'date', timeGranularity: granularity };
   }
 
-  if (fieldType === 'quantitative') {
-    const detectedType = detectFormatType(field, sampleValues);
+  if (safeType === 'quantitative') {
+    const detectedType = detectFormatType(safeField, sampleValues);
 
     if (detectedType === 'currency') {
       return { type: 'currency', compact: true };
@@ -519,7 +525,7 @@ export function createFormatConfig(
   }
 
   // Categorical - check if it's actually dates
-  const detectedType = detectFormatType(field, sampleValues);
+  const detectedType = detectFormatType(safeField, sampleValues);
   if (detectedType === 'date' || detectedType === 'time') {
     // Use backend-provided time grain if available, otherwise auto-detect
     const granularity = timeGrain ? mapGrainToGranularity(timeGrain) : detectTimeGranularity(sampleValues);

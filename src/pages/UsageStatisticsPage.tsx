@@ -92,8 +92,8 @@ const UsageStatisticsPage: React.FC = () => {
             <TrendingUp className="w-3 h-3" />
             <span>Consumption Insights</span>
           </div>
-          <h1 className="text-3xl font-black tracking-tight text-foreground">Usage Analytics</h1>
-          <p className="text-muted-foreground mt-1 font-medium">
+          <h1 className="app-page-title">Usage Analytics</h1>
+          <p className="app-page-subtitle mt-1">
             Detailed breakdown of your analytical consumption and API resource usage.
           </p>
         </div>
@@ -304,8 +304,8 @@ const UsageStatisticsPage: React.FC = () => {
                   <Layers className="w-6 h-6" />
                </div>
                <div>
-                  <h4 className="font-bold text-lg">{currentUsage.plan.name} Tier</h4>
-                  <p className="text-sm text-muted-foreground font-medium">Your current monthly billing cycle resets in {format(parseISO(currentUsage.reset_at), 'PPP')}</p>
+                  <h4 className="text-base font-semibold">{currentUsage.plan.name} Tier</h4>
+                  <p className="text-sm text-muted-foreground">Your current monthly billing cycle resets in {format(parseISO(currentUsage.reset_at), 'PPP')}</p>
                </div>
             </div>
             <div className="flex gap-3">

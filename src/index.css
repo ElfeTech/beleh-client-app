@@ -1,3 +1,5 @@
+@import './styles/typography.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -121,7 +123,7 @@
   }
 
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-tap-highlight-color: transparent;
   }
@@ -130,9 +132,9 @@
 @layer components {
   /* Centralized Button Styles - Mobile First */
   .btn {
-    @apply inline-flex items-center justify-center rounded-md text-sm font-bold transition-all 
+    @apply inline-flex items-center justify-center rounded-md text-xs font-semibold transition-all 
            active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none
-           px-4 py-2.5 md:py-2 md:px-5;
+           px-3 py-2 md:py-1.5 md:px-4;
   }
 
   .btn-primary {
@@ -246,14 +248,32 @@
     box-shadow: 0 -12px 36px -10px rgba(0, 0, 0, 0.55);
   }
 
+  .composer-textarea {
+    overflow-x: hidden;
+    overflow-y: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    scrollbar-gutter: stable;
+  }
+
+  .composer-textarea::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .composer-textarea::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-muted) 45%, transparent);
+    border-radius: 999px;
+  }
+
   /* Chat bubbles — token-based surfaces (no gray Tailwind muted) + wide layout */
   .message-bubble {
     width: fit-content;
     max-width: min(100%, calc(100vw - 1.5rem));
     border-radius: var(--radius-xl, 1rem);
-    padding: 1rem 1.125rem;
-    font-size: 0.9375rem;
-    line-height: 1.65;
+    padding: 0.875rem 1rem;
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
     box-shadow: var(--ds-shadow-card, 0 1px 2px rgba(15, 23, 42, 0.06));
     transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
@@ -261,8 +281,8 @@
   @media (min-width: 640px) {
     .message-bubble {
       max-width: min(96%, 52rem);
-      padding: 1.125rem 1.35rem;
-      font-size: 1rem;
+      padding: 1rem 1.125rem;
+      font-size: var(--text-md);
     }
   }
 
@@ -293,6 +313,18 @@
     color: var(--text-primary);
     border: 1px solid var(--ds-border-subtle);
     box-shadow: var(--ds-shadow-card);
+  }
+
+  /* Full-width bubble when showing suggested follow-ups (avoids fit-content + float layout bugs) */
+  .message-bubble--with-suggestions {
+    width: 100%;
+    max-width: min(96%, 52rem);
+  }
+
+  @media (min-width: 1024px) {
+    .message-bubble--with-suggestions {
+      max-width: min(94%, 58rem);
+    }
   }
 
   html[data-theme='dark'] .message-assistant {

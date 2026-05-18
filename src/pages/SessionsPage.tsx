@@ -7,6 +7,7 @@ import { WorkspaceContext } from '../context/WorkspaceContext';
 import { authService } from '../services/authService';
 import { apiClient } from '../services/apiClient';
 import { usePaginatedFetch } from '../hooks/usePaginatedFetch';
+import { workspaceChatPath } from '../hooks/useSessionInUrl';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import './SessionsPage.css';
 
@@ -114,11 +115,11 @@ const SessionsPage: React.FC = () => {
       setActiveSessionId(newSession.id);
 
       // Navigate to workspace - the Workspace component will load messages (empty for new session)
-      navigate(`/workspace/${workspaceId}`);
+      navigate(workspaceChatPath(workspaceId, newSession.id));
     } catch (err) {
       console.error('Failed to create session:', err);
       // Still navigate but without creating session - user can try again from workspace
-      navigate(`/workspace/${workspaceId}`);
+      navigate(workspaceChatPath(workspaceId));
     } finally {
       setIsCreatingSession(false);
     }
@@ -126,7 +127,9 @@ const SessionsPage: React.FC = () => {
 
   const handleSessionClick = (sessionId: string) => {
     setActiveSessionId(sessionId);
-    navigate(`/workspace/${workspaceId}`);
+    if (workspaceId) {
+      navigate(workspaceChatPath(workspaceId, sessionId));
+    }
   };
 
   const handleTouchStart = (sessionId: string) => {

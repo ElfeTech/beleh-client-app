@@ -35,6 +35,8 @@ function formatSourceType(ds: DataSourceResponse): string {
   return raw.replace(/\s+/g, '_').slice(0, 16);
 }
 
+const COMPOSER_MAX_ROWS = 4;
+
 function tagLabel(
   selectedDatasourceId: string | null,
   datasources: DataSourceResponse[],
@@ -74,7 +76,39 @@ export function ChatComposer({
   const rootRef = useRef<HTMLDivElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
+
+  const syncTextareaHeight = useCallback(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+
+    ta.style.height = 'auto';
+    const styles = getComputedStyle(ta);
+    const lineHeight = Number.parseFloat(styles.lineHeight) || 20;
+    const paddingY =
+      Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
+    const maxHeight = lineHeight * COMPOSER_MAX_ROWS + paddingY;
+    const contentHeight = ta.scrollHeight;
+
+    if (contentHeight > maxHeight) {
+      ta.style.height = `${maxHeight}px`;
+      ta.style.overflowY = 'auto';
+    } else {
+      ta.style.height = `${contentHeight}px`;
+      ta.style.overflowY = 'hidden';
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    syncTextareaHeight();
+  }, [value, syncTextareaHeight]);
+
+  useEffect(() => {
+    const onResize = () => syncTextareaHeight();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [syncTextareaHeight]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -329,7 +363,7 @@ export function ChatComposer({
     <div ref={rootRef} className="relative z-40 w-full">
       <div
         className={cn(
-          'flex w-full min-h-[52px] md:min-h-[56px] items-stretch gap-1.5 md:gap-2 rounded-2xl border px-2 py-1.5 md:px-3 md:py-2 shadow-sm transition-[box-shadow,border-color]',
+          'flex w-full min-h-[48px] items-end gap-1.5 md:gap-2 rounded-2xl border px-2 py-1.5 md:px-3 md:py-2 shadow-sm transition-[box-shadow,border-color]',
           'border-[color:var(--border-primary)] bg-[color:var(--bg-primary)]',
           'focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/20',
           'dark:border-border/80 dark:bg-[color:var(--bg-card)] dark:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.65)]'
@@ -351,6 +385,7 @@ export function ChatComposer({
         </button>
 
         <textarea
+          ref={textareaRef}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
@@ -362,8 +397,9 @@ export function ChatComposer({
           placeholder={selectedDatasourceId === null || selectedDatasourceId === '' ? 'Ask a general question...' : 'Query selected source…'}
           disabled={disabled}
           rows={1}
+          wrap="soft"
           className={cn(
-            'min-h-0 flex-1 resize-none bg-transparent py-2 text-sm leading-snug text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-muted)]',
+            'composer-textarea min-h-[2.25rem] flex-1 resize-none bg-transparent py-2 text-sm leading-snug text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-muted)]',
             'disabled:cursor-not-allowed disabled:opacity-60'
           )}
         />

@@ -5,25 +5,25 @@
 }
 
 .datasets-header {
-  padding: var(--spacing-xl) var(--spacing-lg) var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-lg) var(--spacing-md);
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-primary);
   transition: all 0.3s ease;
 }
 
 .datasets-header h1 {
-  font-size: 28px;
-  font-weight: 800;
+  font-size: var(--text-xl);
+  font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
   margin: 0 0 var(--spacing-xs) 0;
 }
 
 .datasets-header p {
-  font-size: 15px;
+  font-size: var(--text-sm);
   color: var(--text-tertiary);
   margin: 0;
-  line-height: 1.5;
+  line-height: var(--leading-normal);
 }
 
 /* Floating Action Button for Mobile */

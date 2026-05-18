@@ -20,6 +20,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { NavLink, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import logoImage from '../../assets/logo.webp';
 import { ChatSessionContext } from '../../context/ChatSessionContext';
@@ -29,6 +30,7 @@ import { useWorkspace } from '../../context/WorkspaceContext';
 import { useUsage } from '../../context/UsageContext';
 import { ContextMenu } from '../common/ContextMenu';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { workspaceChatPath } from '../../hooks/useSessionInUrl';
 import './UnifiedSidebar.css';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
@@ -96,14 +98,25 @@ export function UnifiedSidebar() {
   };
 
   const handleDelete = async () => {
-    if (!actionSessionId) return;
+    const sessionId = actionSessionId;
+    if (!sessionId) return;
     setIsDeleting(true);
     try {
-        await chatContext?.deleteSession(actionSessionId);
+      const ok = await chatContext?.deleteSession(sessionId);
+      if (ok) {
+        toast.success('Chat deleted');
         setShowDeleteConfirm(false);
+        if (activeSessionId === sessionId && effectiveWorkspaceId) {
+          navigate(workspaceChatPath(effectiveWorkspaceId), { replace: true });
+        }
+      } else {
+        toast.error('Could not delete this chat. Please try again.');
+      }
+    } catch {
+      toast.error('Could not delete this chat. Please try again.');
     } finally {
-        setIsDeleting(false);
-        setActionSessionId(null);
+      setIsDeleting(false);
+      setActionSessionId(null);
     }
   };
 
@@ -129,15 +142,13 @@ export function UnifiedSidebar() {
   const handleSessionClick = (sessionId: string) => {
     if (!effectiveWorkspaceId) return;
     chatContext?.setActiveSessionId(sessionId);
-    if (location.pathname !== workspaceBase) {
-      navigate(workspaceBase);
-    }
+    navigate(workspaceChatPath(effectiveWorkspaceId, sessionId));
   };
 
   const handleNewChat = () => {
     if (!effectiveWorkspaceId) return;
     chatContext?.setActiveSessionId(null);
-    navigate(workspaceBase);
+    navigate(workspaceChatPath(effectiveWorkspaceId));
   };
 
   const handleRefreshChats = async () => {
@@ -170,7 +181,7 @@ export function UnifiedSidebar() {
     <aside
       className={cn(
         'unified-sidebar flex flex-col transition-[width] duration-300 ease-out relative z-20 pointer-events-auto',
-        isCollapsed ? 'w-[4.25rem]' : 'w-64'
+        isCollapsed ? 'w-[3.75rem]' : 'w-56'
       )}
     >
       <button
@@ -184,7 +195,7 @@ export function UnifiedSidebar() {
 
       <div
         className={cn(
-          'flex shrink-0 items-center gap-3 px-4 pb-2 pt-6',
+          'flex shrink-0 items-center gap-2 px-3 pb-1.5 pt-4',
           isCollapsed && 'flex-col justify-center gap-2 px-2'
         )}
       >
@@ -193,12 +204,12 @@ export function UnifiedSidebar() {
           alt="Beleh"
           className={cn(
             'unified-sidebar__logo object-contain object-left',
-            isCollapsed ? 'mx-auto h-7 w-auto max-w-[2.75rem]' : 'h-9 w-auto max-w-[11rem] shrink-0'
+            isCollapsed ? 'mx-auto h-6 w-auto max-w-[2.5rem]' : 'h-7 w-auto max-w-[9.5rem] shrink-0'
           )}
         />
         {!isCollapsed && effectiveWorkspaceId && workspaceLabel ? (
           <div className="min-w-0 flex-1">
-            <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
+            <p className="truncate text-2xs font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
               {workspaceLabel}
             </p>
           </div>
@@ -210,28 +221,28 @@ export function UnifiedSidebar() {
           <>
             <NavLink to={workspaceBase} end className={navClass}>
               {onSettingsRoute ? (
-                <ArrowLeft className="h-5 w-5 shrink-0" strokeWidth={2} />
+                <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
               ) : (
-                <MessageSquare className="h-5 w-5 shrink-0" strokeWidth={2} />
+                <MessageSquare className="h-4 w-4 shrink-0" strokeWidth={2} />
               )}
               {!isCollapsed && <span>{onSettingsRoute ? 'Back to chat' : 'Chat'}</span>}
             </NavLink>
             <NavLink to={`${workspaceBase}/datasets`} className={navClass}>
-              <Database className="h-5 w-5 shrink-0" strokeWidth={2} />
+              <Database className="h-4 w-4 shrink-0" strokeWidth={2} />
               {!isCollapsed && <span>Data sources</span>}
             </NavLink>
             <NavLink to={`${workspaceBase}/sessions`} className={navClass}>
-              <History className="h-5 w-5 shrink-0" strokeWidth={2} />
+              <History className="h-4 w-4 shrink-0" strokeWidth={2} />
               {!isCollapsed && <span>Sessions</span>}
             </NavLink>
             <NavLink to={`${workspaceBase}/statistics`} className={navClass}>
-              <TrendingUp className="h-5 w-5 shrink-0" strokeWidth={2} />
+              <TrendingUp className="h-4 w-4 shrink-0" strokeWidth={2} />
               {!isCollapsed && <span>Usage Analytics</span>}
             </NavLink>
           </>
         ) : (
           <NavLink to="/settings/workspaces" className={navClass} end>
-            <LayoutGrid className="h-5 w-5 shrink-0" strokeWidth={2} />
+            <LayoutGrid className="h-4 w-4 shrink-0" strokeWidth={2} />
             {!isCollapsed && <span>Workspaces</span>}
           </NavLink>
         )}
@@ -240,7 +251,7 @@ export function UnifiedSidebar() {
           to="/settings/general"
           className={() => cn('sidebar-nav-link', settingsAreaActive && 'sidebar-nav-link--active')}
         >
-          <Settings className="h-5 w-5 shrink-0" strokeWidth={2} />
+          <Settings className="h-4 w-4 shrink-0" strokeWidth={2} />
           {!isCollapsed && <span>Settings</span>}
         </NavLink>
 
@@ -427,8 +438,7 @@ export function UnifiedSidebar() {
         isOpen={Boolean(menuAnchorEl)}
         anchorEl={menuAnchorEl}
         onClose={() => {
-            setMenuAnchorEl(null);
-            setActionSessionId(null);
+          setMenuAnchorEl(null);
         }}
         items={[
           {
@@ -442,10 +452,7 @@ export function UnifiedSidebar() {
             label: 'Delete',
             icon: <Trash2 className="h-4 w-4" strokeWidth={2} />,
             variant: 'danger',
-            onClick: () => {
-              setMenuAnchorEl(null);
-              setShowDeleteConfirm(true);
-            },
+            onClick: () => setShowDeleteConfirm(true),
           },
         ]}
       />

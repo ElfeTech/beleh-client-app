@@ -360,6 +360,55 @@ export function getColorPalette(type: 'default' | 'monochrome' | 'warm' | 'cool'
  * Multi-dimensional visualization adapters
  */
 
+function isValidFieldName(field: unknown): field is string {
+  return typeof field === 'string' && field.trim().length > 0;
+}
+
+function pickFieldName(
+  ...candidates: (string | undefined | null)[]
+): string | undefined {
+  for (const c of candidates) {
+    if (isValidFieldName(c)) return c.trim();
+  }
+  return undefined;
+}
+
+function isNumericColumnValue(value: unknown): boolean {
+  if (value == null || value === '') return false;
+  if (typeof value === 'number' && !Number.isNaN(value)) return true;
+  return !Number.isNaN(Number(value));
+}
+
+function inferNumericField(
+  rawData: Record<string, any>[],
+  excludeFields: Set<string>
+): string | null {
+  if (rawData.length === 0) return null;
+  const columns = Object.keys(rawData[0]);
+  for (const col of columns) {
+    if (excludeFields.has(col)) continue;
+    if (isNumericColumnValue(rawData[0][col])) return col;
+  }
+  return null;
+}
+
+function inferCategoryField(
+  rawData: Record<string, any>[],
+  excludeFields: Set<string>
+): string | null {
+  if (rawData.length === 0) return null;
+  const columns = Object.keys(rawData[0]);
+  for (const col of columns) {
+    if (excludeFields.has(col)) continue;
+    const value = rawData[0][col];
+    if (value != null && !isNumericColumnValue(value)) return col;
+  }
+  for (const col of columns) {
+    if (!excludeFields.has(col)) return col;
+  }
+  return null;
+}
+
 export interface MultiDimensionalChartData {
   xField: string;
   yField: string;
@@ -392,56 +441,50 @@ export function adaptMultiDimensionalData(
   visualization: VisualizationRecommendation,
   rawData: Record<string, any>[]
 ): MultiDimensionalChartData {
-  const { encoding } = visualization;
-
-  if (!encoding?.x) {
-    throw new Error('Missing required x encoding configuration');
-  }
+  const { encoding, dimensions } = visualization;
 
   if (rawData.length === 0) {
     throw new Error('No data available');
   }
 
-  const xField = encoding.x.field;
+  const seriesField = pickFieldName(
+    encoding?.series?.field,
+    encoding?.color?.field,
+    dimensions?.series,
+    dimensions?.color
+  );
+  const colorField = pickFieldName(encoding?.color?.field, dimensions?.color);
+  const sizeField = pickFieldName(encoding?.size?.field, dimensions?.size);
+  const facetField = pickFieldName(encoding?.facet?.field, dimensions?.facet);
 
-  // If y field is not explicitly provided, infer it from the data
-  let yField: string;
-  let yLabel: string;
-  let yType: 'categorical' | 'quantitative' | 'temporal' = 'quantitative';
+  const prelimExclude = new Set(
+    [seriesField, colorField, sizeField, facetField].filter(isValidFieldName)
+  );
 
-  if (encoding?.y) {
-    yField = encoding.y.field;
-    yLabel = encoding.y.label || yField;
-    yType = encoding.y.type;
-  } else {
-    // Infer y field from data - find the first numeric column that's not x or series/color/size/facet
-    const excludeFields = new Set([
-      xField,
-      encoding.series?.field,
-      encoding.color?.field,
-      encoding.size?.field,
-      encoding.facet?.field,
-    ].filter(Boolean));
-
-    const numericColumns = Object.keys(rawData[0]).filter(col => {
-      if (excludeFields.has(col)) return false;
-      const value = rawData[0][col];
-      return typeof value === 'number' || !isNaN(Number(value));
-    });
-
-    if (numericColumns.length === 0) {
-      throw new Error('No numeric field found for y-axis');
-    }
-
-    yField = numericColumns[0];
-    yLabel = yField.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+  let xField = pickFieldName(encoding?.x?.field, dimensions?.x);
+  if (!xField) {
+    xField = inferCategoryField(rawData, prelimExclude) ?? undefined;
+  }
+  if (!xField) {
+    throw new Error('Missing required x-axis field');
   }
 
-  // Extract dimension fields
-  const seriesField = encoding.series?.field;
-  const colorField = encoding.color?.field;
-  const sizeField = encoding.size?.field;
-  const facetField = encoding.facet?.field;
+  const excludeForY = new Set([xField, ...prelimExclude]);
+
+  let yField = pickFieldName(encoding?.y?.field, dimensions?.y);
+  let yLabel: string;
+  let yType: 'categorical' | 'quantitative' | 'temporal' = encoding?.y?.type ?? 'quantitative';
+
+  if (!yField) {
+    yField = inferNumericField(rawData, excludeForY) ?? undefined;
+  }
+  if (!yField) {
+    throw new Error('No numeric field found for y-axis');
+  }
+
+  yLabel =
+    encoding?.y?.label ||
+    (isValidFieldName(dimensions?.y) ? dimensions.y.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) : yField.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
 
   // Calculate dimension count
   let dimensionCount = 2; // x and y are always present
@@ -456,16 +499,16 @@ export function adaptMultiDimensionalData(
 
   const xFormat = createFormatConfig(
     xField,
-    encoding.x.type,
+    encoding?.x?.type ?? 'categorical',
     xSampleValues,
-    encoding.x.format
+    encoding?.x?.format
   );
 
   const yFormat = createFormatConfig(
     yField,
     yType,
     ySampleValues,
-    encoding.y?.format
+    encoding?.y?.format
   );
 
   // Extract time grain from visualization metadata (check both direct property and advanced_spec)
@@ -474,19 +517,19 @@ export function adaptMultiDimensionalData(
   return {
     xField,
     yField,
-    xLabel: encoding.x.label || xField,
+    xLabel: encoding?.x?.label || xField,
     yLabel,
     xFormat,
     yFormat,
     data: rawData,
     seriesField,
-    seriesLabel: encoding.series?.label || seriesField,
+    seriesLabel: encoding?.series?.label || seriesField,
     colorField,
-    colorLabel: encoding.color?.label || colorField,
+    colorLabel: encoding?.color?.label || colorField,
     sizeField,
-    sizeLabel: encoding.size?.label || sizeField,
+    sizeLabel: encoding?.size?.label || sizeField,
     facetField,
-    facetLabel: encoding.facet?.label || facetField,
+    facetLabel: encoding?.facet?.label || facetField,
     timeGrain,
     dimensionCount,
   };

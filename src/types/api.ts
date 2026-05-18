@@ -258,12 +258,21 @@ export interface SupportingFact {
   [key: string]: any;
 }
 
+export interface InsightUsage {
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  total_tokens?: number;
+  model_id?: string;
+}
+
 export interface InsightResponse {
   summary: string;
   key_insights: string[];
-  supporting_facts: SupportingFact[];
+  supporting_facts?: SupportingFact[];
   limitations: string;
   confidence: number;
+  suggested_next_prompts?: string[];
+  usage?: InsightUsage;
 }
 
 // Chat Session Types

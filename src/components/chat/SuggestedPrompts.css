@@ -1,0 +1,97 @@
+/* Suggested follow-ups inside assistant message bubbles */
+.suggested-prompts {
+  width: 100%;
+  min-width: 0;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--ds-border-subtle);
+  clear: both;
+}
+
+.suggested-prompts__label {
+  display: block;
+  margin: 0 0 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.suggested-prompts__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.suggested-prompts__btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font: inherit;
+  line-height: 1.45;
+  color: var(--text-primary);
+  cursor: pointer;
+  background: color-mix(in srgb, var(--ds-surface-muted) 88%, var(--primary-500) 4%);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-md, 0.5rem);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.suggested-prompts__btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--ds-surface-muted) 70%, var(--primary-500) 10%);
+  border-color: color-mix(in srgb, var(--primary-500) 45%, var(--border-primary));
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--primary-500) 12%, transparent);
+}
+
+.suggested-prompts__btn:focus-visible {
+  outline: 2px solid var(--primary-500);
+  outline-offset: 2px;
+}
+
+.suggested-prompts__btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.suggested-prompts__text {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-sm);
+  font-weight: 500;
+}
+
+.suggested-prompts__arrow {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  color: var(--primary-500);
+  opacity: 0.7;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.suggested-prompts__btn:hover:not(:disabled) .suggested-prompts__arrow {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+html[data-theme='dark'] .suggested-prompts__btn {
+  background: color-mix(in srgb, var(--bg-secondary) 90%, var(--primary-500) 6%);
+  border-color: var(--border-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+
+html[data-theme='dark'] .suggested-prompts__btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--bg-tertiary) 85%, var(--primary-500) 12%);
+  border-color: var(--primary-400);
+}

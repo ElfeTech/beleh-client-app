@@ -18,7 +18,7 @@ export function MetricCard({ label, value, change, prefix, suffix }: MetricCardP
       <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{label}</p>
       <div className="mt-2 flex items-baseline gap-1">
         {prefix && <span className="text-sm font-medium text-muted-foreground">{prefix}</span>}
-        <span className="text-2xl font-bold text-foreground">{value}</span>
+        <span className="text-xl font-bold text-foreground">{value}</span>
         {suffix && <span className="text-sm font-medium text-muted-foreground">{suffix}</span>}
       </div>
       {change !== undefined && (

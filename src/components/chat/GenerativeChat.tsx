@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Database, Loader2, Sparkles } from 'lucide-react';
@@ -7,6 +7,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ConnectorWidget } from './ConnectorWidget';
 import { ChatComposer } from './ChatComposer';
 import { ChartVisualization } from './ChartVisualization';
+import { SuggestedPrompts } from './SuggestedPrompts';
+import { ChatFailureCard } from './ChatFailureCard';
+import { getWorkflowFailure, formatChatRequestError } from '../../utils/chatWorkflowStatus';
+import type { WorkflowFailureInfo } from '../../utils/chatWorkflowStatus';
 import { ConnectorSelectionModal } from '../layout/ConnectorSelectionModal';
 import { PostgresConnectorModal } from '../layout/PostgresConnectorModal';
 import { useWorkspace } from '../../context/WorkspaceContext';
@@ -27,6 +31,8 @@ interface Message {
   metadata?: any;
   timestamp: Date;
   status?: 'sending' | 'sent' | 'error';
+  failure?: WorkflowFailureInfo;
+  retryPrompt?: string;
 }
 
 export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?: string }) {
@@ -37,6 +43,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     datasources,
     connectors,
     currentWorkspace,
+    loading: workspaceLoading,
     saveWorkspaceState,
     refreshConnectors,
     invalidateContextCache,
@@ -89,8 +96,18 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
 
   useEffect(() => {
     if (!currentWorkspace?.id) return;
+    // Avoid PATCH /state with localStorage ids before datasource lists have loaded
+    if (workspaceLoading && datasources.length === 0 && connectors.length === 0) return;
     saveWorkspaceState(currentWorkspace.id, selectedDatasourceId, activeSessionId);
-  }, [selectedDatasourceId, activeSessionId, currentWorkspace?.id, saveWorkspaceState]);
+  }, [
+    selectedDatasourceId,
+    activeSessionId,
+    currentWorkspace?.id,
+    saveWorkspaceState,
+    workspaceLoading,
+    datasources.length,
+    connectors.length,
+  ]);
 
   // If the selected source was deleted or removed from the workspace, fall back to General
   useEffect(() => {
@@ -151,83 +168,167 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     }
   }, [localMessages, isLoading]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading || !user) return;
-    const text = input.trim();
+  const sendMessage = useCallback(
+    async (text: string, options?: { skipUserMessage?: boolean }) => {
+      const trimmed = text.trim();
+      if (!trimmed || isLoading || !user) return;
 
-    // 1. Show user message immediately
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: text,
-      timestamp: new Date(),
-      status: 'sending'
-    };
+      const userMessageId = Date.now().toString();
+      const userMessage: Message = {
+        id: userMessageId,
+        role: 'user',
+        content: trimmed,
+        timestamp: new Date(),
+        status: 'sending',
+      };
 
-    setLocalMessages((prev) => [...prev, userMessage]);
-    setInput('');
-    setIsLoading(true);
-
-    try {
-      const token = await user.getIdToken();
-      let sessionId = activeSessionId;
-
-      // 2. Create session if none exists
-      if (!sessionId) {
-        const newSession = await apiClient.createWorkspaceSession(
-          token, 
-          workspaceId, 
-          text.slice(0, 30), 
-          selectedDatasourceId || undefined
-        );
-        addSession(newSession);
-        setActiveSessionId(newSession.id);
-        sessionId = newSession.id;
+      if (options?.skipUserMessage) {
+        setLocalMessages((prev) => {
+          const lastUser = [...prev].reverse().find((m) => m.role === 'user');
+          if (!lastUser) return [...prev, userMessage];
+          return prev.map((m) =>
+            m.id === lastUser.id ? { ...m, status: 'sending' as const } : m
+          );
+        });
+      } else {
+        setLocalMessages((prev) => [...prev, userMessage]);
       }
 
-      // 3. Send message to backend
-      const response = await apiClient.addMessageToSession(
-        token,
-        sessionId!,
-        text,
-        selectedDatasourceId || null // Ensure null is sent for "General" mode, not empty string
-      );
+      setIsLoading(true);
 
-      // 4. Update UI with AI response
-      const assistantMessage: Message = {
-        id: response.message_id || (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: response.insight?.summary || "I've analyzed the data.",
-        metadata: {
-            intent: response.intent,
-            execution: response.execution,
-            visualization: response.visualization,
-            insight: response.insight
-        },
-        timestamp: new Date(),
-        status: 'sent'
-      };
+      try {
+        const token = await user.getIdToken();
+        let sessionId = activeSessionId;
 
-      setLocalMessages((prev) => {
-          // Update the user message status to 'sent' and add assistant message
-          const updated = prev.map(m => m.id === userMessage.id ? { ...m, status: 'sent' as const } : m);
+        if (!sessionId) {
+          const newSession = await apiClient.createWorkspaceSession(
+            token,
+            workspaceId,
+            trimmed.slice(0, 30),
+            selectedDatasourceId || undefined
+          );
+          addSession(newSession);
+          setActiveSessionId(newSession.id);
+          sessionId = newSession.id;
+        }
+
+        const response = await apiClient.addMessageToSession(
+          token,
+          sessionId!,
+          trimmed,
+          selectedDatasourceId || null
+        );
+
+        const workflowFailure = getWorkflowFailure(response);
+        const assistantMessage: Message = workflowFailure
+          ? {
+              id: response.message_id || (Date.now() + 1).toString(),
+              role: 'assistant',
+              content: response.insight?.summary || workflowFailure.detail,
+              metadata: {
+                intent: response.intent,
+                execution: response.execution,
+                visualization: response.visualization,
+                insight: response.insight,
+              },
+              failure: workflowFailure,
+              retryPrompt: trimmed,
+              timestamp: new Date(),
+              status: 'sent',
+            }
+          : {
+              id: response.message_id || (Date.now() + 1).toString(),
+              role: 'assistant',
+              content: response.insight?.summary || "I've analyzed the data.",
+              metadata: {
+                intent: response.intent,
+                execution: response.execution,
+                visualization: response.visualization,
+                insight: response.insight,
+              },
+              timestamp: new Date(),
+              status: 'sent',
+            };
+
+        setLocalMessages((prev) => {
+          const withoutFailureTail = workflowFailure
+            ? prev.filter((m, i, arr) => {
+                if (i !== arr.length - 1) return true;
+                return !(m.role === 'assistant' && m.failure);
+              })
+            : prev;
+          const updated = withoutFailureTail.map((m) => {
+            if (options?.skipUserMessage && m.role === 'user' && m.content === trimmed) {
+              return { ...m, status: 'sent' as const };
+            }
+            if (!options?.skipUserMessage && m.id === userMessageId) {
+              return { ...m, status: 'sent' as const };
+            }
+            return m;
+          });
           return [...updated, assistantMessage];
-      });
+        });
 
-    } catch (err: any) {
-      console.error('Failed to send message:', err);
-      const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: `Error: ${err.message || 'Something went wrong. Please try again.'}`,
-        timestamp: new Date(),
-      };
-      setLocalMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
-      void refetchMessages();
-    }
+        if (workflowFailure) {
+          toast.error(workflowFailure.title);
+        }
+      } catch (err: unknown) {
+        console.error('Failed to send message:', err);
+        const failure = formatChatRequestError(err);
+        const errorMessage: Message = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: failure.detail,
+          failure,
+          retryPrompt: trimmed,
+          timestamp: new Date(),
+        };
+        setLocalMessages((prev) => {
+          const updated = prev.map((m) => {
+            if (options?.skipUserMessage && m.role === 'user' && m.content === trimmed) {
+              return { ...m, status: 'error' as const };
+            }
+            if (!options?.skipUserMessage && m.id === userMessageId) {
+              return { ...m, status: 'error' as const };
+            }
+            return m;
+          });
+          return [...updated, errorMessage];
+        });
+        toast.error(failure.title);
+      } finally {
+        setIsLoading(false);
+        void refetchMessages();
+      }
+    },
+    [
+      isLoading,
+      user,
+      activeSessionId,
+      workspaceId,
+      selectedDatasourceId,
+      addSession,
+      setActiveSessionId,
+      refetchMessages,
+    ]
+  );
+
+  const handleSend = () => {
+    if (!input.trim()) return;
+    const text = input.trim();
+    setInput('');
+    void sendMessage(text);
   };
+
+  const latestAssistantWithSuggestionsId = useMemo(() => {
+    for (let i = localMessages.length - 1; i >= 0; i--) {
+      const m = localMessages[i];
+      if (m.role !== 'assistant' || m.id === 'welcome') continue;
+      const prompts = (m.metadata as ChatWorkflowResponse | undefined)?.insight?.suggested_next_prompts;
+      return prompts?.length ? m.id : null;
+    }
+    return null;
+  }, [localMessages]);
 
   const handleConnectorSelect = (connectorId: string) => {
     setInput(`I want to connect ${connectorId}`);
@@ -256,7 +357,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
               >
                 <div className={cn(
                   "message-bubble group",
-                  msg.role === 'user' ? "message-user" : "message-assistant"
+                  msg.role === 'user' ? "message-user" : "message-assistant",
+                  msg.role === 'assistant' &&
+                    msg.id === latestAssistantWithSuggestionsId &&
+                    "message-bubble--with-suggestions",
                 )}>
                   {msg.role === 'assistant' && (
                     <div className="flex items-center gap-2 mb-2 text-[10px] font-bold tracking-widest text-primary uppercase">
@@ -264,15 +368,55 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                       AI Analyst
                     </div>
                   )}
-                  <div className="leading-relaxed whitespace-pre-wrap">
-                    {msg.content}
-                  </div>
+                  {!msg.failure && (
+                    <div className="leading-relaxed whitespace-pre-wrap">
+                      {msg.content}
+                    </div>
+                  )}
+
+                  {msg.failure && (
+                    <ChatFailureCard
+                      title={msg.failure.title}
+                      detail={msg.failure.detail}
+                      canRetry={msg.failure.canRetry}
+                      disabled={isLoading}
+                      onRetry={
+                        msg.retryPrompt
+                          ? () => {
+                              setLocalMessages((prev) =>
+                                prev.filter(
+                                  (m, i, arr) =>
+                                    !(i === arr.length - 1 && m.role === 'assistant' && m.failure)
+                                )
+                              );
+                              void sendMessage(msg.retryPrompt!, { skipUserMessage: true });
+                            }
+                          : undefined
+                      }
+                    />
+                  )}
                   
                   {msg.metadata && (
                     <div className="mt-4 border-t border-[color:var(--ds-border-subtle)] pt-4">
                         <ChartVisualization response={msg.metadata as ChatWorkflowResponse} />
                     </div>
                   )}
+
+                  {msg.role === 'assistant' &&
+                    !msg.failure &&
+                    msg.id === latestAssistantWithSuggestionsId &&
+                    (() => {
+                      const suggested =
+                        (msg.metadata as ChatWorkflowResponse | undefined)?.insight?.suggested_next_prompts;
+                      if (!suggested?.length) return null;
+                      return (
+                        <SuggestedPrompts
+                          prompts={suggested}
+                          onSelect={(prompt) => void sendMessage(prompt)}
+                          disabled={isLoading}
+                        />
+                      );
+                    })()}
 
                   {msg.type === 'widget' && msg.widgetType === 'connector' && (
                     <div className="mt-4 rounded-xl border border-[color:var(--ds-border-subtle)] bg-[color:var(--ds-surface-muted)] p-1">
@@ -285,7 +429,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                     msg.role === 'user' ? "text-right" : "text-left"
                   )}>
                     {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {msg.status === 'sending' && " • Sending"}
+                    {msg.status === 'sending' && ' • Sending'}
+                    {msg.status === 'error' && ' • Failed'}
                   </div>
                 </div>
               </motion.div>

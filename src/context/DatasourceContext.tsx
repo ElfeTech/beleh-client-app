@@ -5,6 +5,7 @@ import {
     readSelectedDatasetId,
     writeSelectedDatasetId,
 } from '../lib/selectedDatasourceStorage';
+import { isSourceInWorkspace } from '../lib/workspaceStateValidation';
 
 interface DatasourceContextType {
     selectedDatasourceId: string | null;
@@ -58,17 +59,18 @@ export function DatasourceProvider({ children }: { children: ReactNode }) {
         const uid = user.uid;
         const serverDatasetId = workspaceContext.state.last_active_dataset_id ?? null;
 
-        const validInWorkspace = (id: string | null | undefined) =>
-            !!id &&
-            (datasources.some((d) => d.id === id) || connectors.some((c) => c.id === id));
-
         let chosen: string | null = null;
-        if (validInWorkspace(serverDatasetId)) {
+        if (isSourceInWorkspace(serverDatasetId, datasources, connectors)) {
             chosen = serverDatasetId as string;
         } else {
+            if (serverDatasetId) {
+                writeSelectedDatasetId(uid, wid, null);
+            }
             const stored = readSelectedDatasetId(uid, wid);
-            if (validInWorkspace(stored)) {
+            if (isSourceInWorkspace(stored, datasources, connectors)) {
                 chosen = stored;
+            } else if (stored) {
+                writeSelectedDatasetId(uid, wid, null);
             }
         }
 
@@ -84,19 +86,20 @@ export function DatasourceProvider({ children }: { children: ReactNode }) {
         setSelectedDatasourceId,
     ]);
 
-    // Apply localStorage as soon as datasource lists exist, even if workspace-context API is still loading.
+    // Fallback: localStorage only after lists exist and only if still valid (never trust stale ids)
     useEffect(() => {
         if (!user?.uid || !currentWorkspace?.id || loading) return;
         const wid = currentWorkspace.id;
         if (datasetHydratedForWorkspaceRef.current === wid) return;
-        if (workspaceContext && workspaceContext.workspace.id === wid) return;
+        if (datasources.length === 0 && connectors.length === 0) return;
 
         const stored = readSelectedDatasetId(user.uid, wid);
         if (!stored) return;
-        const valid =
-            datasources.some((d) => d.id === stored) || connectors.some((c) => c.id === stored);
-        if (valid) {
+        if (isSourceInWorkspace(stored, datasources, connectors)) {
             setSelectedDatasourceId(stored);
+            datasetHydratedForWorkspaceRef.current = wid;
+        } else {
+            writeSelectedDatasetId(user.uid, wid, null);
         }
     }, [
         user?.uid,
@@ -104,7 +107,6 @@ export function DatasourceProvider({ children }: { children: ReactNode }) {
         loading,
         datasources,
         connectors,
-        workspaceContext,
         setSelectedDatasourceId,
     ]);
 

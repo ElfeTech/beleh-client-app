@@ -103,6 +103,11 @@ function makeResponse(
             supporting_facts: [],
             limitations: 'This is a demo with sample data. Upload your own data for real insights.',
             confidence: 0.9,
+            suggested_next_prompts: [
+                'Show me a breakdown by category',
+                'What is the trend over time?',
+                'Compare the top and bottom performers',
+            ],
         },
     };
 }

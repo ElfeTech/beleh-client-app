@@ -40,15 +40,37 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
         const vizTypeValue = viz.type || viz.visualization_type;
         viz.visualization_type = vizTypeValue;
 
-        // Convert dimensions to encoding if dimensions exists but encoding doesn't
-        if (viz.dimensions && !viz.encoding) {
+        const dim = viz.dimensions;
+        const enc = viz.encoding ?? {};
+        const fieldFromDim = (key: keyof NonNullable<typeof dim>) => {
+            const d = dim?.[key];
+            return typeof d === 'string' && d.trim() ? d.trim() : undefined;
+        };
+        const mergeAxis = (
+            axis: 'x' | 'y' | 'series' | 'color' | 'size' | 'facet',
+            defaultType: 'categorical' | 'quantitative'
+        ) => {
+            const existing = enc[axis];
+            const dimField = fieldFromDim(axis);
+            const field = existing?.field?.trim() || dimField;
+            if (!field) return existing;
+            return {
+                ...existing,
+                field,
+                type: existing?.type ?? defaultType,
+                label: existing?.label || field,
+            };
+        };
+
+        if (dim || enc) {
             viz.encoding = {
-                x: viz.dimensions.x ? { field: viz.dimensions.x, type: 'categorical' as const, label: viz.dimensions.x } : undefined,
-                y: viz.dimensions.y ? { field: viz.dimensions.y, type: 'quantitative' as const, label: viz.dimensions.y } : undefined,
-                series: viz.dimensions.series ? { field: viz.dimensions.series, type: 'categorical' as const, label: viz.dimensions.series } : undefined,
-                color: viz.dimensions.color ? { field: viz.dimensions.color, type: 'categorical' as const, label: viz.dimensions.color } : undefined,
-                size: viz.dimensions.size ? { field: viz.dimensions.size, type: 'quantitative' as const, label: viz.dimensions.size } : undefined,
-                facet: viz.dimensions.facet ? { field: viz.dimensions.facet, type: 'categorical' as const, label: viz.dimensions.facet } : undefined,
+                ...enc,
+                x: mergeAxis('x', 'categorical'),
+                y: mergeAxis('y', 'quantitative'),
+                series: mergeAxis('series', 'categorical'),
+                color: mergeAxis('color', 'categorical'),
+                size: mergeAxis('size', 'quantitative'),
+                facet: mergeAxis('facet', 'categorical'),
             };
         }
 

@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { GenerativeChat } from '../components/chat/GenerativeChat';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { useSessionInUrl } from '../hooks/useSessionInUrl';
 
 export function Workspace() {
     const { id: workspaceId } = useParams<{ id: string }>();
@@ -12,6 +13,8 @@ export function Workspace() {
         setCurrentWorkspace,
         refreshDatasources,
     } = useWorkspace();
+
+    useSessionInUrl(workspaceId);
 
     useEffect(() => {
         if (!workspaceId || workspaces.length === 0) return;

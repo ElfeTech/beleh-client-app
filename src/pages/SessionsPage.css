@@ -41,8 +41,8 @@ html[data-theme='dark'] .sessions-header {
 }
 
 .sessions-header h1 {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: var(--text-xl);
+  font-weight: 700;
   color: var(--text-primary);
   margin: 0;
 }
@@ -52,7 +52,7 @@ html[data-theme='dark'] .sessions-header {
   align-items: center;
   gap: 6px;
   color: var(--text-secondary);
-  font-size: 14px;
+  font-size: var(--text-sm);
 }
 
 .selected-dataset svg {
@@ -251,7 +251,7 @@ html[data-theme='dark'] .session-card.active {
 }
 
 .sessions-empty p {
-  font-size: 14px;
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   max-width: 300px;
   margin: 0 auto 24px;
