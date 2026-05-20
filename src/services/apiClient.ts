@@ -37,6 +37,7 @@ import type {
   PlanResponse
 } from '../types/usage';
 import type { FeedbackSubmission } from '../types/feedback';
+import { formatApiErrorMessage } from '../utils/apiErrorMessage';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -184,18 +185,7 @@ class APIClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[API] Error response:', errorData);
-
-        // Handle structured error details (e.g., quota exceeded)
-        if (errorData.detail) {
-          if (typeof errorData.detail === 'object' && errorData.detail.message) {
-            throw new Error(errorData.detail.message);
-          }
-          if (typeof errorData.detail === 'string') {
-            throw new Error(errorData.detail);
-          }
-        }
-
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(formatApiErrorMessage(errorData, response.status));
       }
 
       const data = await response.json();

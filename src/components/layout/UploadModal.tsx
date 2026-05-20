@@ -7,6 +7,7 @@ import { useUsage } from '../../context/UsageContext';
 import { apiClient } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import type { DataSourceResponse } from '../../types/api';
+import { extractApiErrorDetail, formatDatasourceError } from '../../utils/apiErrorMessage';
 import './UploadModal.css';
 
 interface UploadModalProps {
@@ -74,7 +75,7 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
         }, 1500);
       } else if (dataset.status === 'FAILED') {
         setProgress(0);
-        setError(dataset.ingestion_error || 'Dataset processing failed');
+        setError(formatDatasourceError(dataset));
         if (pollIntervalRef.current) {
           clearInterval(pollIntervalRef.current);
         }
@@ -105,6 +106,13 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
       const token = await user.getIdToken();
       const dataset = await apiClient.createDatasource(token, workspaceId, file, name);
 
+      if (dataset.status === 'FAILED') {
+        setUploadStatus('FAILED');
+        setProgress(0);
+        setError(formatDatasourceError(dataset));
+        return;
+      }
+
       setUploadStatus(dataset.status);
       setProgress(25);
 
@@ -115,7 +123,11 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
       pollDatasetStatus(dataset.id);
     } catch (err) {
       console.error('Upload failed:', err);
-      setError(err instanceof Error ? err.message : 'Failed to upload datasource');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError(extractApiErrorDetail(err) ?? 'Failed to upload datasource');
+      }
       setUploadStatus('FAILED');
       setProgress(0);
     }
@@ -141,7 +153,7 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
       case 'READY':
         return 'Dataset ready';
       case 'FAILED':
-        return 'Processing failed';
+        return error || 'Processing failed';
       case 'NEEDS_INPUT':
         return 'Needs your input…';
       default:

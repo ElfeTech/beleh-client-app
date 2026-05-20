@@ -311,6 +311,8 @@ export interface ExecutionMetadata {
   visualization_hint: string | null;
   error_type: string | null;
   message: string | null;
+  /** Compiled SQL returned by the analytical engine when available */
+  sql_query?: string | null;
 }
 
 export interface ChatMessageMetadata {

@@ -394,7 +394,11 @@ export function ChatComposer({
               if (canSend) onSubmit();
             }
           }}
-          placeholder={selectedDatasourceId === null || selectedDatasourceId === '' ? 'Ask a general question...' : 'Query selected source…'}
+          placeholder={
+            selectedDatasourceId === null || selectedDatasourceId === ''
+              ? 'Ask Beleh AI Analyst to query schemas, calculate savings, or produce charts...'
+              : 'Ask Beleh AI Analyst to query schemas, calculate savings, or produce charts...'
+          }
           disabled={disabled}
           rows={1}
           wrap="soft"
@@ -410,7 +414,9 @@ export function ChatComposer({
           disabled={!canSend}
           className={cn(
             'self-center shrink-0 rounded-xl px-4 py-2 text-[11px] font-extrabold tracking-widest transition-all active:scale-[0.97]',
-            canSend ? 'bg-primary text-primary-foreground shadow-sm hover:opacity-95' : 'cursor-not-allowed bg-muted text-muted-foreground'
+            canSend
+              ? 'bg-[color:var(--accent-teal-600)] text-white shadow-md hover:opacity-95'
+              : 'cursor-not-allowed bg-muted text-muted-foreground'
           )}
         >
           SEND

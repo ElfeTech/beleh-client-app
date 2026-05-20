@@ -53,7 +53,7 @@ export function MainLayout() {
 
     return (
         <div className="flex h-screen overflow-hidden font-sans bg-[color:var(--bg-secondary)]">
-            {!isMobile && <UnifiedSidebar />}
+            {!isMobile && <UnifiedSidebar variant="rail" />}
 
             {isMobile && (
                 <>
@@ -99,7 +99,7 @@ export function MainLayout() {
                             />
                             <div
                                 id="mobile-nav-drawer"
-                                className="fixed bottom-0 left-0 top-0 z-[1100] flex w-[min(90vw,288px)] max-w-full flex-col border-r border-[color:var(--border-primary)] bg-[color:var(--bg-secondary)] shadow-2xl"
+                                className="fixed bottom-0 left-0 top-0 z-[1100] flex w-[min(92vw,22rem)] max-w-full flex-col border-r border-[color:var(--sidebar-border)] bg-[color:var(--sidebar-bg)] shadow-2xl"
                                 role="dialog"
                                 aria-modal="true"
                                 aria-label="Navigation"
@@ -115,7 +115,7 @@ export function MainLayout() {
                                     </button>
                                 </div>
                                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                                    <UnifiedSidebar />
+                                    <UnifiedSidebar variant="drawer" />
                                 </div>
                             </div>
                         </>

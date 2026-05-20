@@ -8,6 +8,7 @@ import { StepIndicator } from '../upload/StepIndicator';
 import { SheetSelection } from '../upload/SheetSelection';
 import { HeaderSelection } from '../upload/HeaderSelection';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { formatDatasourceError } from '../../utils/apiErrorMessage';
 import './UploadModal.css';
 
 interface DatasourceModalProps {
@@ -125,7 +126,8 @@ export function DatasourceModal({ mode, workspaceId, datasourceId, initialName =
                 }, 1500);
             } else if (dataset.status === 'FAILED') {
                 setProgress(0);
-                setError(dataset.ingestion_error || 'Dataset processing failed');
+                setUploadStatus('FAILED');
+                setError(formatDatasourceError(dataset));
                 if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
             }
         } catch (err) {
@@ -181,6 +183,13 @@ export function DatasourceModal({ mode, workspaceId, datasourceId, initialName =
 
             const needsInput = result.status === 'NEEDS_INPUT' ||
                 (result.status === 'FAILED' && result.metadata_json?.requires_user_input);
+
+            if (result.status === 'FAILED' && !needsInput) {
+                setUploadStatus('FAILED');
+                setProgress(0);
+                setError(formatDatasourceError(result));
+                return;
+            }
 
             if (needsInput) {
                 setUploadStatus('NEEDS_INPUT');
@@ -287,7 +296,7 @@ export function DatasourceModal({ mode, workspaceId, datasourceId, initialName =
             case 'NEEDS_INPUT': return 'Action required';
             case 'PROCESSING': return 'Processing data...';
             case 'READY': return 'Dataset ready!';
-            case 'FAILED': return 'Processing failed';
+            case 'FAILED': return error || 'Processing failed';
             default: return '';
         }
     };
@@ -370,6 +379,8 @@ export function DatasourceModal({ mode, workspaceId, datasourceId, initialName =
                         <p className="status-help-text">
                             {uploadStatus === 'READY'
                                 ? "Everything looks good! Your data is ready to be visualized."
+                                : uploadStatus === 'FAILED'
+                                    ? (error || 'Processing failed. Please try again.')
                                 : uploadStatus === 'PROCESSING'
                                     ? "We're almost there. Just making sure all your data is properly structured."
                                     : "Preparing your data..."
