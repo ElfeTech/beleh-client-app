@@ -1,26 +1,38 @@
 import React from 'react';
+import { Clock } from 'lucide-react';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
+import './SettingsShared.css';
 import './ComingSoon.css';
 
 interface ComingSoonProps {
   title: string;
   description?: string;
+  breadcrumbLabel?: string;
 }
 
-export const ComingSoon: React.FC<ComingSoonProps> = ({ title, description }) => {
+export const ComingSoon: React.FC<ComingSoonProps> = ({
+  title,
+  description,
+  breadcrumbLabel,
+}) => {
+  const crumb = breadcrumbLabel || title.toUpperCase().replace(/\s+/g, ' ');
+
   return (
     <div className="coming-soon-container">
-      <div className="coming-soon-content">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <h2>{title}</h2>
-        {description && <p>{description}</p>}
+      <SettingsSectionHeader
+        breadcrumbLabel={crumb}
+        title={title}
+        description={description || 'This area is under development.'}
+        icon={<Clock size={20} strokeWidth={1.75} />}
+      />
+      <div className="settings-card coming-soon-content">
         <div className="coming-soon-badge">Coming Soon</div>
+        <p className="coming-soon-lede">
+          We are building this experience to match enterprise governance workflows.
+        </p>
+        <button type="button" className="btn-gradient-primary btn-gradient-primary--sm" disabled>
+          + Send Invite
+        </button>
       </div>
     </div>
   );

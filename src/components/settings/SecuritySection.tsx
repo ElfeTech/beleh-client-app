@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { Shield } from 'lucide-react';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
+import './SettingsShared.css';
 import './SecuritySection.css';
 
 export function SecuritySection() {
@@ -37,25 +40,19 @@ export function SecuritySection() {
   };
 
   return (
-    <div className="security-section">
-      {/* Header */}
-      <div className="section-header">
-        <div className="header-icon security">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-          </svg>
-        </div>
-        <div className="header-text">
-          <h1>Security</h1>
-          <p>Manage your account security and authentication settings</p>
-        </div>
-      </div>
+    <div className="settings-page-section security-section">
+      <SettingsSectionHeader
+        breadcrumbLabel="SECURITY"
+        title="Security"
+        description="Manage your account security and authentication settings"
+        icon={<Shield size={20} strokeWidth={1.75} />}
+      />
 
       {/* Authentication Method */}
       <div className="settings-card">
-        <div className="card-header">
-          <h2>Authentication Method</h2>
-          <span className="card-badge">Active</span>
+        <div className="settings-card__head">
+          <h2 className="settings-card__title">Authentication Method</h2>
+          <span className="settings-card__badge settings-card__badge--success">Active</span>
         </div>
         
         <div className="auth-method-item">
@@ -71,15 +68,17 @@ export function SecuritySection() {
             <h3>Google Sign-In</h3>
             <p>You're signed in with your Google account</p>
           </div>
-          <span className="status-badge active">Connected</span>
+          <span className="settings-status-pill settings-status-pill--success">Connected</span>
         </div>
       </div>
 
       {/* Two-Factor Authentication */}
       <div className="settings-card tfa-card">
-        <div className="card-header">
-          <h2>Two-Factor Authentication (2FA)</h2>
-          <span className={`card-badge ${is2FAEnabled ? 'success' : 'warning'}`}>
+        <div className="settings-card__head">
+          <h2 className="settings-card__title">Two-Factor Authentication (2FA)</h2>
+          <span
+            className={`settings-card__badge ${is2FAEnabled ? 'settings-card__badge--success' : 'settings-card__badge--warning'}`}
+          >
             {is2FAEnabled ? 'Enabled' : 'Not Enabled'}
           </span>
         </div>
@@ -110,8 +109,9 @@ export function SecuritySection() {
             </div>
           </div>
           
-          <button 
-            className={`tfa-toggle-btn ${is2FAEnabled ? 'enabled' : ''}`}
+          <button
+            type="button"
+            className={`btn-gradient-primary btn-gradient-primary--sm tfa-toggle-btn ${is2FAEnabled ? 'tfa-toggle-btn--outline' : ''}`}
             onClick={handle2FAToggle}
           >
             {is2FAEnabled ? (
@@ -161,9 +161,11 @@ export function SecuritySection() {
 
       {/* Active Sessions */}
       <div className="settings-card">
-        <div className="card-header">
-          <h2>Active Sessions</h2>
-          <button className="text-btn danger">Sign out all</button>
+        <div className="settings-card__head">
+          <h2 className="settings-card__title">Active Sessions</h2>
+          <button type="button" className="settings-text-btn settings-text-btn--danger">
+            Sign out all
+          </button>
         </div>
 
         <div className="sessions-list">
@@ -194,7 +196,9 @@ export function SecuritySection() {
             <div className="session-details">
               <div className="session-header">
                 <h4>iPhone • Safari</h4>
-                <button className="text-btn small">Revoke</button>
+                <button type="button" className="settings-text-btn settings-text-btn--small">
+                  Revoke
+                </button>
               </div>
               <p>San Francisco, CA • Last active: 2 hours ago</p>
             </div>
@@ -267,7 +271,7 @@ export function SecuritySection() {
                   </div>
                 </div>
 
-                <button className="primary-btn" onClick={() => setSetupStep('verify')}>
+                <button type="button" className="btn-gradient-primary" onClick={() => setSetupStep('verify')}>
                   Continue
                 </button>
               </div>
@@ -298,11 +302,12 @@ export function SecuritySection() {
                 </div>
 
                 <div className="modal-actions">
-                  <button className="secondary-btn" onClick={() => setSetupStep('scan')}>
+                  <button type="button" className="settings-outline-btn" onClick={() => setSetupStep('scan')}>
                     Back
                   </button>
-                  <button 
-                    className="primary-btn" 
+                  <button
+                    type="button"
+                    className="btn-gradient-primary"
                     onClick={handleVerifyCode}
                     disabled={verificationCode.length !== 6}
                   >
@@ -343,8 +348,8 @@ export function SecuritySection() {
                   </button>
                 </div>
 
-                <button className="primary-btn" onClick={handleComplete2FASetup}>
-                  I've saved my codes
+                <button type="button" className="btn-gradient-primary" onClick={handleComplete2FASetup}>
+                  I&apos;ve saved my codes
                 </button>
               </div>
             )}

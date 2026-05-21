@@ -99,7 +99,7 @@ export function MainLayout() {
                             />
                             <div
                                 id="mobile-nav-drawer"
-                                className="fixed bottom-0 left-0 top-0 z-[1100] flex w-[min(92vw,22rem)] max-w-full flex-col border-r border-[color:var(--sidebar-border)] bg-[color:var(--sidebar-bg)] shadow-2xl"
+                                className="fixed bottom-0 left-0 top-0 z-[1100] flex w-[min(92vw,24rem)] max-w-full flex-col border-r border-[color:var(--sidebar-border)] bg-[color:var(--sidebar-bg)] shadow-2xl"
                                 role="dialog"
                                 aria-modal="true"
                                 aria-label="Navigation"

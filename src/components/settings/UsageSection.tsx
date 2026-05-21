@@ -1,19 +1,173 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { CreditCard, Check, Sparkles } from 'lucide-react';
 import { useUsage } from '../../context/UsageContext';
-import { format } from 'date-fns';
-import { UpgradePlansModal } from './UpgradePlansModal';
+import { useAuth } from '../../context/useAuth';
+import { apiClient } from '../../services/apiClient';
+import type { Plan } from '../../types/usage';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
+import { BillingCycleToggle, type BillingCycle } from './BillingCycleToggle';
+import './SettingsShared.css';
 import './UsageSection.css';
 
+function formatTokenCount(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+function formatUsageValue(n: number, metricKey: string): string {
+  if (metricKey === 'tokens') return formatTokenCount(n);
+  return n.toLocaleString();
+}
+
+function pct(used: number, limit: number): number {
+  if (limit <= 0) return 0;
+  return Math.min(100, (used / limit) * 100);
+}
+
+function planFeatures(plan: Plan): string[] {
+  const { limits } = plan;
+  const unlimited = plan.tier.toLowerCase().includes('enterprise');
+  return [
+    unlimited
+      ? 'Unlimited queries per month'
+      : `${limits.monthly_query_limit.toLocaleString()} Queries per month`,
+    unlimited ? 'Unlimited datasets' : `${limits.max_datasets} Datasets`,
+    unlimited
+      ? 'Unlimited AI tokens'
+      : `${formatTokenCount(limits.monthly_llm_token_limit)} Tokens per month`,
+    unlimited
+      ? 'Unlimited chart renders'
+      : `${limits.monthly_chart_renders_limit.toLocaleString()} Chart renders`,
+    unlimited
+      ? 'Unlimited workspaces'
+      : `${limits.max_workspaces} Workspace${limits.max_workspaces > 1 ? 's' : ''}`,
+    ...(unlimited ? ['Dedicated VPC clusters', 'Scale clusters'] : []),
+  ];
+}
+
+function isProTier(plan: Plan): boolean {
+  const t = plan.tier.toLowerCase();
+  return t.includes('pro') || plan.name.toLowerCase().includes('pro');
+}
+
+function isEnterpriseTier(plan: Plan): boolean {
+  const t = plan.tier.toLowerCase();
+  return t.includes('enterprise') || plan.name.toLowerCase().includes('enterprise');
+}
+
+/** Shown when the API returns no plans or the request fails */
+const DEFAULT_BILLING_PLANS: Plan[] = [
+  {
+    id: 'free_starter',
+    name: 'Free Starter',
+    tier: 'free',
+    description: 'Free Developer Sandbox',
+    price_monthly: 0,
+    price_yearly: 0,
+    limits: {
+      monthly_query_limit: 100,
+      monthly_llm_token_limit: 50_000,
+      monthly_rows_scanned_limit: 100_000,
+      monthly_chart_renders_limit: 50,
+      max_datasets: 3,
+      max_workspaces: 1,
+      max_members_per_workspace: 1,
+    },
+    features: {},
+    is_active: true,
+  },
+  {
+    id: 'pro_developer',
+    name: 'Pro Developer',
+    tier: 'pro',
+    description: 'For growing teams and production workloads',
+    price_monthly: 49,
+    price_yearly: 470,
+    limits: {
+      monthly_query_limit: 5_000,
+      monthly_llm_token_limit: 500_000,
+      monthly_rows_scanned_limit: 5_000_000,
+      monthly_chart_renders_limit: 500,
+      max_datasets: 25,
+      max_workspaces: 5,
+      max_members_per_workspace: 10,
+    },
+    features: {},
+    is_active: true,
+  },
+  {
+    id: 'enterprise',
+    name: 'Enterprise',
+    tier: 'enterprise',
+    description: 'Dedicated clusters and compliance controls',
+    price_monthly: 199,
+    price_yearly: 1_910,
+    limits: {
+      monthly_query_limit: 999_999,
+      monthly_llm_token_limit: 10_000_000,
+      monthly_rows_scanned_limit: 999_999_999,
+      monthly_chart_renders_limit: 999_999,
+      max_datasets: 999,
+      max_workspaces: 999,
+      max_members_per_workspace: 999,
+    },
+    features: {},
+    is_active: true,
+  },
+];
+
+function resolveDisplayPlans(apiPlans: Plan[]): Plan[] {
+  const active = apiPlans.filter((p) => p.is_active).sort((a, b) => a.price_monthly - b.price_monthly);
+  return active.length > 0 ? active : DEFAULT_BILLING_PLANS;
+}
+
+function isCurrentPlan(tierPlan: Plan, currentPlanId: string, currentTier?: string): boolean {
+  if (tierPlan.id === currentPlanId) return true;
+  if (!currentTier) return false;
+  return tierPlan.tier.toLowerCase() === currentTier.toLowerCase();
+}
+
 export function UsageSection() {
-  const { currentUsage, summary, remaining, isLoading, error } = useUsage();
-  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const { user } = useAuth();
+  const { currentUsage, remaining, isLoading, error } = useUsage();
+  const [plans, setPlans] = useState<Plan[]>(DEFAULT_BILLING_PLANS);
+  const [plansLoading, setPlansLoading] = useState(true);
+  const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
+
+  const fetchPlans = useCallback(async () => {
+    if (!user) {
+      setPlans(DEFAULT_BILLING_PLANS);
+      setPlansLoading(false);
+      return;
+    }
+    try {
+      setPlansLoading(true);
+      const token = await user.getIdToken();
+      const [available, currentPlanRes] = await Promise.all([
+        apiClient.getAvailablePlans(),
+        apiClient.getCurrentPlan(token),
+      ]);
+      setPlans(resolveDisplayPlans(available.plans));
+      setBillingCycle(currentPlanRes.billing_cycle === 'yearly' ? 'yearly' : 'monthly');
+    } catch (e) {
+      console.error('Failed to load plans:', e);
+      setPlans(DEFAULT_BILLING_PLANS);
+    } finally {
+      setPlansLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    void fetchPlans();
+  }, [fetchPlans]);
 
   if (isLoading && !currentUsage) {
     return (
-      <div className="usage-section">
-        <div className="loading-state">
-          <div className="spinner"></div>
-          <p>Loading usage data...</p>
+      <div className="settings-page-section billing-page">
+        <div className="billing-loading settings-card">
+          <div className="billing-spinner" />
+          <p>Loading billing data…</p>
         </div>
       </div>
     );
@@ -21,369 +175,193 @@ export function UsageSection() {
 
   if (error && !currentUsage) {
     return (
-      <div className="usage-section">
-        <div className="error-state">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="8" x2="12" y2="12" />
-            <line x1="12" y1="16" x2="12.01" y2="16" />
-          </svg>
-          <h3>Failed to Load Usage Data</h3>
+      <div className="settings-page-section billing-page">
+        <div className="billing-error settings-card">
+          <h3>Failed to load billing</h3>
           <p>{error}</p>
         </div>
       </div>
     );
   }
 
-  const getProgressColor = (percentage: number) => {
-    if (percentage >= 100) return '#EF4444';
-    if (percentage >= 90) return '#EF4444';
-    if (percentage >= 70) return '#F59E0B';
-    return '#3B82F6';
-  };
+  const plan = currentUsage?.plan;
+  const metrics = currentUsage?.metrics;
+  const currentPlanId = plan?.id ?? '';
 
-  const getProgressGradient = (percentage: number) => {
-    if (percentage >= 100) return 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';
-    if (percentage >= 90) return 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)';
-    if (percentage >= 70) return 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)';
-    return 'linear-gradient(135deg, #3B82F6 0%, #2563EB 100%)';
-  };
+  const usageMetrics = [
+    {
+      key: 'queries',
+      label: 'Query quota',
+      caption: `${remaining?.queries_limit.toLocaleString() ?? 0} Queries per month`,
+      used: remaining?.queries_used ?? metrics?.queries_used ?? 0,
+      limit: remaining?.queries_limit ?? metrics?.queries_limit ?? 0,
+    },
+    {
+      key: 'datasets',
+      label: 'Table pools',
+      caption: `${metrics?.datasets_limit ?? 0} Datasets`,
+      used: metrics?.datasets_used ?? 0,
+      limit: metrics?.datasets_limit ?? 0,
+    },
+    {
+      key: 'tokens',
+      label: 'Inference',
+      caption: `${formatTokenCount(metrics?.llm_tokens_limit ?? 0)} Tokens per month`,
+      used: metrics?.llm_tokens_used ?? 0,
+      limit: metrics?.llm_tokens_limit ?? 0,
+    },
+    {
+      key: 'charts',
+      label: 'Graphics',
+      caption: `${metrics?.chart_renders_limit ?? 0} Chart renders`,
+      used: metrics?.chart_renders_used ?? 0,
+      limit: metrics?.chart_renders_limit ?? 0,
+    },
+    {
+      key: 'workspaces',
+      label: 'Hierarchy',
+      caption: `${plan?.limits.max_workspaces ?? 1} Workspace${(plan?.limits.max_workspaces ?? 1) > 1 ? 's' : ''}`,
+      used: 1,
+      limit: plan?.limits.max_workspaces ?? 1,
+    },
+  ];
 
-  const formatDate = (dateString: string) => {
-    try {
-      return format(new Date(dateString), 'MMM dd, yyyy');
-    } catch {
-      return dateString;
-    }
-  };
-
-  const queryPercentage = remaining
-    ? (remaining.queries_used / remaining.queries_limit) * 100
-    : 0;
-
-  const datasetsPercentage = currentUsage
-    ? (currentUsage.metrics.datasets_used / currentUsage.metrics.datasets_limit) * 100
-    : 0;
-
-  const tokensPercentage = currentUsage
-    ? (currentUsage.metrics.llm_tokens_used / currentUsage.metrics.llm_tokens_limit) * 100
-    : 0;
+  const getPlanPrice = (p: Plan) => (billingCycle === 'monthly' ? p.price_monthly : p.price_yearly);
 
   return (
-    <div className="usage-section-modern">
-      {/* Hero Section */}
-      <div className="usage-hero">
-        <div className="hero-content">
-          <div className="hero-text">
-            <h1>Usage & Billing</h1>
-            <p>Monitor your usage, manage your subscription, and upgrade anytime</p>
-          </div>
-          {currentUsage?.reset_at && (
-            <div className="cycle-badge">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <polyline points="12 6 12 12 16 14" />
-              </svg>
-              <span>Resets {formatDate(currentUsage.reset_at)}</span>
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="settings-page-section billing-page">
+      <SettingsSectionHeader
+        breadcrumbLabel="BILLING & PLANS"
+        title="Billing & Plans Settings"
+        description="Manage subscription and files. Keep values synchronous for corporate compliance audits."
+        icon={<CreditCard size={20} strokeWidth={1.75} />}
+      />
 
-      {/* Plan Overview Card */}
-      {currentUsage?.plan && (
-        <div className="plan-overview-card">
-          <div className="plan-header-section">
-            <div className="plan-info">
-              <div className="plan-tier-badge">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
-                <span>{currentUsage.plan.name} Plan</span>
-              </div>
-              <h2 className="plan-title">{currentUsage.plan.description}</h2>
-              <div className="plan-price">
-                <span className="price-amount">${currentUsage.plan.price_monthly}</span>
-                <span className="price-period">per month</span>
-              </div>
-            </div>
-            <button className="upgrade-btn-header" disabled /* onClick={() => setShowUpgradeModal(true)}*/>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              </svg>
-              Upgrade Plan
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Usage Stats Grid */}
-      <div className="usage-stats-grid">
-        {/* Queries Card */}
-        <div className="stat-card queries-card">
-          <div className="stat-card-header">
-            <div className="stat-icon queries-icon">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
-            </div>
-            <div className="stat-header-text">
-              <h3>Queries</h3>
-              <p>Monthly API queries</p>
-            </div>
-          </div>
-          <div className="stat-numbers">
-            <div className="stat-value">{remaining?.queries_used.toLocaleString() || 0}</div>
-            <div className="stat-limit">of {remaining?.queries_limit.toLocaleString() || 0}</div>
-          </div>
-          <div className="stat-progress">
-            <div className="progress-track">
-              <div
-                className="progress-bar-fill"
-                style={{
-                  width: `${Math.min(queryPercentage, 100)}%`,
-                  background: getProgressGradient(queryPercentage),
-                }}
-              >
-                <div className="progress-shimmer"></div>
-              </div>
-            </div>
-            <div className="progress-labels">
-              <span className="progress-percentage" style={{ color: getProgressColor(queryPercentage) }}>
-                {queryPercentage.toFixed(0)}%
+      {plan && (
+        <section className="billing-current-plan settings-card">
+          <div className="billing-current-plan__top">
+            <div className="billing-current-plan__badges">
+              <span className="billing-badge billing-badge--current">
+                Current plan: {plan.name}
               </span>
-              <span className="progress-remaining">{remaining?.queries_remaining.toLocaleString()} left</span>
+              <span className="billing-badge billing-badge--id">ID: {plan.id}</span>
             </div>
+            <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
           </div>
+          <h2 className="billing-current-plan__name">{plan.description || plan.name}</h2>
+          <p className="billing-current-plan__desc">
+            Ideal for individual developers exploring schema catalogs and AI-assisted analytics in a
+            secure sandbox environment.
+          </p>
+        </section>
+      )}
+
+      <section className="billing-section">
+        <h3 className="billing-section__title">
+          <Check size={16} strokeWidth={2.5} aria-hidden />
+          Plan includes &amp; usage tracker
+        </h3>
+        <div className="billing-usage-grid">
+          {usageMetrics.map(({ key, label, caption, used, limit }) => (
+            <div key={key} className="billing-usage-card settings-card">
+              <p className="billing-usage-card__label">{label}</p>
+              <p className="billing-usage-card__caption">{caption}</p>
+              <div className="billing-usage-card__bar">
+                <div className="billing-usage-card__fill" style={{ width: `${pct(used, limit)}%` }} />
+              </div>
+              <p className="billing-usage-card__used">
+                Used: {formatUsageValue(used, key)} / Limit: {formatUsageValue(limit, key)}
+              </p>
+            </div>
+          ))}
         </div>
+      </section>
 
-        {/* Datasets Card */}
-        {currentUsage?.metrics && (
-          <div className="stat-card datasets-card">
-            <div className="stat-card-header">
-              <div className="stat-icon datasets-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-                  <line x1="12" y1="22.08" x2="12" y2="12" />
-                </svg>
-              </div>
-              <div className="stat-header-text">
-                <h3>Datasets</h3>
-                <p>Active data sources</p>
-              </div>
-            </div>
-            <div className="stat-numbers">
-              <div className="stat-value">{currentUsage.metrics.datasets_used}</div>
-              <div className="stat-limit">of {currentUsage.metrics.datasets_limit}</div>
-            </div>
-            <div className="stat-progress">
-              <div className="progress-track">
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    width: `${Math.min(datasetsPercentage, 100)}%`,
-                    background: getProgressGradient(datasetsPercentage),
-                  }}
-                >
-                  <div className="progress-shimmer"></div>
-                </div>
-              </div>
-              <div className="progress-labels">
-                <span className="progress-percentage" style={{ color: getProgressColor(datasetsPercentage) }}>
-                  {datasetsPercentage.toFixed(0)}%
-                </span>
-                <span className="progress-remaining">{currentUsage.metrics.datasets_remaining} available</span>
-              </div>
-            </div>
+      <section className="billing-section">
+        <h3 className="billing-section__title">
+          <Sparkles size={16} strokeWidth={2} aria-hidden />
+          Available upgrade plans &amp; limits
+        </h3>
+
+        {plansLoading ? (
+          <div className="billing-plans-loading settings-card">
+            <div className="billing-spinner" />
+            <p>Loading plans…</p>
           </div>
-        )}
+        ) : (
+          <div className="billing-plans-grid">
+            {plans.map((tierPlan) => {
+              const isCurrent = isCurrentPlan(tierPlan, currentPlanId, plan?.tier);
+              const recommended = isProTier(tierPlan);
+              const enterprise = isEnterpriseTier(tierPlan);
+              const price = getPlanPrice(tierPlan);
 
-        {/* LLM Tokens Card */}
-        {currentUsage?.metrics && (
-          <div className="stat-card tokens-card">
-            <div className="stat-card-header">
-              <div className="stat-icon tokens-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5M2 12l10 5 10-5" />
-                </svg>
-              </div>
-              <div className="stat-header-text">
-                <h3>LLM Tokens</h3>
-                <p>AI processing tokens</p>
-              </div>
-            </div>
-            <div className="stat-numbers">
-              <div className="stat-value">{(currentUsage.metrics.llm_tokens_used / 1000).toFixed(1)}K</div>
-              <div className="stat-limit">of {(currentUsage.metrics.llm_tokens_limit / 1000).toFixed(0)}K</div>
-            </div>
-            <div className="stat-progress">
-              <div className="progress-track">
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    width: `${Math.min(tokensPercentage, 100)}%`,
-                    background: getProgressGradient(tokensPercentage),
-                  }}
+              return (
+                <article
+                  key={tierPlan.id}
+                  className={`billing-tier-card settings-card ${recommended ? 'billing-tier-card--recommended' : ''} ${isCurrent ? 'billing-tier-card--current' : ''}`}
                 >
-                  <div className="progress-shimmer"></div>
-                </div>
-              </div>
-              <div className="progress-labels">
-                <span className="progress-percentage" style={{ color: getProgressColor(tokensPercentage) }}>
-                  {tokensPercentage.toFixed(0)}%
-                </span>
-                <span className="progress-remaining">
-                  {(currentUsage.metrics.llm_tokens_remaining / 1000).toFixed(1)}K left
-                </span>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Warnings Section */}
-      {summary?.warnings && summary.warnings.length > 0 && (
-        <div className="alerts-section">
-          <h3 className="section-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-              <line x1="12" y1="9" x2="12" y2="13" />
-              <line x1="12" y1="17" x2="12.01" y2="17" />
-            </svg>
-            Usage Alerts
-          </h3>
-          <div className="alerts-list">
-            {summary.warnings.map((warning, index) => (
-              <div key={index} className={`alert-item alert-${warning.level}`}>
-                <div className="alert-icon-wrapper">
-                  {warning.level === 'critical' ? (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="15" y1="9" x2="9" y2="15" />
-                      <line x1="9" y1="9" x2="15" y2="15" />
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="10" />
-                      <line x1="12" y1="8" x2="12" y2="12" />
-                      <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
+                  {recommended && (
+                    <span className="billing-tier-card__ribbon">Recommended</span>
                   )}
-                </div>
-                <p className="alert-message">{warning.message}</p>
-              </div>
-            ))}
+                  <header className="billing-tier-card__header">
+                    <h4 className="billing-tier-card__name">{tierPlan.name}</h4>
+                    {recommended && (
+                      <p className="billing-tier-card__promo">Save 20% on Annual</p>
+                    )}
+                    {enterprise && (
+                      <p className="billing-tier-card__promo billing-tier-card__promo--link">
+                        Scale clusters
+                      </p>
+                    )}
+                  </header>
+                  <div className="billing-tier-card__price">
+                    <span className="billing-tier-card__amount">${price}</span>
+                    <span className="billing-tier-card__period">
+                      / {billingCycle === 'monthly' ? 'month' : 'year'}
+                    </span>
+                  </div>
+                  <ul className="billing-tier-card__features">
+                    {planFeatures(tierPlan).map((feat) => (
+                      <li key={feat}>
+                        <Check size={14} strokeWidth={2.5} className="billing-tier-card__check" aria-hidden />
+                        {feat}
+                      </li>
+                    ))}
+                  </ul>
+                  <footer className="billing-tier-card__footer">
+                    {isCurrent ? (
+                      <button type="button" className="billing-tier-card__btn billing-tier-card__btn--active" disabled>
+                        Currently active plan
+                      </button>
+                    ) : (
+                      <button type="button" className="billing-tier-card__btn billing-tier-card__btn--soon" disabled>
+                        Coming soon
+                      </button>
+                    )}
+                  </footer>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <section className="billing-stripe-banner settings-card">
+        <div className="billing-stripe-banner__text">
+          <span className="billing-stripe-dot" aria-hidden />
+          <div>
+            <h3>Secure Stripe gateway enabled</h3>
+            <p>
+              Payments and subscription changes are processed through the Stripe billing portal.
+              Invoices, tax IDs, and payment methods are managed there.
+            </p>
           </div>
         </div>
-      )}
-
-      {/* Plan Features Section */}
-      {currentUsage?.plan?.limits && (
-        <div className="features-section">
-          <h3 className="section-title">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-            Plan Includes
-          </h3>
-          <div className="features-grid-modern">
-            <div className="feature-card">
-              <div className="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                </svg>
-              </div>
-              <div className="feature-content">
-                <div className="feature-value">{currentUsage.plan.limits.monthly_query_limit.toLocaleString()}</div>
-                <div className="feature-label">Queries per month</div>
-              </div>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <line x1="9" y1="9" x2="15" y2="9" />
-                  <line x1="9" y1="15" x2="15" y2="15" />
-                </svg>
-              </div>
-              <div className="feature-content">
-                <div className="feature-value">{currentUsage.plan.limits.max_datasets}</div>
-                <div className="feature-label">Datasets</div>
-              </div>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 2L2 7l10 5 10-5-10-5z" />
-                  <path d="M2 17l10 5 10-5" />
-                </svg>
-              </div>
-              <div className="feature-content">
-                <div className="feature-value">{(currentUsage.plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K</div>
-                <div className="feature-label">AI tokens per month</div>
-              </div>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="18" y1="20" x2="18" y2="10" />
-                  <line x1="12" y1="20" x2="12" y2="4" />
-                  <line x1="6" y1="20" x2="6" y2="14" />
-                </svg>
-              </div>
-              <div className="feature-content">
-                <div className="feature-value">{currentUsage.plan.limits.monthly_chart_renders_limit}</div>
-                <div className="feature-label">Chart renders</div>
-              </div>
-            </div>
-            <div className="feature-card">
-              <div className="feature-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                </svg>
-              </div>
-              <div className="feature-content">
-                <div className="feature-value">{currentUsage.plan.limits.max_workspaces}</div>
-                <div className="feature-label">Workspace{currentUsage.plan.limits.max_workspaces > 1 ? 's' : ''}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Upgrade CTA */}
-      {queryPercentage >= 70 && (
-        <div className="upgrade-cta-modern">
-          <div className="cta-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-            </svg>
-          </div>
-          <div className="cta-content">
-            <h3>Running low on queries?</h3>
-            <p>Upgrade to a higher plan for more capacity, advanced features, and priority support</p>
-          </div>
-          <button className="cta-button" onClick={() => setShowUpgradeModal(true)}>
-            Explore Plans
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="5" y1="12" x2="19" y2="12" />
-              <polyline points="12 5 19 12 12 19" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* Upgrade Plans Modal */}
-      {currentUsage?.plan && (
-        <UpgradePlansModal
-          isOpen={showUpgradeModal}
-          currentPlanId={currentUsage.plan.id}
-          onClose={() => setShowUpgradeModal(false)}
-        />
-      )}
+        <button type="button" className="billing-stripe-portal-btn" disabled>
+          Coming soon
+        </button>
+      </section>
     </div>
   );
 }

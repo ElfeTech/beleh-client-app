@@ -196,7 +196,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
       <aside
         className={cn(
           'unified-sidebar flex flex-col transition-[width] duration-300 ease-out relative z-20 pointer-events-auto',
-          isDrawer ? 'unified-sidebar--drawer w-full' : collapsed ? 'w-[3.75rem]' : 'w-60'
+          isDrawer ? 'unified-sidebar--drawer w-full' : collapsed ? 'w-[3.75rem]' : 'w-[17.5rem]'
         )}
       >
         {!isDrawer && (

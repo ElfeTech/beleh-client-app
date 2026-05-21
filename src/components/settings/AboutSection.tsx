@@ -1,3 +1,6 @@
+import { Info } from 'lucide-react';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
+import './SettingsShared.css';
 import './AboutSection.css';
 
 export function AboutSection() {
@@ -47,24 +50,20 @@ export function AboutSection() {
 
 
   return (
-    <div className="about-section">
-      {/* Header */}
-      <div className="section-header">
-        <div className="header-icon about">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="12" y1="16" x2="12" y2="12" />
-            <line x1="12" y1="8" x2="12.01" y2="8" />
-          </svg>
-        </div>
-        <div className="header-text">
-          <h1>About</h1>
-          <p>Learn more about Beleh (ብልህ) and our mission</p>
-        </div>
-      </div>
+    <div className="settings-page-section about-section">
+      <SettingsSectionHeader
+        breadcrumbLabel="ABOUT"
+        title="About"
+        description="Learn more about Beleh (ብልህ) and our mission"
+        icon={<Info size={20} strokeWidth={1.75} />}
+      />
 
       {/* App Info Card */}
-      <div className="app-info-card">
+      <div className="settings-card app-info-card">
+        <div className="settings-card__head settings-card__head--tight">
+          <h2 className="settings-card__title">Application</h2>
+          <span className="settings-card__badge settings-card__badge--success">Operational</span>
+        </div>
         <div className="app-logo">
           <div className="logo-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -98,7 +97,7 @@ export function AboutSection() {
           </div>
         </div>
 
-        <button className="check-updates-btn">
+        <button type="button" className="settings-outline-btn check-updates-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M23 4v6h-6" />
             <path d="M1 20v-6h6" />
@@ -154,8 +153,9 @@ export function AboutSection() {
 
       {/* Legal Documents */}
       <div className="settings-card">
-        <div className="card-header">
-          <h2>Legal</h2>
+        <div className="settings-card__head">
+          <h2 className="settings-card__title">Legal</h2>
+          <span className="settings-card__badge settings-card__badge--muted">Documents</span>
         </div>
         <div className="legal-list">
           {legalLinks.map((link, index) => (

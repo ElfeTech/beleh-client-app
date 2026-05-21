@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { HelpCircle } from 'lucide-react';
+import { SettingsSectionHeader } from './SettingsSectionHeader';
+import './SettingsShared.css';
 import './HelpSection.css';
 
 interface FAQItem {
@@ -94,21 +97,13 @@ export function HelpSection() {
   };
 
   return (
-    <div className="help-section">
-      {/* Header */}
-      <div className="section-header">
-        <div className="header-icon help">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
-            <line x1="12" y1="17" x2="12.01" y2="17" />
-          </svg>
-        </div>
-        <div className="header-text">
-          <h1>Help & Support</h1>
-          <p>Find answers, get help, and contact our support team</p>
-        </div>
-      </div>
+    <div className="settings-page-section help-section">
+      <SettingsSectionHeader
+        breadcrumbLabel="HELP"
+        title="Help & Support"
+        description="Find answers, get help, and contact our support team"
+        icon={<HelpCircle size={20} strokeWidth={1.75} />}
+      />
 
       {/* Quick Links */}
       <div className="quick-links-grid">
@@ -130,18 +125,10 @@ export function HelpSection() {
       </div>
 
       {/* FAQ Section */}
-      <div className="settings-card faq-card">
-        <div className="card-header">
-          <div className="header-with-icon">
-            <div className="header-icon-small faq">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
-                <line x1="12" y1="17" x2="12.01" y2="17" />
-              </svg>
-            </div>
-            <h2>Frequently Asked Questions</h2>
-          </div>
+      <div className="settings-card">
+        <div className="settings-card__head">
+          <h2 className="settings-card__title">Frequently Asked Questions</h2>
+          <span className="settings-card__badge settings-card__badge--info">FAQ</span>
         </div>
 
         <div className="faq-list">
@@ -168,17 +155,10 @@ export function HelpSection() {
       </div>
 
       {/* Contact Support */}
-      <div className="settings-card contact-card">
-        <div className="card-header">
-          <div className="header-with-icon">
-            <div className="header-icon-small contact">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-              </svg>
-            </div>
-            <h2>Contact Support</h2>
-          </div>
-          <span className="response-time">
+      <div className="settings-card">
+        <div className="settings-card__head">
+          <h2 className="settings-card__title">Contact Support</h2>
+          <span className="settings-status-pill settings-status-pill--muted response-time">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10" />
               <polyline points="12 6 12 12 16 14" />
@@ -190,8 +170,11 @@ export function HelpSection() {
         <form className="contact-form" onSubmit={handleSubmitTicket}>
           <div className="form-row">
             <div className="form-group">
-              <label htmlFor="subject">Subject</label>
-              <select 
+              <label className="settings-label" htmlFor="subject">
+                Subject
+              </label>
+              <select
+                className="settings-select"
                 id="subject"
                 value={contactSubject}
                 onChange={(e) => setContactSubject(e.target.value)}
@@ -208,8 +191,11 @@ export function HelpSection() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="message">Message</label>
+            <label className="settings-label" htmlFor="message">
+              Message
+            </label>
             <textarea
+              className="settings-textarea"
               id="message"
               value={contactMessage}
               onChange={(e) => setContactMessage(e.target.value)}
@@ -220,7 +206,7 @@ export function HelpSection() {
           </div>
 
           <div className="form-actions">
-            <button type="submit" className="submit-btn">
+            <button type="submit" className="btn-gradient-primary">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />

@@ -99,6 +99,10 @@
     --btn-secondary-hover: #f8fafc;
     --btn-secondary-text: #334155;
     --btn-secondary-border: #e2e8f0;
+    --btn-gradient-start: #00a3ff;
+    --btn-gradient-mid: #38bdf8;
+    --btn-gradient-end: #00d1b2;
+    --btn-gradient-shadow: 0 4px 14px -2px color-mix(in srgb, #00a3ff 40%, #00d1b2 60%);
     --error: #dc2626;
     --error-light: #fef2f2;
 
@@ -164,6 +168,10 @@
     --btn-secondary-hover: #1e293b;
     --btn-secondary-text: #e2e8f0;
     --btn-secondary-border: #334155;
+    --btn-gradient-start: #38bdf8;
+    --btn-gradient-mid: #2dd4bf;
+    --btn-gradient-end: #14b8a6;
+    --btn-gradient-shadow: 0 4px 18px -2px color-mix(in srgb, #38bdf8 35%, #14b8a6 65%);
     --error: #f87171;
     --error-light: rgba(248, 113, 113, 0.12);
     --ds-surface: #0f172a;
@@ -546,6 +554,53 @@
   color: var(--text-disabled);
   cursor: not-allowed;
   box-shadow: none;
+}
+
+/* Blue → teal gradient primary CTA (settings save, connect DB, invites) */
+.btn-gradient-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: 0.65rem 1.15rem;
+  border: none;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(
+    90deg,
+    var(--btn-gradient-start) 0%,
+    var(--btn-gradient-mid) 48%,
+    var(--btn-gradient-end) 100%
+  );
+  color: #fff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  font-family: inherit;
+  line-height: 1.25;
+  cursor: pointer;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    var(--btn-gradient-shadow);
+  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btn-gradient-primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+.btn-gradient-primary:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.btn-gradient-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.btn-gradient-primary--sm {
+  padding: 0.5rem 0.9rem;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-md);
 }
 
 .secondary-btn {

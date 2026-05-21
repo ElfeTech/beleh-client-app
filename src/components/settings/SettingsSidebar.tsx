@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { NavLink } from 'react-router-dom';
+import { AuthContext } from '../../context/AuthContext';
 import './SettingsSidebar.css';
 
 export type SettingsSection =
@@ -115,7 +116,19 @@ const menuItems: MenuItem[] = [
   },
 ];
 
+function getInitials(name: string) {
+  return name
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase()
+    .substring(0, 2);
+}
+
 export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ onSignOut }) => {
+  const authContext = useContext(AuthContext);
+  const user = authContext?.user;
+
   const groupedItems = menuItems.reduce(
     (acc, item) => {
       if (!acc[item.category]) {
@@ -127,38 +140,54 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ onSignOut }) =
     {} as Record<string, MenuItem[]>
   );
 
+  const categoryOrder = ['Account', 'Workspace', 'Preferences', 'Billing', 'Support'];
+
   return (
-    <div className="settings-sidebar-container">
-      <div className="settings-sidebar-header">
-        <h3>Settings</h3>
+    <aside className="settings-sidebar-container">
+      <div className="settings-sidebar-profile">
+        <div className="settings-sidebar-avatar">
+          {user?.photoURL ? (
+            <img src={user.photoURL} alt={user.displayName || 'User'} />
+          ) : (
+            <span>{getInitials(user?.displayName || user?.email || 'U')}</span>
+          )}
+        </div>
+        <div className="settings-sidebar-profile-text">
+          <p className="settings-sidebar-profile-name">{user?.displayName || 'User'}</p>
+          {user?.email ? <p className="settings-sidebar-profile-email">{user.email}</p> : null}
+        </div>
       </div>
 
       <div className="settings-sidebar-content">
-        {Object.entries(groupedItems).map(([category, items]) => (
-          <div key={category} className="settings-sidebar-section">
-            <div className="settings-sidebar-section-title">{category}</div>
-            <div className="settings-sidebar-menu">
-              {items.map((item) => (
-                <NavLink
-                  key={item.id}
-                  to={`/settings/${item.id}`}
-                  end
-                  className={({ isActive }) =>
-                    `settings-sidebar-item${isActive ? ' active' : ''}`
-                  }
-                >
-                  <div className="sidebar-item-icon">{item.icon}</div>
-                  <div className="sidebar-item-content">
-                    <div className="sidebar-item-title">{item.title}</div>
-                    <div className="sidebar-item-subtitle">{item.subtitle}</div>
-                  </div>
-                </NavLink>
-              ))}
+        {categoryOrder.map((category) => {
+          const items = groupedItems[category];
+          if (!items?.length) return null;
+          return (
+            <div key={category} className="settings-sidebar-section">
+              <div className="settings-sidebar-section-title">{category}</div>
+              <nav className="settings-sidebar-menu" aria-label={`${category} settings`}>
+                {items.map((item) => (
+                  <NavLink
+                    key={item.id}
+                    to={`/settings/${item.id}`}
+                    end
+                    className={({ isActive }) =>
+                      `settings-sidebar-item${isActive ? ' active' : ''}`
+                    }
+                  >
+                    <div className="sidebar-item-icon">{item.icon}</div>
+                    <div className="sidebar-item-content">
+                      <div className="sidebar-item-title">{item.title}</div>
+                      <div className="sidebar-item-subtitle">{item.subtitle}</div>
+                    </div>
+                  </NavLink>
+                ))}
+              </nav>
             </div>
-          </div>
-        ))}
+          );
+        })}
 
-        <div className="settings-sidebar-section">
+        <div className="settings-sidebar-section settings-sidebar-section--footer">
           <button type="button" className="settings-sidebar-signout" onClick={onSignOut}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -167,6 +196,6 @@ export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ onSignOut }) =
           </button>
         </div>
       </div>
-    </div>
+    </aside>
   );
 };

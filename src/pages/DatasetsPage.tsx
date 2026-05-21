@@ -4,12 +4,13 @@ import { toast } from 'sonner';
 import {
   Plus,
   Search,
-  ChevronRight,
-  Clock,
   Database,
   FileSpreadsheet,
   FileJson,
   Layers,
+  Check,
+  Lock,
+  MessageSquare,
 } from 'lucide-react';
 import { WorkspaceContext } from '../context/WorkspaceContext';
 import { DatasourceContext } from '../context/DatasourceContext';
@@ -25,25 +26,19 @@ import { DatasourceModal } from '../components/layout/DatasourceModal';
 import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { ContextMenu, type ContextMenuItem } from '../components/common/ContextMenu';
-import type { ConnectorResponse, DataSourceResponse } from '../types/api';
+import type { ConnectorResponse, DataSourceResponse, DatasetTable } from '../types/api';
+import {
+  catalogSourceKey,
+  tablesFromMetadata,
+  isPrimaryKeyColumn,
+  getSourceDisplayName,
+  getSourceHostHint,
+  getSourceTableCountLabel,
+  type CatalogSourceRef,
+} from '../utils/schemaCatalog';
 import './DatasetsPage.css';
 
 type SourceFilter = 'all' | 'files' | 'databases';
-
-function formatRelativeTime(iso: string | null | undefined): string {
-  if (!iso) return 'Never synced';
-  const t = new Date(iso).getTime();
-  if (Number.isNaN(t)) return 'Unknown';
-  const diff = Math.max(0, Date.now() - t);
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins} min${mins === 1 ? '' : 's'} ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`;
-  const days = Math.floor(hrs / 24);
-  if (days < 14) return `${days} day${days === 1 ? '' : 's'} ago`;
-  return new Date(iso).toLocaleDateString();
-}
 
 type UnifiedRow =
   | { kind: 'connector'; id: string; connector: ConnectorResponse }
@@ -106,6 +101,12 @@ const DatasetsPage: React.FC = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [selectedCatalogSource, setSelectedCatalogSource] = useState<CatalogSourceRef | null>(null);
+  const [tableSearchQuery, setTableSearchQuery] = useState('');
+  const [catalogTables, setCatalogTables] = useState<DatasetTable[]>([]);
+  const [tablesLoading, setTablesLoading] = useState(false);
+  const [selectedTableName, setSelectedTableName] = useState<string | null>(null);
+  const [connectionLog, setConnectionLog] = useState('');
 
   const datasources = workspaceContext?.datasources || [];
   const connectors = workspaceContext?.connectors || [];
@@ -146,6 +147,90 @@ const DatasetsPage: React.FC = () => {
   }, [unifiedSources, searchQuery, sourceFilter]);
 
   useEffect(() => {
+    if (filteredSources.length === 0) {
+      setSelectedCatalogSource(null);
+      return;
+    }
+    const stillVisible = selectedCatalogSource
+      ? filteredSources.some((row) => catalogSourceKey({ kind: row.kind, id: row.id }) === catalogSourceKey(selectedCatalogSource))
+      : false;
+    if (!stillVisible) {
+      const first = filteredSources[0];
+      setSelectedCatalogSource({ kind: first.kind, id: first.id });
+    }
+  }, [filteredSources, selectedCatalogSource]);
+
+  useEffect(() => {
+    if (!user || !selectedCatalogSource) {
+      setCatalogTables([]);
+      setSelectedTableName(null);
+      return;
+    }
+
+    const row = unifiedSources.find(
+      (r) => r.kind === selectedCatalogSource.kind && r.id === selectedCatalogSource.id
+    );
+    if (!row) return;
+
+    if (row.kind === 'connector') {
+      setCatalogTables([]);
+      setSelectedTableName(null);
+      setTablesLoading(false);
+      return;
+    }
+
+    if (row.datasource.status !== 'READY') {
+      setCatalogTables([]);
+      setSelectedTableName(null);
+      setTablesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setTablesLoading(true);
+      try {
+        const token = await user.getIdToken();
+        const response = await apiClient.listDatasetTables(token, row.datasource.id);
+        if (cancelled) return;
+        const tables = response.tables.length > 0 ? response.tables : tablesFromMetadata(row.datasource);
+        setCatalogTables(tables);
+        setSelectedTableName(tables[0]?.table_name ?? null);
+      } catch {
+        if (cancelled) return;
+        const fallback = tablesFromMetadata(row.datasource);
+        setCatalogTables(fallback);
+        setSelectedTableName(fallback[0]?.table_name ?? null);
+      } finally {
+        if (!cancelled) setTablesLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, selectedCatalogSource, unifiedSources]);
+
+  const filteredTables = useMemo(() => {
+    const q = tableSearchQuery.trim().toLowerCase();
+    if (!q) return catalogTables;
+    return catalogTables.filter((t) => t.table_name.toLowerCase().includes(q));
+  }, [catalogTables, tableSearchQuery]);
+
+  const selectedTable = useMemo(
+    () => catalogTables.find((t) => t.table_name === selectedTableName) ?? null,
+    [catalogTables, selectedTableName]
+  );
+
+  const selectedCatalogRow = useMemo(() => {
+    if (!selectedCatalogSource) return null;
+    return unifiedSources.find(
+      (r) => r.kind === selectedCatalogSource.kind && r.id === selectedCatalogSource.id
+    ) ?? null;
+  }, [unifiedSources, selectedCatalogSource]);
+
+  useEffect(() => {
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);
     };
@@ -154,27 +239,16 @@ const DatasetsPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  const handleUseInChat = (ref: CatalogSourceRef) => {
+    setSelectedDatasourceId(ref.id);
+    navigate(`/workspace/${workspaceId}`);
+    toast.success('Source selected for AI analysis');
   };
 
-  const handleDatasetSelect = async (datasetId: string) => {
-    // Set as active dataset
-    setSelectedDatasourceId(datasetId);
-
-    // Navigate back to chat (session will be created in Workspace component)
-    navigate(`/workspace/${workspaceId}`);
-  };
-
-  const handleConnectorSelect = async (connectorId: string) => {
-    // Set as active connector/datasource
-    setSelectedDatasourceId(connectorId);
-
-    // Navigate back to chat
-    navigate(`/workspace/${workspaceId}`);
-    toast.success("Database selected for analysis");
+  const handleCatalogSourceSelect = (ref: CatalogSourceRef) => {
+    setSelectedCatalogSource(ref);
+    setTableSearchQuery('');
+    setConnectionLog('');
   };
   // Mobile menu handlers
   const handleMoreClick = (e: React.MouseEvent, id: string, type: 'datasource' | 'connector') => {
@@ -259,7 +333,28 @@ const DatasetsPage: React.FC = () => {
 
   const getMenuItems = (): ActionSheetItem[] => {
     const items: ActionSheetItem[] = [];
-    
+
+    if (selectedItemForMenu) {
+      items.push({
+        id: 'use-in-chat',
+        label: 'Use in AI Analyst',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        ),
+        variant: 'default' as const,
+        onClick: () => {
+          if (selectedItemForMenu) {
+            handleUseInChat({
+              kind: selectedItemForMenu.type === 'connector' ? 'connector' : 'datasource',
+              id: selectedItemForMenu.id,
+            });
+          }
+        },
+      });
+    }
+
     if (selectedItemForMenu?.type === 'datasource') {
       items.push({
         id: 'preview',
@@ -323,6 +418,23 @@ const DatasetsPage: React.FC = () => {
   const getContextMenuItems = (): ContextMenuItem[] => {
     const items: ContextMenuItem[] = [];
 
+    if (selectedItemForMenu) {
+      items.push({
+        id: 'use-in-chat',
+        label: 'Use in AI Analyst',
+        icon: <MessageSquare size={16} strokeWidth={2} />,
+        variant: 'default',
+        onClick: () => {
+          if (selectedItemForMenu) {
+            handleUseInChat({
+              kind: selectedItemForMenu.type === 'connector' ? 'connector' : 'datasource',
+              id: selectedItemForMenu.id,
+            });
+          }
+        },
+      });
+    }
+
     if (selectedItemForMenu?.type === 'datasource') {
       items.push({
         id: 'preview',
@@ -383,57 +495,48 @@ const DatasetsPage: React.FC = () => {
     return items;
   };
 
-  const renderLoading = () => (
-    <div className="ds-source-grid ds-source-grid--loading">
-      {[1, 2, 3, 4, 5, 6].map((i) => (
-        <div key={i} className="ds-source-skeleton">
-          <div className="ds-source-skeleton__shine" />
-          <div className="ds-source-skeleton__row">
-            <div className="ds-source-skeleton__icon" />
-            <div className="ds-source-skeleton__pill" />
-          </div>
-          <div className="ds-source-skeleton__title" />
-          <div className="ds-source-skeleton__meta" />
-          <div className="ds-source-skeleton__footer" />
-        </div>
-      ))}
-    </div>
-  );
+  const handleTestConnection = () => {
+    if (!selectedCatalogRow || selectedCatalogRow.kind !== 'connector') {
+      setConnectionLog(
+        'No connection log. Test connection is available when configuring PostgreSQL connectors.'
+      );
+      return;
+    }
+    const c = selectedCatalogRow.connector;
+    setConnectionLog(
+      `[${new Date().toLocaleTimeString()}] Connector "${c.name}" (${c.type})\n` +
+        `Status: ${c.status} · Metadata: ${c.metadata_status}\n` +
+        `Last sync: ${c.last_sync_at ? new Date(c.last_sync_at).toLocaleString() : 'never'}\n\n` +
+        'Saved credentials are not exposed for security. Re-run connection test from connector settings when editing is available.'
+    );
+  };
 
   const hasContent = unifiedSources.length > 0;
 
   const renderSourceIcon = (row: UnifiedRow) => {
-    if (row.kind === 'connector') {
-      return (
-        <div className="ds-card-icon ds-card-icon--connector" aria-hidden>
-          <Database className="ds-card-icon-svg" strokeWidth={1.75} />
-        </div>
-      );
-    }
+    const iconProps = { size: 16, strokeWidth: 1.75 as const };
+    if (row.kind === 'connector') return <Database {...iconProps} />;
     const mime = row.datasource.mime_type?.toLowerCase() || '';
-    if (mime.includes('json')) {
-      return (
-        <div className="ds-card-icon ds-card-icon--json" aria-hidden>
-          <FileJson className="ds-card-icon-svg" strokeWidth={1.75} />
-        </div>
-      );
-    }
+    if (mime.includes('json')) return <FileJson {...iconProps} />;
     if (mime.includes('csv') || mime.includes('excel') || mime.includes('sheet') || mime.includes('spreadsheet')) {
-      return (
-        <div className="ds-card-icon ds-card-icon--sheet" aria-hidden>
-          <FileSpreadsheet className="ds-card-icon-svg" strokeWidth={1.75} />
-        </div>
-      );
+      return <FileSpreadsheet {...iconProps} />;
     }
-    return (
-      <div className="ds-card-icon ds-card-icon--file" aria-hidden>
-        <Layers className="ds-card-icon-svg" strokeWidth={1.75} />
-      </div>
-    );
+    return <Layers {...iconProps} />;
+  };
+
+  const tableCountForSource = (row: UnifiedRow): number | null => {
+    const key = catalogSourceKey({ kind: row.kind, id: row.id });
+    if (selectedCatalogSource && catalogSourceKey(selectedCatalogSource) === key) {
+      return catalogTables.length;
+    }
+    if (row.kind === 'datasource' && row.datasource.metadata_json?.columns?.length) {
+      return 1;
+    }
+    return null;
   };
 
   return (
-    <div className="datasets-page app-page-root">
+    <div className="schema-catalog-page app-page-root analytics-page">
       {isMobile && (
         <MobileChatHeader
           onWorkspaceClick={() => setShowWorkspaceSwitcher(true)}
@@ -442,61 +545,60 @@ const DatasetsPage: React.FC = () => {
         />
       )}
 
-      <div className="ds-page-inner">
-        <header className="ds-hero">
-          <div className="ds-hero-bg" aria-hidden />
-          <div className="ds-hero-text">
-            <p className="ds-hero-kicker">Workspace</p>
-            <h1>Data Sources</h1>
-            <p className="ds-hero-lede">Manage and sync your active connections.</p>
-            {!loading && (
-              <p className="ds-hero-meta">
-                <span className="ds-hero-meta__dot" aria-hidden />
-                {unifiedSources.length} source{unifiedSources.length === 1 ? '' : 's'} in this workspace
-              </p>
-            )}
+      <div className="sc-inner">
+        <header className="sc-page-header">
+          <div>
+            <div className="sc-page-header__title-row">
+              <span className="sc-page-header__icon" aria-hidden>
+                <Database size={22} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h1>Database Schema Catalog</h1>
+                <p className="sc-page-header__lede">
+                  Audit and map enterprise datasources, table schemas, and secure encrypted pipelines.
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="ds-hero-actions">
-            <span className="ds-active-pill" aria-live="polite">
-              {activeConnectionCount} active
-            </span>
-            <button
-              type="button"
-              className="ds-primary-cta"
-              onClick={() => setShowConnectorSelectionModal(true)}
-            >
-              <Plus size={18} strokeWidth={2.5} aria-hidden />
-              Add connection
-            </button>
-          </div>
+          <button
+            type="button"
+            className="btn-gradient-primary sc-connect-cta--desktop"
+            onClick={() => setShowConnectorSelectionModal(true)}
+          >
+            <Plus size={18} strokeWidth={2.5} aria-hidden />
+            Connect Enterprise DB
+          </button>
         </header>
 
         {!loading && hasContent && (
-          <div className="ds-toolbar">
-            <div className="ds-search-wrap">
-              <Search className="ds-search-icon" size={18} strokeWidth={2} aria-hidden />
+          <div className="sc-toolbar">
+            <div className="sc-search-wrap">
+              <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
               <input
-                className="ds-search-input"
+                className="sc-search-input"
                 placeholder="Search by name, type, or host…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Search data sources"
               />
             </div>
-            <div className="ds-filter-pills" role="tablist" aria-label="Filter sources">
+            <div className="sc-filter-pills" role="tablist" aria-label="Filter sources">
               {(['all', 'files', 'databases'] as const).map((key) => (
                 <button
                   key={key}
                   type="button"
                   role="tab"
                   aria-selected={sourceFilter === key}
-                  className={`ds-filter-pill ${sourceFilter === key ? 'is-active' : ''}`}
+                  className={`sc-filter-pill ${sourceFilter === key ? 'is-active' : ''}`}
                   onClick={() => setSourceFilter(key)}
                 >
                   {key === 'all' ? 'All' : key === 'files' ? 'Files' : 'Databases'}
                 </button>
               ))}
             </div>
+            <span className="ds-pill ds-pill--muted" aria-live="polite">
+              {activeConnectionCount} active
+            </span>
           </div>
         )}
 
@@ -504,34 +606,43 @@ const DatasetsPage: React.FC = () => {
           className="upload-dataset-fab"
           type="button"
           onClick={() => setShowConnectorSelectionModal(true)}
-          aria-label="Add connection"
+          aria-label="Connect data source"
         >
           <Plus size={26} strokeWidth={2.5} />
         </button>
 
         {loading ? (
-          renderLoading()
-        ) : !hasContent ? (
-          <div className="datasets-empty ds-empty-hero">
-            <div className="ds-empty-icon-wrap" aria-hidden>
-              <Database size={40} strokeWidth={1.5} />
+          <div className="sc-catalog-layout">
+            <div className="sc-panel sc-col--sources">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="sc-skeleton-row" />
+              ))}
             </div>
+            <div className="sc-panel">
+              <div className="sc-skeleton-row" />
+              <div className="sc-skeleton-row" />
+            </div>
+            <div className="sc-panel">
+              <div className="sc-skeleton-row" />
+            </div>
+          </div>
+        ) : !hasContent ? (
+          <div className="sc-empty-hero">
+            <Database size={40} strokeWidth={1.5} aria-hidden />
             <h3>No data sources yet</h3>
-            <p>Upload a spreadsheet or connect PostgreSQL to start analyzing with AI.</p>
-            {!isMobile && (
-              <button type="button" className="ds-primary-cta" onClick={() => setShowConnectorSelectionModal(true)}>
-                <Plus size={18} strokeWidth={2.5} aria-hidden />
-                Add connection
-              </button>
-            )}
+            <p>Upload a spreadsheet or connect PostgreSQL to explore schemas and analyze with AI.</p>
+            <button type="button" className="btn-gradient-primary" onClick={() => setShowConnectorSelectionModal(true)}>
+              <Plus size={18} strokeWidth={2.5} aria-hidden />
+              Connect Enterprise DB
+            </button>
           </div>
         ) : filteredSources.length === 0 ? (
-          <div className="ds-empty-filtered">
+          <div className="sc-empty-hero">
             <h3>No matches</h3>
             <p>Try another search or reset filters.</p>
             <button
               type="button"
-              className="ds-link-btn"
+              className="sc-link-btn"
               onClick={() => {
                 setSearchQuery('');
                 setSourceFilter('all');
@@ -541,92 +652,214 @@ const DatasetsPage: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="ds-source-grid">
-            {filteredSources.map((row) => {
-              const pill =
-                row.kind === 'connector'
-                  ? getConnectorPill(row.connector.status)
-                  : getDatasourcePill(row.datasource.status);
-              const updatedIso =
-                row.kind === 'connector'
-                  ? row.connector.updated_at || row.connector.last_sync_at || row.connector.created_at
-                  : row.datasource.updated_at || row.datasource.created_at;
-              const title = row.kind === 'connector' ? row.connector.name : row.datasource.name;
-              const id = row.kind === 'connector' ? row.connector.id : row.datasource.id;
-              const menuType = row.kind === 'connector' ? 'connector' : 'datasource';
-              const isSelected =
-                row.kind === 'datasource' && datasourceContext?.selectedDatasourceId === row.datasource.id;
+          <div className="sc-catalog-layout">
+            <div className="sc-col sc-col--sources">
+              <div className="sc-panel">
+                <div className="sc-panel__head">Encrypted sources</div>
+                <div className="sc-panel__body">
+                  <div className="sc-sources-list">
+                    {filteredSources.map((row) => {
+                      const ref: CatalogSourceRef = { kind: row.kind, id: row.id };
+                      const isSelected =
+                        selectedCatalogSource?.kind === ref.kind && selectedCatalogSource?.id === ref.id;
+                      const pill =
+                        row.kind === 'connector'
+                          ? getConnectorPill(row.connector.status)
+                          : getDatasourcePill(row.datasource.status);
+                      const title = getSourceDisplayName(row.kind, row.kind === 'connector' ? row.connector : undefined, row.kind === 'datasource' ? row.datasource : undefined);
+                      const hostHint = getSourceHostHint(row.kind, row.kind === 'connector' ? row.connector : undefined, row.kind === 'datasource' ? row.datasource : undefined);
+                      const tableLabel = getSourceTableCountLabel(
+                        row.kind,
+                        tableCountForSource(row),
+                        row.kind === 'connector' ? row.connector.metadata_status : undefined
+                      );
+                      const menuType = row.kind === 'connector' ? 'connector' : 'datasource';
+                      const ready = row.kind === 'datasource' ? row.datasource.status === 'READY' : row.connector.status === 'ACTIVE';
 
-              return (
-                <div
-                  key={row.kind === 'connector' ? `c-${row.connector.id}` : `d-${row.datasource.id}`}
-                  className={`ds-source-card ds-source-card--${row.kind} ${isSelected ? 'is-selected' : ''}`}
-                  data-kind={row.kind}
-                >
-                  <button
-                    type="button"
-                    className="ds-source-card__body"
-                    disabled={row.kind === 'datasource' && row.datasource.status !== 'READY'}
-                    onClick={() => {
-                      if (row.kind === 'connector') handleConnectorSelect(row.connector.id);
-                      else if (row.datasource.status === 'READY') handleDatasetSelect(row.datasource.id);
-                    }}
-                  >
-                    <div className="ds-source-card__top">
-                      {renderSourceIcon(row)}
-                      <span className={pill.className}>{pill.label}</span>
-                    </div>
-                    <p className="ds-source-card__kind">
-                      {row.kind === 'connector' ? 'Live database' : 'Uploaded file'}
-                    </p>
-                    <h3 className="ds-source-card__title">{title}</h3>
-                    <p className="ds-source-card__updated">
-                      <Clock size={14} strokeWidth={2} aria-hidden />
-                      <span>Updated {formatRelativeTime(updatedIso)}</span>
-                    </p>
-                    {row.kind === 'connector' ? (
-                      <p className="ds-source-card__hint">
-                        {row.connector.type.toUpperCase()} · Index {row.connector.metadata_status.toLowerCase()}
-                      </p>
-                    ) : (
-                      <p className="ds-source-card__hint">
-                        {row.datasource.mime_type?.split('/').pop()?.toUpperCase() || 'FILE'}
-                        {row.datasource.file_size ? ` · ${formatFileSize(row.datasource.file_size)}` : ''}
-                        {row.datasource.metadata_json?.row_count
-                          ? ` · ${row.datasource.metadata_json.row_count.toLocaleString()} rows`
-                          : ''}
-                      </p>
-                    )}
-                  </button>
-                  <div className="ds-source-card__footer">
-                    {row.kind === 'datasource' && row.datasource.status === 'READY' && (
-                      <button
-                        type="button"
-                        className="ds-source-card__ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePreview(row.datasource.id);
-                        }}
-                      >
-                        Preview
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="ds-source-card__settings"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (isMobile) handleMoreClick(e, id, menuType);
-                        else handleDesktopMenuClick(e, id, menuType);
-                      }}
-                    >
-                      <span>Settings</span>
-                      <ChevronRight size={16} strokeWidth={2.25} aria-hidden />
-                    </button>
+                      return (
+                        <button
+                          key={catalogSourceKey(ref)}
+                          type="button"
+                          className={`sc-source-item ${isSelected ? 'is-selected' : ''}`}
+                          disabled={!ready && row.kind === 'datasource'}
+                          onClick={() => handleCatalogSourceSelect(ref)}
+                        >
+                          <div className="sc-source-item__row">
+                            <span className="sc-source-item__icon" aria-hidden>
+                              {renderSourceIcon(row)}
+                            </span>
+                            <div>
+                              <p className="sc-source-item__name">{title}</p>
+                              <p className="sc-source-item__host">{hostHint}</p>
+                            </div>
+                          </div>
+                          <div className="sc-source-item__meta">
+                            <span className={`sc-status-dot ${pill.className.includes('success') ? '' : ''}`}>
+                              {pill.label}
+                            </span>
+                            <span>{tableLabel}</span>
+                          </div>
+                          <div className="sc-source-item__actions">
+                            <button
+                              type="button"
+                              className="sc-source-item__menu-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isMobile) handleMoreClick(e, ref.id, menuType);
+                                else handleDesktopMenuClick(e, ref.id, menuType);
+                              }}
+                            >
+                              Options
+                            </button>
+                          </div>
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              );
-            })}
+                <div className="sc-terminal-wrap">
+                  <div className="sc-terminal">
+                    <div className="sc-terminal__head">
+                      <span>&gt;_ VPC connection terminal</span>
+                      <button
+                        type="button"
+                        className="sc-terminal__test-btn"
+                        onClick={handleTestConnection}
+                      >
+                        Test connection
+                      </button>
+                    </div>
+                    <pre className={`sc-terminal__body ${connectionLog ? 'has-log' : ''}`}>
+                      {connectionLog ||
+                        "No connection log. Click 'Test Connection' to check certificate status, latency boundaries, and query response time."}
+                    </pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <section className="sc-col sc-col--tables">
+              <div className="sc-panel">
+                <div className="sc-panel__head">
+                  Schema tables ({selectedCatalogRow?.kind === 'connector' ? '—' : catalogTables.length})
+                </div>
+                <div className="sc-tables-search">
+                  <div className="sc-search-wrap">
+                    <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
+                    <input
+                      className="sc-search-input"
+                      placeholder="Search database schema…"
+                      value={tableSearchQuery}
+                      onChange={(e) => setTableSearchQuery(e.target.value)}
+                      aria-label="Search tables in selected source"
+                      disabled={!selectedCatalogSource || selectedCatalogRow?.kind === 'connector'}
+                    />
+                  </div>
+                </div>
+                <div className="sc-panel__body sc-panel__body--flush">
+                  {tablesLoading ? (
+                    <>
+                      <div className="sc-skeleton-row" />
+                      <div className="sc-skeleton-row" />
+                    </>
+                  ) : selectedCatalogRow?.kind === 'connector' ? (
+                    <div className="sc-empty-panel">
+                      <h3>Schema sync pending</h3>
+                      <p>
+                        Table discovery for live databases will appear here once connector metadata sync
+                        completes.
+                      </p>
+                    </div>
+                  ) : selectedCatalogRow?.kind === 'datasource' && selectedCatalogRow.datasource.status !== 'READY' ? (
+                    <div className="sc-empty-panel">
+                      <h3>Source processing</h3>
+                      <p>Schema tables are available when this dataset reaches Ready status.</p>
+                    </div>
+                  ) : filteredTables.length === 0 ? (
+                    <div className="sc-empty-panel">
+                      <p>No tables match your search.</p>
+                    </div>
+                  ) : (
+                    <ul className="sc-table-list">
+                      {filteredTables.map((table) => (
+                        <li key={table.table_name}>
+                          <button
+                            type="button"
+                            className={`sc-table-item ${selectedTableName === table.table_name ? 'is-selected' : ''}`}
+                            onClick={() => setSelectedTableName(table.table_name)}
+                          >
+                            <span>{table.table_name}</span>
+                            <span className="sc-table-item__count">
+                              {table.row_count.toLocaleString()} rows
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="sc-col sc-col--detail">
+              <div className="sc-panel">
+                {selectedTable ? (
+                  <>
+                    <div className="sc-detail-head">
+                      <h2>{selectedTable.table_name}</h2>
+                      <p className="sc-detail-head__sub">
+                        Contains {selectedTable.column_count} structural columns · Estimated rows:{' '}
+                        {selectedTable.row_count.toLocaleString()}
+                      </p>
+                      <span className="sc-detail-head__badge">
+                        <Check size={14} strokeWidth={2.5} aria-hidden />
+                        Sync verified
+                      </span>
+                    </div>
+                    <div className="sc-panel__body sc-panel__body--flush">
+                      <table className="sc-schema-table">
+                        <thead>
+                          <tr>
+                            <th>Column name</th>
+                            <th>Type signature</th>
+                            <th>Attributes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedTable.columns.map((col, index) => (
+                            <tr key={col.name}>
+                              <td>{col.name}</td>
+                              <td className="type-cell">{col.type}</td>
+                              <td>
+                                {isPrimaryKeyColumn(col, index) ? (
+                                  <span className="sc-pk-badge">PK</span>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="sc-detail-footer">
+                      <p>
+                        <Lock size={12} strokeWidth={2} aria-hidden style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+                        Row-level security rules may apply for enterprise connectors.
+                      </p>
+                      <p style={{ marginTop: '0.5rem' }}>
+                        Use <code>SELECT * FROM {selectedTable.table_name}</code> to query.
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <div className="sc-empty-panel">
+                    <h3>Select a table</h3>
+                    <p>Choose a schema table to inspect column names, types, and attributes.</p>
+                  </div>
+                )}
+              </div>
+            </section>
           </div>
         )}
       </div>
