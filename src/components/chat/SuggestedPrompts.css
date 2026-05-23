@@ -77,7 +77,9 @@
   height: 1rem;
   color: var(--primary-500);
   opacity: 0.7;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
 }
 
 .suggested-prompts__btn:hover:not(:disabled) .suggested-prompts__arrow {

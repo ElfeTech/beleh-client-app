@@ -17,7 +17,7 @@ export function isValidSessionIdForState(sessionId: string | null | undefined): 
 export function resolveDatasetIdForStateEndpoint(
   datasetId: string | null | undefined,
   datasources: DataSourceResponse[],
-  _connectors: ConnectorResponse[]
+  _connectors: ConnectorResponse[],
 ): string | null {
   if (!datasetId || datasetId === 'undefined') return null;
   const inDatasources = datasources.some((d) => d.id === datasetId);
@@ -29,7 +29,7 @@ export function resolveDatasetIdForStateEndpoint(
 export function isSourceInWorkspace(
   id: string | null | undefined,
   datasources: DataSourceResponse[],
-  connectors: ConnectorResponse[]
+  connectors: ConnectorResponse[],
 ): boolean {
   if (!id) return false;
   return datasources.some((d) => d.id === id) || connectors.some((c) => c.id === id);

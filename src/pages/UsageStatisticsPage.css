@@ -65,7 +65,9 @@
   font-weight: 600;
   font-family: var(--font-mono);
   color: var(--text-secondary);
-  transition: background 0.18s ease, color 0.18s ease;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -96,7 +98,9 @@
   padding: var(--space-4);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 }
 
 .stat-card::after {
@@ -111,7 +115,11 @@
 
 .stat-card:hover {
   box-shadow: var(--shadow-md);
-  border-color: color-mix(in srgb, var(--stat-accent, var(--accent-teal-500)) 35%, var(--border-primary));
+  border-color: color-mix(
+    in srgb,
+    var(--stat-accent, var(--accent-teal-500)) 35%,
+    var(--border-primary)
+  );
 }
 
 html[data-theme='dark'] .stat-card:hover {
@@ -261,12 +269,24 @@ html[data-theme='dark'] .analytics-chart-card:hover {
   height: 280px;
 }
 
-.analytics-stagger-1 { animation-delay: 0ms; }
-.analytics-stagger-2 { animation-delay: 80ms; }
-.analytics-stagger-3 { animation-delay: 160ms; }
-.analytics-stagger-4 { animation-delay: 240ms; }
-.analytics-stagger-5 { animation-delay: 320ms; }
-.analytics-stagger-6 { animation-delay: 400ms; }
+.analytics-stagger-1 {
+  animation-delay: 0ms;
+}
+.analytics-stagger-2 {
+  animation-delay: 80ms;
+}
+.analytics-stagger-3 {
+  animation-delay: 160ms;
+}
+.analytics-stagger-4 {
+  animation-delay: 240ms;
+}
+.analytics-stagger-5 {
+  animation-delay: 320ms;
+}
+.analytics-stagger-6 {
+  animation-delay: 400ms;
+}
 
 @media (max-width: 1024px) {
   .charts-layout {

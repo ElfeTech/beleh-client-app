@@ -87,9 +87,7 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
     }
 
     // Get unique color values if color field is present
-    const allColorValues = colorField
-      ? Array.from(new Set(data.map((d) => d[colorField])))
-      : [];
+    const allColorValues = colorField ? Array.from(new Set(data.map((d) => d[colorField]))) : [];
 
     const MAX_CATEGORIES = 20;
     const isOverloaded = allColorValues.length > MAX_CATEGORIES;
@@ -112,33 +110,35 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
     });
 
     // Transform data
-    const chartData = data.map((row) => {
-      const x = row[xField];
-      const y = row[yField];
-      const size = sizeField ? row[sizeField] : 100;
-      let color = colorField ? row[colorField] : null;
+    const chartData = data
+      .map((row) => {
+        const x = row[xField];
+        const y = row[yField];
+        const size = sizeField ? row[sizeField] : 100;
+        let color = colorField ? row[colorField] : null;
 
-      // Map to "Other" if overloaded and not in top list
-      if (isOverloaded && color !== null && !topColorSet.has(color)) {
-        color = 'Other';
-      }
+        // Map to "Other" if overloaded and not in top list
+        if (isOverloaded && color !== null && !topColorSet.has(color)) {
+          color = 'Other';
+        }
 
-      // Normalize size
-      let normalizedSize = 100;
-      if (sizeField && sizeMax !== sizeMin) {
-        normalizedSize = minSize + ((size - sizeMin) / (sizeMax - sizeMin)) * (maxSize - minSize);
-      }
+        // Normalize size
+        let normalizedSize = 100;
+        if (sizeField && sizeMax !== sizeMin) {
+          normalizedSize = minSize + ((size - sizeMin) / (sizeMax - sizeMin)) * (maxSize - minSize);
+        }
 
-      return {
-        x,
-        y,
-        z: normalizedSize,
-        size: sizeField ? row[sizeField] : undefined,
-        color: color,
-        colorValue: colorMap.get(color) || (color === null ? COLOR_PALETTE[0] : '#9ca3af'),
-        _raw: row,
-      };
-    }).filter(item => !disabledCategories.has(String(item.color)));
+        return {
+          x,
+          y,
+          z: normalizedSize,
+          size: sizeField ? row[sizeField] : undefined,
+          color: color,
+          colorValue: colorMap.get(color) || (color === null ? COLOR_PALETTE[0] : '#9ca3af'),
+          _raw: row,
+        };
+      })
+      .filter((item) => !disabledCategories.has(String(item.color)));
 
     // Create legend items for color dimension
     const legendItems: LegendItem[] = displayColorValues.map((value) => ({
@@ -167,10 +167,12 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
           }}
         >
           <div style={{ marginBottom: '4px' }}>
-            <strong>{xLabel}:</strong> {typeof point.x === 'number' ? point.x.toLocaleString() : point.x}
+            <strong>{xLabel}:</strong>{' '}
+            {typeof point.x === 'number' ? point.x.toLocaleString() : point.x}
           </div>
           <div style={{ marginBottom: '4px' }}>
-            <strong>{yLabel}:</strong> {typeof point.y === 'number' ? point.y.toLocaleString() : point.y}
+            <strong>{yLabel}:</strong>{' '}
+            {typeof point.y === 'number' ? point.y.toLocaleString() : point.y}
           </div>
           {sizeField && point.size !== undefined && (
             <div style={{ marginBottom: '4px' }}>
@@ -274,7 +276,9 @@ export const ScatterPlotChart: React.FC<ScatterPlotChartProps> = ({
     console.error('ScatterPlotChart rendering error:', error, { data, xField, yField });
     return (
       <div className="chart-error">
-        <p>Unable to render scatter plot: {error instanceof Error ? error.message : 'Unknown error'}</p>
+        <p>
+          Unable to render scatter plot: {error instanceof Error ? error.message : 'Unknown error'}
+        </p>
       </div>
     );
   }

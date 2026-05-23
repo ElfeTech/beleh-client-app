@@ -27,9 +27,7 @@ export function UsageWarningBanner() {
 
   return (
     <div
-      className={`usage-warning-banner ${
-        isCritical ? 'critical' : isWarning ? 'warning' : 'info'
-      }`}
+      className={`usage-warning-banner ${isCritical ? 'critical' : isWarning ? 'warning' : 'info'}`}
       role="alert"
     >
       <div className="warning-icon">
@@ -48,9 +46,7 @@ export function UsageWarningBanner() {
         )}
       </div>
       <div className="warning-content">
-        <strong className="warning-title">
-          {isCritical ? 'Limit Reached' : 'Usage Warning'}
-        </strong>
+        <strong className="warning-title">{isCritical ? 'Limit Reached' : 'Usage Warning'}</strong>
         <p className="warning-message">{warning.message}</p>
       </div>
       <div className="warning-actions">

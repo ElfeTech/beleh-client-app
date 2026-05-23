@@ -8,7 +8,10 @@ export function selectedDatasetStorageKey(uid: string, workspaceId: string): str
   return `${PREFIX}${uid}:${workspaceId}`;
 }
 
-export function readSelectedDatasetId(uid: string | undefined, workspaceId: string | undefined): string | null {
+export function readSelectedDatasetId(
+  uid: string | undefined,
+  workspaceId: string | undefined,
+): string | null {
   if (!uid || !workspaceId || typeof localStorage === 'undefined') return null;
   try {
     const v = localStorage.getItem(selectedDatasetStorageKey(uid, workspaceId));
@@ -22,7 +25,7 @@ export function readSelectedDatasetId(uid: string | undefined, workspaceId: stri
 export function writeSelectedDatasetId(
   uid: string | undefined,
   workspaceId: string | undefined,
-  datasetId: string | null
+  datasetId: string | null,
 ): void {
   if (!uid || !workspaceId || typeof localStorage === 'undefined') return;
   try {

@@ -23,7 +23,10 @@
   font-weight: 700;
   letter-spacing: 0.06em;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .theme-segment__option:hover:not(:disabled):not(.theme-segment__option--selected) {

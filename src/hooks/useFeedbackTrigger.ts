@@ -6,7 +6,7 @@ import type { FeedbackType } from '../types/feedback';
 export const useFeedbackTrigger = (
   type: FeedbackType,
   shouldTrigger: boolean,
-  delay: number = 1000
+  delay: number = 1000,
 ) => {
   const { showFeedback } = useFeedback();
   const hasTriggered = useRef(false);

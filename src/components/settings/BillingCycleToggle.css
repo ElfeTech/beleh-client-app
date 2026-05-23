@@ -21,7 +21,10 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .billing-cycle-segment__option:hover:not(:disabled):not(.billing-cycle-segment__option--selected) {

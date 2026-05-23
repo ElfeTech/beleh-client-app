@@ -16,7 +16,11 @@ export function TableSchemaView({ columns, rows }: TableSchemaViewProps) {
     const q = filter.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter((row) =>
-      columns.some((col) => String(row[col] ?? '').toLowerCase().includes(q))
+      columns.some((col) =>
+        String(row[col] ?? '')
+          .toLowerCase()
+          .includes(q),
+      ),
     );
   }, [rows, columns, filter]);
 
@@ -43,10 +47,7 @@ export function TableSchemaView({ columns, rows }: TableSchemaViewProps) {
           Download CSV
         </button>
       </div>
-      <DataTable
-        columns={columns}
-        data={filteredRows as Record<string, unknown>[]}
-      />
+      <DataTable columns={columns} data={filteredRows as Record<string, unknown>[]} />
     </div>
   );
 }

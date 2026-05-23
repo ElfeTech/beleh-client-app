@@ -118,7 +118,9 @@ const DEFAULT_BILLING_PLANS: Plan[] = [
 ];
 
 function resolveDisplayPlans(apiPlans: Plan[]): Plan[] {
-  const active = apiPlans.filter((p) => p.is_active).sort((a, b) => a.price_monthly - b.price_monthly);
+  const active = apiPlans
+    .filter((p) => p.is_active)
+    .sort((a, b) => a.price_monthly - b.price_monthly);
   return active.length > 0 ? active : DEFAULT_BILLING_PLANS;
 }
 
@@ -267,7 +269,10 @@ export function UsageSection() {
               <p className="billing-usage-card__label">{label}</p>
               <p className="billing-usage-card__caption">{caption}</p>
               <div className="billing-usage-card__bar">
-                <div className="billing-usage-card__fill" style={{ width: `${pct(used, limit)}%` }} />
+                <div
+                  className="billing-usage-card__fill"
+                  style={{ width: `${pct(used, limit)}%` }}
+                />
               </div>
               <p className="billing-usage-card__used">
                 Used: {formatUsageValue(used, key)} / Limit: {formatUsageValue(limit, key)}
@@ -301,14 +306,10 @@ export function UsageSection() {
                   key={tierPlan.id}
                   className={`billing-tier-card settings-card ${recommended ? 'billing-tier-card--recommended' : ''} ${isCurrent ? 'billing-tier-card--current' : ''}`}
                 >
-                  {recommended && (
-                    <span className="billing-tier-card__ribbon">Recommended</span>
-                  )}
+                  {recommended && <span className="billing-tier-card__ribbon">Recommended</span>}
                   <header className="billing-tier-card__header">
                     <h4 className="billing-tier-card__name">{tierPlan.name}</h4>
-                    {recommended && (
-                      <p className="billing-tier-card__promo">Save 20% on Annual</p>
-                    )}
+                    {recommended && <p className="billing-tier-card__promo">Save 20% on Annual</p>}
                     {enterprise && (
                       <p className="billing-tier-card__promo billing-tier-card__promo--link">
                         Scale clusters
@@ -324,18 +325,31 @@ export function UsageSection() {
                   <ul className="billing-tier-card__features">
                     {planFeatures(tierPlan).map((feat) => (
                       <li key={feat}>
-                        <Check size={14} strokeWidth={2.5} className="billing-tier-card__check" aria-hidden />
+                        <Check
+                          size={14}
+                          strokeWidth={2.5}
+                          className="billing-tier-card__check"
+                          aria-hidden
+                        />
                         {feat}
                       </li>
                     ))}
                   </ul>
                   <footer className="billing-tier-card__footer">
                     {isCurrent ? (
-                      <button type="button" className="billing-tier-card__btn billing-tier-card__btn--active" disabled>
+                      <button
+                        type="button"
+                        className="billing-tier-card__btn billing-tier-card__btn--active"
+                        disabled
+                      >
                         Currently active plan
                       </button>
                     ) : (
-                      <button type="button" className="billing-tier-card__btn billing-tier-card__btn--soon" disabled>
+                      <button
+                        type="button"
+                        className="billing-tier-card__btn billing-tier-card__btn--soon"
+                        disabled
+                      >
                         Coming soon
                       </button>
                     )}

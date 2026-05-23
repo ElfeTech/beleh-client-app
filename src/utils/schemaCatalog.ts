@@ -36,7 +36,10 @@ export function tablesFromMetadata(datasource: DataSourceResponse): DatasetTable
   ];
 }
 
-export function isPrimaryKeyColumn(col: DataSourceColumn | DatasetTableColumn, index: number): boolean {
+export function isPrimaryKeyColumn(
+  col: DataSourceColumn | DatasetTableColumn,
+  index: number,
+): boolean {
   const role = 'role' in col ? col.role : undefined;
   if (role && /primary|pk/i.test(role)) return true;
   const name = col.name.toLowerCase();
@@ -46,7 +49,7 @@ export function isPrimaryKeyColumn(col: DataSourceColumn | DatasetTableColumn, i
 export function getSourceDisplayName(
   kind: CatalogSourceKind,
   connector?: ConnectorResponse,
-  datasource?: DataSourceResponse
+  datasource?: DataSourceResponse,
 ): string {
   if (kind === 'connector' && connector) return connector.name;
   if (datasource) return datasource.name;
@@ -56,7 +59,7 @@ export function getSourceDisplayName(
 export function getSourceHostHint(
   kind: CatalogSourceKind,
   connector?: ConnectorResponse,
-  datasource?: DataSourceResponse
+  datasource?: DataSourceResponse,
 ): string {
   if (kind === 'connector' && connector) {
     return `${connector.type.toUpperCase()} · Workspace connector`;
@@ -71,7 +74,7 @@ export function getSourceHostHint(
 export function getSourceTableCountLabel(
   kind: CatalogSourceKind,
   tableCount: number | null,
-  metadataStatus?: ConnectorResponse['metadata_status']
+  metadataStatus?: ConnectorResponse['metadata_status'],
 ): string {
   if (kind === 'connector' && metadataStatus !== 'COMPLETED') {
     return 'Schema pending';

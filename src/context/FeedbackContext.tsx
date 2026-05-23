@@ -1,6 +1,11 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
-import type { FeedbackType, FeedbackTrigger, FeedbackSubmission, FeedbackState } from '../types/feedback';
+import type {
+  FeedbackType,
+  FeedbackTrigger,
+  FeedbackSubmission,
+  FeedbackState,
+} from '../types/feedback';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from './AuthContext';
 import { FEEDBACK_STATE_STORAGE_KEY } from '../constants/clientStorageKeys';
@@ -82,77 +87,83 @@ export const FeedbackProvider = ({ children }: { children: ReactNode }) => {
         // Let the feedback logic check first, then update after showing/dismissing
       } else {
         // Not in the 2-3 day window, update timestamp
-        setState(prev => ({ ...prev, lastVisitTimestamp: now }));
+        setState((prev) => ({ ...prev, lastVisitTimestamp: now }));
       }
     } else {
       // First visit
-      setState(prev => ({ ...prev, lastVisitTimestamp: now }));
+      setState((prev) => ({ ...prev, lastVisitTimestamp: now }));
     }
   }, []);
 
-  const shouldShowFeedback = useCallback((type: FeedbackType): boolean => {
-    // Don't show if already dismissed in this session
-    if (state.dismissedInSession.has(type)) {
-      return false;
-    }
-
-    // Don't show if already submitted this type
-    if (state.submittedTypes.includes(type)) {
-      return false;
-    }
-
-    // Rate limiting: Don't show feedback more than once per day
-    if (state.lastShownTimestamp) {
-      const timeSinceLastShown = Date.now() - state.lastShownTimestamp;
-      if (timeSinceLastShown < ONE_DAY_MS) {
+  const shouldShowFeedback = useCallback(
+    (type: FeedbackType): boolean => {
+      // Don't show if already dismissed in this session
+      if (state.dismissedInSession.has(type)) {
         return false;
       }
-    }
 
-    // Type-specific logic
-    switch (type) {
-      case 'DATA_UNDERSTANDING':
-        return state.datasetUploadCount >= 1 && state.chatQueryCount >= 3;
-
-      case 'ACCURACY':
-        return state.complexQueryCount >= 1;
-
-      case 'RETURNING_USER': {
-        const lastVisit = state.lastVisitTimestamp;
-        if (!lastVisit) return false;
-        const timeSinceLastVisit = Date.now() - lastVisit;
-        return timeSinceLastVisit >= TWO_DAYS_MS && timeSinceLastVisit <= THREE_DAYS_MS;
+      // Don't show if already submitted this type
+      if (state.submittedTypes.includes(type)) {
+        return false;
       }
 
-      case 'UX':
-        return state.visualizationInteractionCount >= 1;
-
-      case 'GENERAL': {
-        // Show general feedback max once per week
-        if (state.lastShownTimestamp) {
-          const timeSinceLastShown = Date.now() - state.lastShownTimestamp;
-          return timeSinceLastShown >= ONE_WEEK_MS;
+      // Rate limiting: Don't show feedback more than once per day
+      if (state.lastShownTimestamp) {
+        const timeSinceLastShown = Date.now() - state.lastShownTimestamp;
+        if (timeSinceLastShown < ONE_DAY_MS) {
+          return false;
         }
-        return Math.random() < 0.1; // 10% chance
       }
 
-      default:
-        return false;
-    }
-  }, [state]);
+      // Type-specific logic
+      switch (type) {
+        case 'DATA_UNDERSTANDING':
+          return state.datasetUploadCount >= 1 && state.chatQueryCount >= 3;
 
-  const showFeedback = useCallback((trigger: FeedbackTrigger) => {
-    if (!shouldShowFeedback(trigger.type)) {
-      return;
-    }
+        case 'ACCURACY':
+          return state.complexQueryCount >= 1;
 
-    setCurrentTrigger(trigger);
-    setIsVisible(true);
-    setState(prev => ({
-      ...prev,
-      lastShownTimestamp: Date.now(),
-    }));
-  }, [shouldShowFeedback]);
+        case 'RETURNING_USER': {
+          const lastVisit = state.lastVisitTimestamp;
+          if (!lastVisit) return false;
+          const timeSinceLastVisit = Date.now() - lastVisit;
+          return timeSinceLastVisit >= TWO_DAYS_MS && timeSinceLastVisit <= THREE_DAYS_MS;
+        }
+
+        case 'UX':
+          return state.visualizationInteractionCount >= 1;
+
+        case 'GENERAL': {
+          // Show general feedback max once per week
+          if (state.lastShownTimestamp) {
+            const timeSinceLastShown = Date.now() - state.lastShownTimestamp;
+            return timeSinceLastShown >= ONE_WEEK_MS;
+          }
+          return Math.random() < 0.1; // 10% chance
+        }
+
+        default:
+          return false;
+      }
+    },
+    [state],
+  );
+
+  const showFeedback = useCallback(
+    (trigger: FeedbackTrigger) => {
+      if (!shouldShowFeedback(trigger.type)) {
+        return;
+      }
+
+      setCurrentTrigger(trigger);
+      setIsVisible(true);
+      setState((prev) => ({
+        ...prev,
+        lastShownTimestamp: Date.now(),
+      }));
+    },
+    [shouldShowFeedback],
+  );
 
   const dismissFeedback = useCallback(() => {
     if (currentTrigger) {
@@ -165,87 +176,90 @@ export const FeedbackProvider = ({ children }: { children: ReactNode }) => {
         updates.lastVisitTimestamp = Date.now();
       }
 
-      setState(prev => ({ ...prev, ...updates }));
+      setState((prev) => ({ ...prev, ...updates }));
     }
     setIsVisible(false);
     setCurrentTrigger(null);
   }, [currentTrigger, state.dismissedInSession]);
 
-  const submitFeedback = useCallback(async (rating?: number, comment?: string) => {
-    if (!currentTrigger || !user) return;
+  const submitFeedback = useCallback(
+    async (rating?: number, comment?: string) => {
+      if (!currentTrigger || !user) return;
 
-    setIsSubmitting(true);
+      setIsSubmitting(true);
 
-    try {
-      const token = await user.getIdToken();
+      try {
+        const token = await user.getIdToken();
 
-      // Get session_id from localStorage if available
-      const sessionId = localStorage.getItem('activeSessionId') || undefined;
+        // Get session_id from localStorage if available
+        const sessionId = localStorage.getItem('activeSessionId') || undefined;
 
-      const submission: FeedbackSubmission = {
-        feedback_type: currentTrigger.type,
-        question: currentTrigger.question,
-        rating,
-        response: comment,
-        session_id: sessionId,
-        metadata: {
-          action_trigger: currentTrigger.type.toLowerCase(),
-          platform_area: 'chat',
-          context: currentTrigger.context,
-        },
-      };
+        const submission: FeedbackSubmission = {
+          feedback_type: currentTrigger.type,
+          question: currentTrigger.question,
+          rating,
+          response: comment,
+          session_id: sessionId,
+          metadata: {
+            action_trigger: currentTrigger.type.toLowerCase(),
+            platform_area: 'chat',
+            context: currentTrigger.context,
+          },
+        };
 
-      // Submit to backend (fire and forget)
-      apiClient.submitFeedback(token, submission).catch(err => {
-        console.error('[Feedback] Submission failed:', err);
-      });
+        // Submit to backend (fire and forget)
+        apiClient.submitFeedback(token, submission).catch((err) => {
+          console.error('[Feedback] Submission failed:', err);
+        });
 
-      // Update local state
-      const updates: Partial<FeedbackState> = {
-        submittedTypes: [...state.submittedTypes, currentTrigger.type],
-      };
+        // Update local state
+        const updates: Partial<FeedbackState> = {
+          submittedTypes: [...state.submittedTypes, currentTrigger.type],
+        };
 
-      // If submitting RETURNING_USER feedback, update the last visit timestamp
-      if (currentTrigger.type === 'RETURNING_USER') {
-        updates.lastVisitTimestamp = Date.now();
+        // If submitting RETURNING_USER feedback, update the last visit timestamp
+        if (currentTrigger.type === 'RETURNING_USER') {
+          updates.lastVisitTimestamp = Date.now();
+        }
+
+        setState((prev) => ({ ...prev, ...updates }));
+
+        // Close modal
+        setIsVisible(false);
+        setCurrentTrigger(null);
+      } catch (error) {
+        console.error('[Feedback] Error submitting feedback:', error);
+      } finally {
+        setIsSubmitting(false);
       }
-
-      setState(prev => ({ ...prev, ...updates }));
-
-      // Close modal
-      setIsVisible(false);
-      setCurrentTrigger(null);
-    } catch (error) {
-      console.error('[Feedback] Error submitting feedback:', error);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [currentTrigger, user]);
+    },
+    [currentTrigger, user],
+  );
 
   // Tracking methods
   const trackDatasetUpload = useCallback(() => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       datasetUploadCount: prev.datasetUploadCount + 1,
     }));
   }, []);
 
   const trackChatQuery = useCallback(() => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       chatQueryCount: prev.chatQueryCount + 1,
     }));
   }, []);
 
   const trackComplexQuery = useCallback(() => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       complexQueryCount: prev.complexQueryCount + 1,
     }));
   }, []);
 
   const trackVisualizationInteraction = useCallback(() => {
-    setState(prev => ({
+    setState((prev) => ({
       ...prev,
       visualizationInteractionCount: prev.visualizationInteractionCount + 1,
     }));
@@ -264,11 +278,7 @@ export const FeedbackProvider = ({ children }: { children: ReactNode }) => {
     trackVisualizationInteraction,
   };
 
-  return (
-    <FeedbackContext.Provider value={value}>
-      {children}
-    </FeedbackContext.Provider>
-  );
+  return <FeedbackContext.Provider value={value}>{children}</FeedbackContext.Provider>;
 };
 
 export const useFeedback = () => {

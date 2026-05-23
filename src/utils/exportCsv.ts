@@ -16,13 +16,17 @@ export function convertRowsToCSV(data: Record<string, unknown>[], columns: strin
         }
         return stringValue;
       })
-      .join(',')
+      .join(','),
   );
 
   return [header, ...rows].join('\n');
 }
 
-export function downloadCsvFile(data: Record<string, unknown>[], columns: string[], filename?: string): void {
+export function downloadCsvFile(
+  data: Record<string, unknown>[],
+  columns: string[],
+  filename?: string,
+): void {
   const csvContent = convertRowsToCSV(data, columns);
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const link = document.createElement('a');

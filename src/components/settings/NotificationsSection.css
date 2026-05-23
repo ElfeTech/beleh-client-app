@@ -38,7 +38,10 @@
   font-size: var(--text-xs);
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .quiet-day-btn.is-active,

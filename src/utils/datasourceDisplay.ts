@@ -23,7 +23,7 @@ export interface WorkspaceSourceContext {
 
 function mapStatusToClusterLabel(
   status: string | undefined,
-  metadataStatus?: string
+  metadataStatus?: string,
 ): { label: string; tone: WorkspaceSourceContext['statusTone'] } {
   const s = (status || '').toUpperCase();
   const meta = (metadataStatus || '').toUpperCase();
@@ -43,7 +43,7 @@ function mapStatusToClusterLabel(
 export function getWorkspaceSourceContext(
   selectedDatasourceId: string | null,
   datasources: DataSourceResponse[],
-  connectors: ConnectorResponse[] = []
+  connectors: ConnectorResponse[] = [],
 ): WorkspaceSourceContext {
   if (!selectedDatasourceId) {
     return {
@@ -60,7 +60,8 @@ export function getWorkspaceSourceContext(
   const ds = datasources.find((d) => d.id === selectedDatasourceId);
   if (ds) {
     const { label, tone } = mapStatusToClusterLabel(ds.status);
-    const path = ds.duckdb_storage_path || `${ds.name.toLowerCase().replace(/\s+/g, '-')}.beleh.local`;
+    const path =
+      ds.duckdb_storage_path || `${ds.name.toLowerCase().replace(/\s+/g, '-')}.beleh.local`;
     return {
       kind: 'datasource',
       id: ds.id,
@@ -100,7 +101,7 @@ export function getWorkspaceSourceContext(
 export function countSchemaTables(
   selectedDatasourceId: string | null,
   datasources: DataSourceResponse[],
-  connectors: ConnectorResponse[] = []
+  connectors: ConnectorResponse[] = [],
 ): number | null {
   if (!selectedDatasourceId) return null;
   const ds = datasources.find((d) => d.id === selectedDatasourceId);

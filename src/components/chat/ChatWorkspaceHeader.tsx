@@ -56,7 +56,7 @@ export function ChatWorkspaceHeader({
             <span
               className={cn(
                 'chat-workspace-header__status-dot',
-                `chat-workspace-header__status-dot--${source.statusTone}`
+                `chat-workspace-header__status-dot--${source.statusTone}`,
               )}
             />
             <span className="truncate">{source.displayName}</span>
@@ -105,7 +105,7 @@ export function ChatWorkspaceHeader({
             <span
               className={cn(
                 'chat-workspace-header__status',
-                `chat-workspace-header__status--${source.statusTone}`
+                `chat-workspace-header__status--${source.statusTone}`,
               )}
             >
               {source.statusLabel}

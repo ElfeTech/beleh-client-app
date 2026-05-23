@@ -28,7 +28,7 @@ export type GoogleAuthIntent = 'signin' | 'register';
 
 export async function establishSession(
   user: User,
-  options?: { forceRefreshToken?: boolean; backendIntent?: GoogleAuthIntent }
+  options?: { forceRefreshToken?: boolean; backendIntent?: GoogleAuthIntent },
 ): Promise<void> {
   const force = options?.forceRefreshToken ?? false;
   const token = await user.getIdToken(force);

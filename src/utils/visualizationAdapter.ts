@@ -6,11 +6,7 @@
 
 import type { VisualizationRecommendation } from '../types/api';
 import type { FormatConfig } from './formatters';
-import {
-  createFormatConfig,
-  formatValue,
-  formatValueTooltip,
-} from './formatters';
+import { createFormatConfig, formatValue, formatValueTooltip } from './formatters';
 
 export interface FormattedChartData {
   // Original field names
@@ -48,7 +44,7 @@ export interface FormattedChartData {
  */
 export function adaptVisualizationData(
   visualization: VisualizationRecommendation,
-  rawData: Record<string, any>[]
+  rawData: Record<string, any>[],
 ): FormattedChartData {
   const { encoding } = visualization;
   const xEncoding = encoding?.x;
@@ -62,8 +58,8 @@ export function adaptVisualizationData(
   const yField = yEncoding.field;
 
   // Extract sample values for type detection
-  const xSampleValues = rawData.map(row => row[xField]).filter(v => v != null);
-  const ySampleValues = rawData.map(row => row[yField]).filter(v => v != null);
+  const xSampleValues = rawData.map((row) => row[xField]).filter((v) => v != null);
+  const ySampleValues = rawData.map((row) => row[yField]).filter((v) => v != null);
 
   // Extract time grain from backend if available (check both direct property and advanced_spec)
   const timeGrain = visualization.time_grain || (visualization as any).advanced_spec?.time_grain;
@@ -74,18 +70,13 @@ export function adaptVisualizationData(
     xEncoding.type,
     xSampleValues,
     xEncoding.format,
-    timeGrain
+    timeGrain,
   );
 
-  const yFormat = createFormatConfig(
-    yField,
-    yEncoding.type,
-    ySampleValues,
-    yEncoding.format
-  );
+  const yFormat = createFormatConfig(yField, yEncoding.type, ySampleValues, yEncoding.format);
 
   // Transform data
-  const chartData = rawData.map(row => {
+  const chartData = rawData.map((row) => {
     const rawX = row[xField];
     const rawY = row[yField];
     const numericY = Number(rawY) || 0;
@@ -143,19 +134,17 @@ export interface PieChartData extends FormattedChartData {
 export function adaptPieChartData(
   visualization: VisualizationRecommendation,
   rawData: Record<string, any>[],
-  maxSlices: number = 10
+  maxSlices: number = 10,
 ): PieChartData {
   // Limit data for readability
   const limitedData = rawData.slice(0, maxSlices);
   const baseData = adaptVisualizationData(visualization, limitedData);
 
   // Add percentage calculations
-  const chartDataWithPercent = baseData.chartData.map(item => ({
+  const chartDataWithPercent = baseData.chartData.map((item) => ({
     ...item,
     percent: baseData.total! > 0 ? item.value / baseData.total! : 0,
-    percentDisplay: baseData.total! > 0
-      ? ((item.value / baseData.total!) * 100).toFixed(1)
-      : '0.0',
+    percentDisplay: baseData.total! > 0 ? ((item.value / baseData.total!) * 100).toFixed(1) : '0.0',
   }));
 
   return {
@@ -175,7 +164,7 @@ export interface LineChartData extends FormattedChartData {
  */
 export function adaptLineChartData(
   visualization: VisualizationRecommendation,
-  rawData: Record<string, any>[]
+  rawData: Record<string, any>[],
 ): LineChartData {
   const baseData = adaptVisualizationData(visualization, rawData);
 
@@ -209,13 +198,14 @@ export interface BarChartData extends FormattedChartData {
  */
 export function adaptBarChartData(
   visualization: VisualizationRecommendation,
-  rawData: Record<string, any>[]
+  rawData: Record<string, any>[],
 ): BarChartData {
   const baseData = adaptVisualizationData(visualization, rawData);
 
   // Bar charts typically use categorical x-axis
-  const isCategorical = baseData.xFormat.type === 'string' ||
-                        (baseData.xFormat.type === 'date' && baseData.xFormat.timeGranularity !== 'none');
+  const isCategorical =
+    baseData.xFormat.type === 'string' ||
+    (baseData.xFormat.type === 'date' && baseData.xFormat.timeGranularity !== 'none');
 
   return {
     ...baseData,
@@ -247,7 +237,7 @@ export function formatTooltipContent(
   value: any,
   xFormat: FormatConfig,
   yFormat: FormatConfig,
-  metricName?: string
+  metricName?: string,
 ): TooltipContent {
   const formattedLabel = formatValueTooltip(name, xFormat);
   const formattedValue = formatValueTooltip(value, yFormat, value);
@@ -277,20 +267,17 @@ export function shouldUseCompactFormat(values: number[]): boolean {
 /**
  * Utility to extract column metadata for formatting
  */
-export function getColumnFormat(
-  columnName: string,
-  data: Record<string, any>[]
-): FormatConfig {
+export function getColumnFormat(columnName: string, data: Record<string, any>[]): FormatConfig {
   const sampleValues = data
-    .map(row => row[columnName])
-    .filter(v => v != null)
+    .map((row) => row[columnName])
+    .filter((v) => v != null)
     .slice(0, 100); // Sample first 100 rows
 
   // Try to detect from field name and values
   const detectedType = createFormatConfig(
     columnName,
     'quantitative', // Default assumption
-    sampleValues
+    sampleValues,
   );
 
   return detectedType;
@@ -352,7 +339,9 @@ export const COLOR_PALETTES = {
   ],
 };
 
-export function getColorPalette(type: 'default' | 'monochrome' | 'warm' | 'cool' = 'default'): string[] {
+export function getColorPalette(
+  type: 'default' | 'monochrome' | 'warm' | 'cool' = 'default',
+): string[] {
   return COLOR_PALETTES[type];
 }
 
@@ -364,9 +353,7 @@ function isValidFieldName(field: unknown): field is string {
   return typeof field === 'string' && field.trim().length > 0;
 }
 
-function pickFieldName(
-  ...candidates: (string | undefined | null)[]
-): string | undefined {
+function pickFieldName(...candidates: (string | undefined | null)[]): string | undefined {
   for (const c of candidates) {
     if (isValidFieldName(c)) return c.trim();
   }
@@ -381,7 +368,7 @@ function isNumericColumnValue(value: unknown): boolean {
 
 function inferNumericField(
   rawData: Record<string, any>[],
-  excludeFields: Set<string>
+  excludeFields: Set<string>,
 ): string | null {
   if (rawData.length === 0) return null;
   const columns = Object.keys(rawData[0]);
@@ -394,7 +381,7 @@ function inferNumericField(
 
 function inferCategoryField(
   rawData: Record<string, any>[],
-  excludeFields: Set<string>
+  excludeFields: Set<string>,
 ): string | null {
   if (rawData.length === 0) return null;
   const columns = Object.keys(rawData[0]);
@@ -439,7 +426,7 @@ export interface MultiDimensionalChartData {
  */
 export function adaptMultiDimensionalData(
   visualization: VisualizationRecommendation,
-  rawData: Record<string, any>[]
+  rawData: Record<string, any>[],
 ): MultiDimensionalChartData {
   const { encoding, dimensions } = visualization;
 
@@ -451,14 +438,14 @@ export function adaptMultiDimensionalData(
     encoding?.series?.field,
     encoding?.color?.field,
     dimensions?.series,
-    dimensions?.color
+    dimensions?.color,
   );
   const colorField = pickFieldName(encoding?.color?.field, dimensions?.color);
   const sizeField = pickFieldName(encoding?.size?.field, dimensions?.size);
   const facetField = pickFieldName(encoding?.facet?.field, dimensions?.facet);
 
   const prelimExclude = new Set(
-    [seriesField, colorField, sizeField, facetField].filter(isValidFieldName)
+    [seriesField, colorField, sizeField, facetField].filter(isValidFieldName),
   );
 
   let xField = pickFieldName(encoding?.x?.field, dimensions?.x);
@@ -484,7 +471,9 @@ export function adaptMultiDimensionalData(
 
   yLabel =
     encoding?.y?.label ||
-    (isValidFieldName(dimensions?.y) ? dimensions.y.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()) : yField.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
+    (isValidFieldName(dimensions?.y)
+      ? dimensions.y.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
+      : yField.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
 
   // Calculate dimension count
   let dimensionCount = 2; // x and y are always present
@@ -494,22 +483,17 @@ export function adaptMultiDimensionalData(
   if (facetField) dimensionCount++;
 
   // Create format configurations
-  const xSampleValues = rawData.map(row => row[xField]).filter(v => v != null);
-  const ySampleValues = rawData.map(row => row[yField]).filter(v => v != null);
+  const xSampleValues = rawData.map((row) => row[xField]).filter((v) => v != null);
+  const ySampleValues = rawData.map((row) => row[yField]).filter((v) => v != null);
 
   const xFormat = createFormatConfig(
     xField,
     encoding?.x?.type ?? 'categorical',
     xSampleValues,
-    encoding?.x?.format
+    encoding?.x?.format,
   );
 
-  const yFormat = createFormatConfig(
-    yField,
-    yType,
-    ySampleValues,
-    encoding?.y?.format
-  );
+  const yFormat = createFormatConfig(yField, yType, ySampleValues, encoding?.y?.format);
 
   // Extract time grain from visualization metadata (check both direct property and advanced_spec)
   const timeGrain = visualization.time_grain || (visualization as any).advanced_spec?.time_grain;
@@ -540,7 +524,7 @@ export function adaptMultiDimensionalData(
  */
 export function checkDimensionOverload(
   visualization: VisualizationRecommendation,
-  maxDimensions: number = 5
+  maxDimensions: number = 5,
 ): { overloaded: boolean; dimensionCount: number; message?: string } {
   const { encoding } = visualization;
 
@@ -566,11 +550,8 @@ export function checkDimensionOverload(
 /**
  * Get unique values for a categorical field
  */
-export function getUniqueValues(
-  data: Record<string, any>[],
-  field: string
-): any[] {
-  return Array.from(new Set(data.map(row => row[field])));
+export function getUniqueValues(data: Record<string, any>[], field: string): any[] {
+  return Array.from(new Set(data.map((row) => row[field])));
 }
 
 /**
@@ -579,7 +560,7 @@ export function getUniqueValues(
 export function checkFieldCardinality(
   data: Record<string, any>[],
   field: string,
-  maxCardinality: number = 20
+  maxCardinality: number = 20,
 ): { valid: boolean; cardinality: number; message?: string } {
   const uniqueValues = getUniqueValues(data, field);
   const cardinality = uniqueValues.length;
@@ -618,7 +599,7 @@ export interface WideToLongResult {
 export function detectWideFormatData(
   data: Record<string, any>[],
   xField: string,
-  yField?: string
+  yField?: string,
 ): { isWideFormat: boolean; numericColumns: string[] } {
   if (!data || data.length === 0) {
     return { isWideFormat: false, numericColumns: [] };
@@ -628,10 +609,12 @@ export function detectWideFormatData(
   const allColumns = Object.keys(firstRow);
 
   // Find all numeric columns (excluding the x-axis field)
-  const numericColumns = allColumns.filter(col => {
+  const numericColumns = allColumns.filter((col) => {
     if (col === xField) return false;
     const value = firstRow[col];
-    return typeof value === 'number' || (!Number.isNaN(Number(value)) && value !== null && value !== '');
+    return (
+      typeof value === 'number' || (!Number.isNaN(Number(value)) && value !== null && value !== '')
+    );
   });
 
   // Consider it wide format if:
@@ -650,12 +633,12 @@ export function transformWideToLong(
   xField: string,
   metricColumns: string[],
   seriesFieldName: string = 'metric',
-  valueFieldName: string = 'value'
+  valueFieldName: string = 'value',
 ): WideToLongResult {
   const longData: Record<string, any>[] = [];
 
-  data.forEach(row => {
-    metricColumns.forEach(metricCol => {
+  data.forEach((row) => {
+    metricColumns.forEach((metricCol) => {
       const newRow: Record<string, any> = {
         [xField]: row[xField],
         [seriesFieldName]: formatMetricName(metricCol),
@@ -665,7 +648,7 @@ export function transformWideToLong(
       };
 
       // Copy any other non-metric fields (e.g., additional dimensions)
-      Object.keys(row).forEach(key => {
+      Object.keys(row).forEach((key) => {
         if (key !== xField && !metricColumns.includes(key)) {
           newRow[key] = row[key];
         }
@@ -692,6 +675,6 @@ function formatMetricName(name: string): string {
     .replaceAll('_', ' ')
     .replaceAll(/([a-z])([A-Z])/g, '$1 $2')
     .split(' ')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(' ');
 }

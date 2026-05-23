@@ -11,13 +11,7 @@ interface NotificationSetting {
   enabled: boolean;
 }
 
-function NotificationToggle({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: () => void;
-}) {
+function NotificationToggle({ checked, onChange }: { checked: boolean; onChange: () => void }) {
   return (
     <label className="settings-toggle">
       <input type="checkbox" checked={checked} onChange={onChange} />
@@ -28,22 +22,57 @@ function NotificationToggle({
 
 export function NotificationsSection() {
   const [emailNotifications, setEmailNotifications] = useState<NotificationSetting[]>([
-    { id: 'usage_alerts', title: 'Usage Alerts', description: 'Get notified when you reach 80% and 100% of your quota', enabled: true },
-    { id: 'weekly_summary', title: 'Weekly Summary', description: 'Receive a weekly summary of your analytics activity', enabled: true },
-    { id: 'new_features', title: 'New Features', description: 'Be the first to know about new features and updates', enabled: false },
-    { id: 'tips_tricks', title: 'Tips & Tricks', description: 'Helpful tips to get the most out of our platform', enabled: false },
+    {
+      id: 'usage_alerts',
+      title: 'Usage Alerts',
+      description: 'Get notified when you reach 80% and 100% of your quota',
+      enabled: true,
+    },
+    {
+      id: 'weekly_summary',
+      title: 'Weekly Summary',
+      description: 'Receive a weekly summary of your analytics activity',
+      enabled: true,
+    },
+    {
+      id: 'new_features',
+      title: 'New Features',
+      description: 'Be the first to know about new features and updates',
+      enabled: false,
+    },
+    {
+      id: 'tips_tricks',
+      title: 'Tips & Tricks',
+      description: 'Helpful tips to get the most out of our platform',
+      enabled: false,
+    },
   ]);
 
   const [pushNotifications, setPushNotifications] = useState<NotificationSetting[]>([
-    { id: 'query_complete', title: 'Query Complete', description: 'Notify when long-running queries finish', enabled: true },
-    { id: 'dataset_ready', title: 'Dataset Ready', description: 'Notify when dataset processing completes', enabled: true },
-    { id: 'team_activity', title: 'Team Activity', description: 'Updates about team member actions', enabled: false },
+    {
+      id: 'query_complete',
+      title: 'Query Complete',
+      description: 'Notify when long-running queries finish',
+      enabled: true,
+    },
+    {
+      id: 'dataset_ready',
+      title: 'Dataset Ready',
+      description: 'Notify when dataset processing completes',
+      enabled: true,
+    },
+    {
+      id: 'team_activity',
+      title: 'Team Activity',
+      description: 'Updates about team member actions',
+      enabled: false,
+    },
   ]);
 
   const toggleSetting = (
     settings: NotificationSetting[],
     setSettings: React.Dispatch<React.SetStateAction<NotificationSetting[]>>,
-    id: string
+    id: string,
   ) => {
     setSettings(settings.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)));
   };
@@ -86,7 +115,9 @@ export function NotificationsSection() {
               </div>
               <NotificationToggle
                 checked={notification.enabled}
-                onChange={() => toggleSetting(emailNotifications, setEmailNotifications, notification.id)}
+                onChange={() =>
+                  toggleSetting(emailNotifications, setEmailNotifications, notification.id)
+                }
               />
             </div>
           ))}
@@ -109,7 +140,9 @@ export function NotificationsSection() {
               </div>
               <NotificationToggle
                 checked={notification.enabled}
-                onChange={() => toggleSetting(pushNotifications, setPushNotifications, notification.id)}
+                onChange={() =>
+                  toggleSetting(pushNotifications, setPushNotifications, notification.id)
+                }
               />
             </div>
           ))}

@@ -23,7 +23,10 @@
   color: var(--text-tertiary);
   cursor: pointer;
   white-space: nowrap;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
 }
 
 .response-view-tabs__tab:hover {

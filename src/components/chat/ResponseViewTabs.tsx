@@ -12,10 +12,7 @@ import { InteractivePlotView } from './InteractivePlotView';
 import { SqlInspectorPanel } from './SqlInspectorPanel';
 import './ResponseViewTabs.css';
 
-const TAB_CONFIG: Record<
-  ResponseViewId,
-  { label: string; icon: typeof LayoutGrid }
-> = {
+const TAB_CONFIG: Record<ResponseViewId, { label: string; icon: typeof LayoutGrid }> = {
   table: { label: 'Table schema matrix', icon: LayoutGrid },
   plot: { label: 'Interactive plot', icon: BarChart3 },
   sql: { label: 'Compiled SQL', icon: Terminal },
@@ -31,7 +28,7 @@ export function ResponseViewTabs({ response, schemaTarget }: ResponseViewTabsPro
   const { availableViews, defaultView } = availability;
 
   const [activeView, setActiveView] = useState<ResponseViewId>(
-    defaultView ?? availableViews[0] ?? 'table'
+    defaultView ?? availableViews[0] ?? 'table',
   );
 
   useEffect(() => {
@@ -89,7 +86,10 @@ export function ResponseViewTabs({ response, schemaTarget }: ResponseViewTabsPro
               type="button"
               role="tab"
               aria-selected={isActive}
-              className={cn('response-view-tabs__tab', isActive && 'response-view-tabs__tab--active')}
+              className={cn(
+                'response-view-tabs__tab',
+                isActive && 'response-view-tabs__tab--active',
+              )}
               onClick={() => setActiveView(viewId)}
             >
               <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />

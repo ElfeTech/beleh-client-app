@@ -217,13 +217,36 @@ export interface SortingConfig {
 export interface VisualizationRecommendation {
   // New backend format uses 'type', old format uses 'visualization_type'
   type?:
-  | 'line' | 'multiline' | 'bar' | 'stacked_bar' | 'heatmap' | 'scatter' | 'pie' | 'table' | 'auto';
-  visualization_type?:
-  // Backend format (lowercase with underscores)
-  | 'line' | 'multiline' | 'bar' | 'stacked_bar' | 'heatmap' | 'scatter' | 'pie' | 'table' | 'auto'
-  // Legacy frontend format (uppercase with underscores) - for backward compatibility
-  | 'BAR_CHART' | 'LINE_CHART' | 'PIE_CHART' | 'SCATTER_PLOT' | 'TABLE' | 'HEATMAP'
-  | 'MULTI_LINE_CHART' | 'GROUPED_BAR_CHART' | 'STACKED_BAR_CHART' | 'NONE';
+    | 'line'
+    | 'multiline'
+    | 'bar'
+    | 'stacked_bar'
+    | 'heatmap'
+    | 'scatter'
+    | 'pie'
+    | 'table'
+    | 'auto';
+  visualization_type?: // Backend format (lowercase with underscores)
+    | 'line'
+    | 'multiline'
+    | 'bar'
+    | 'stacked_bar'
+    | 'heatmap'
+    | 'scatter'
+    | 'pie'
+    | 'table'
+    | 'auto'
+    // Legacy frontend format (uppercase with underscores) - for backward compatibility
+    | 'BAR_CHART'
+    | 'LINE_CHART'
+    | 'PIE_CHART'
+    | 'SCATTER_PLOT'
+    | 'TABLE'
+    | 'HEATMAP'
+    | 'MULTI_LINE_CHART'
+    | 'GROUPED_BAR_CHART'
+    | 'STACKED_BAR_CHART'
+    | 'NONE';
   title: string;
   description: string;
   // New backend format uses 'dimensions', old format uses 'encoding'
@@ -428,7 +451,7 @@ export interface ConnectorResponse {
   updated_at: string | null;
 }
 
-export interface ConnectionTestRequest extends PostgreSQLConfig { }
+export interface ConnectionTestRequest extends PostgreSQLConfig {}
 
 export interface ConnectionTestResponse {
   success: boolean;

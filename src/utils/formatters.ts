@@ -8,7 +8,16 @@ import { format, parseISO, isValid, getQuarter, getISOWeek } from 'date-fns';
 /**
  * Time granularity detection from data patterns
  */
-export type TimeGranularity = 'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second' | 'none';
+export type TimeGranularity =
+  | 'year'
+  | 'quarter'
+  | 'month'
+  | 'week'
+  | 'day'
+  | 'hour'
+  | 'minute'
+  | 'second'
+  | 'none';
 
 export interface FormatConfig {
   type: 'number' | 'currency' | 'percentage' | 'date' | 'time' | 'datetime' | 'string';
@@ -38,7 +47,7 @@ export function isDateTime(value: any): boolean {
   ];
 
   const strValue = String(value);
-  if (datePatterns.some(pattern => pattern.test(strValue))) {
+  if (datePatterns.some((pattern) => pattern.test(strValue))) {
     try {
       const date = parseISO(strValue);
       return isValid(date);
@@ -91,25 +100,27 @@ export function detectTimeGranularity(values: any[]): TimeGranularity {
   if (values.length === 0) return 'none';
 
   const dates = values
-    .filter(v => v != null)
-    .map(v => {
+    .filter((v) => v != null)
+    .map((v) => {
       try {
         return parseISO(String(v));
       } catch {
         return null;
       }
     })
-    .filter(d => d && isValid(d)) as Date[];
+    .filter((d) => d && isValid(d)) as Date[];
 
   if (dates.length === 0) return 'none';
 
   // Check if all dates have the same year
-  const years = new Set(dates.map(d => d.getFullYear()));
-  const months = new Set(dates.map(d => `${d.getFullYear()}-${d.getMonth()}`));
-  const days = new Set(dates.map(d => d.toDateString()));
+  const years = new Set(dates.map((d) => d.getFullYear()));
+  const months = new Set(dates.map((d) => `${d.getFullYear()}-${d.getMonth()}`));
+  const days = new Set(dates.map((d) => d.toDateString()));
 
   // Check for time components
-  const hasTimes = dates.some(d => d.getHours() !== 0 || d.getMinutes() !== 0 || d.getSeconds() !== 0);
+  const hasTimes = dates.some(
+    (d) => d.getHours() !== 0 || d.getMinutes() !== 0 || d.getSeconds() !== 0,
+  );
 
   if (!hasTimes) {
     // Date-only granularity
@@ -127,8 +138,8 @@ export function detectTimeGranularity(values: any[]): TimeGranularity {
     return 'day';
   } else {
     // Has time component
-    const hasMinutes = dates.some(d => d.getMinutes() !== 0);
-    const hasSeconds = dates.some(d => d.getSeconds() !== 0);
+    const hasMinutes = dates.some((d) => d.getMinutes() !== 0);
+    const hasSeconds = dates.some((d) => d.getSeconds() !== 0);
 
     if (hasSeconds) return 'second';
     if (hasMinutes) return 'minute';
@@ -145,7 +156,11 @@ export function detectTimeGranularity(values: any[]): TimeGranularity {
  * - Week: W1 2024
  * - Day: Jan 15
  */
-export function formatDate(value: any, granularity: TimeGranularity = 'day', fullFormat: boolean = false): string {
+export function formatDate(
+  value: any,
+  granularity: TimeGranularity = 'day',
+  fullFormat: boolean = false,
+): string {
   if (!value) return 'N/A';
 
   try {
@@ -205,15 +220,8 @@ export function formatDate(value: any, granularity: TimeGranularity = 'day', ful
 /**
  * Format a number with intelligent precision and compact notation
  */
-export function formatNumber(
-  value: number,
-  config: Partial<FormatConfig> = {}
-): string {
-  const {
-    decimals,
-    compact = false,
-    locale = 'en-US',
-  } = config;
+export function formatNumber(value: number, config: Partial<FormatConfig> = {}): string {
+  const { decimals, compact = false, locale = 'en-US' } = config;
 
   if (value === null || value === undefined || isNaN(value)) {
     return 'N/A';
@@ -273,15 +281,8 @@ function getIntelligentDecimals(value: number): number {
 /**
  * Format currency values
  */
-export function formatCurrency(
-  value: number,
-  config: Partial<FormatConfig> = {}
-): string {
-  const {
-    currency = 'USD',
-    locale = 'en-US',
-    compact = false,
-  } = config;
+export function formatCurrency(value: number, config: Partial<FormatConfig> = {}): string {
+  const { currency = 'USD', locale = 'en-US', compact = false } = config;
 
   if (value === null || value === undefined || isNaN(value)) {
     return 'N/A';
@@ -301,10 +302,7 @@ export function formatCurrency(
 /**
  * Format percentage values
  */
-export function formatPercentage(
-  value: number,
-  config: Partial<FormatConfig> = {}
-): string {
+export function formatPercentage(value: number, config: Partial<FormatConfig> = {}): string {
   const { decimals = 1 } = config;
 
   if (value === null || value === undefined || isNaN(value)) {
@@ -321,7 +319,7 @@ export function formatPercentage(
 export function formatTimeLabel(
   value: any,
   grain?: string,
-  config: Partial<FormatConfig> = {}
+  config: Partial<FormatConfig> = {},
 ): string {
   if (!value) return 'N/A';
 
@@ -381,10 +379,7 @@ export function formatTimeLabel(
  * Format time label for tooltips (more detailed)
  * Shows fuller context than axis labels
  */
-export function formatTimeLabelTooltip(
-  value: any,
-  grain?: string
-): string {
+export function formatTimeLabelTooltip(value: any, grain?: string): string {
   if (!value) return 'N/A';
 
   try {
@@ -441,7 +436,7 @@ export function formatTimeLabelTooltip(
  */
 export function detectFormatType(
   fieldName: string | undefined | null,
-  sampleValues: any[]
+  sampleValues: any[],
 ): FormatConfig['type'] {
   if (!fieldName || typeof fieldName !== 'string') {
     return 'string';
@@ -460,22 +455,27 @@ export function detectFormatType(
     return 'percentage';
   }
 
-  if (lowerName.includes('price') || lowerName.includes('cost') || lowerName.includes('amount') ||
-      lowerName.includes('revenue') || lowerName.includes('salary')) {
+  if (
+    lowerName.includes('price') ||
+    lowerName.includes('cost') ||
+    lowerName.includes('amount') ||
+    lowerName.includes('revenue') ||
+    lowerName.includes('salary')
+  ) {
     return 'currency';
   }
 
   // Check sample values
-  const validSamples = sampleValues.filter(v => v != null);
+  const validSamples = sampleValues.filter((v) => v != null);
   if (validSamples.length === 0) return 'string';
 
   // Check if dates
-  if (validSamples.some(v => isDateTime(v))) {
+  if (validSamples.some((v) => isDateTime(v))) {
     return 'date';
   }
 
   // Check if numbers
-  const numericSamples = validSamples.filter(v => typeof v === 'number' || !isNaN(Number(v)));
+  const numericSamples = validSamples.filter((v) => typeof v === 'number' || !isNaN(Number(v)));
   if (numericSamples.length === validSamples.length) {
     return 'number';
   }
@@ -491,7 +491,7 @@ export function createFormatConfig(
   fieldType: 'categorical' | 'quantitative' | 'temporal' | undefined,
   sampleValues: any[],
   format?: string,
-  timeGrain?: string
+  timeGrain?: string,
 ): FormatConfig {
   const safeField = field && typeof field === 'string' ? field : 'value';
   const safeType = fieldType ?? 'quantitative';
@@ -506,7 +506,9 @@ export function createFormatConfig(
   // Auto-detect based on field type
   if (safeType === 'temporal') {
     // Use backend-provided time grain if available, otherwise auto-detect
-    const granularity = timeGrain ? mapGrainToGranularity(timeGrain) : detectTimeGranularity(sampleValues);
+    const granularity = timeGrain
+      ? mapGrainToGranularity(timeGrain)
+      : detectTimeGranularity(sampleValues);
     return { type: 'date', timeGranularity: granularity };
   }
 
@@ -528,7 +530,9 @@ export function createFormatConfig(
   const detectedType = detectFormatType(safeField, sampleValues);
   if (detectedType === 'date' || detectedType === 'time') {
     // Use backend-provided time grain if available, otherwise auto-detect
-    const granularity = timeGrain ? mapGrainToGranularity(timeGrain) : detectTimeGranularity(sampleValues);
+    const granularity = timeGrain
+      ? mapGrainToGranularity(timeGrain)
+      : detectTimeGranularity(sampleValues);
     return { type: 'date', timeGranularity: granularity };
   }
 

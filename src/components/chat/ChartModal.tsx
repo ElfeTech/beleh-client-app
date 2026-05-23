@@ -20,7 +20,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
 
   const { visualization, execution } = response;
   const fullData = execution?.rows || [];
-  const columnNames = execution?.columns?.map(col => col.name) || [];
+  const columnNames = execution?.columns?.map((col) => col.name) || [];
 
   // Reset state when modal opens/closes
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
@@ -52,10 +52,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
       // Pinch to zoom
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
-      const distance = Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      );
+      const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
       lastTouchDistance.current = distance;
     } else if (e.touches.length === 1 && scale > 1) {
       // Pan when zoomed
@@ -72,15 +69,12 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
       // Pinch to zoom
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
-      const distance = Math.hypot(
-        touch2.clientX - touch1.clientX,
-        touch2.clientY - touch1.clientY
-      );
+      const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
 
       if (lastTouchDistance.current > 0) {
         const delta = distance - lastTouchDistance.current;
         const scaleChange = delta * 0.01;
-        setScale(prev => Math.max(1, Math.min(4, prev + scaleChange)));
+        setScale((prev) => Math.max(1, Math.min(4, prev + scaleChange)));
       }
 
       lastTouchDistance.current = distance;
@@ -99,11 +93,11 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
   };
 
   const handleZoomIn = () => {
-    setScale(prev => Math.min(4, prev + 0.5));
+    setScale((prev) => Math.min(4, prev + 0.5));
   };
 
   const handleZoomOut = () => {
-    setScale(prev => Math.max(1, prev - 0.5));
+    setScale((prev) => Math.max(1, prev - 0.5));
     if (scale <= 1.5) {
       setPosition({ x: 0, y: 0 });
     }
@@ -123,7 +117,12 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
           <h2>{title || 'Chart Visualization'}</h2>
           <button className="chart-modal-close" onClick={onClose} aria-label="Close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -150,7 +149,12 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
           {scale > 1 && (
             <button onClick={handleReset} className="reset-btn" aria-label="Reset zoom">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
               </svg>
               Reset
             </button>
@@ -171,19 +175,11 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
               cursor: isDragging ? 'grabbing' : scale > 1 ? 'grab' : 'default',
             }}
           >
-            <ChartRenderer
-              data={fullData}
-              visualization={visualization}
-              columns={columnNames}
-            />
+            <ChartRenderer data={fullData} visualization={visualization} columns={columnNames} />
           </div>
         </div>
 
-        {scale > 1 && (
-          <div className="chart-modal-hint">
-            Pinch to zoom • Drag to pan
-          </div>
-        )}
+        {scale > 1 && <div className="chart-modal-hint">Pinch to zoom • Drag to pan</div>}
       </div>
     </div>
   );

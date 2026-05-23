@@ -99,7 +99,7 @@ export function extractDatasourceError(dataset: DataSourceResponse): string | nu
 
 export function formatDatasourceError(
   dataset: DataSourceResponse,
-  fallback = 'Dataset processing failed'
+  fallback = 'Dataset processing failed',
 ): string {
   return extractDatasourceError(dataset) ?? fallback;
 }

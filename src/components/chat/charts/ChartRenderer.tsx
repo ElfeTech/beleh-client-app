@@ -13,519 +13,552 @@ import { ScatterPlotChart } from './ScatterPlotChart';
 import { HeatmapChart } from './HeatmapChart';
 import type { VisualizationRecommendation } from '../../../types/api';
 import {
-    adaptMultiDimensionalData,
-    checkDimensionOverload,
-    checkFieldCardinality,
-    detectWideFormatData,
-    transformWideToLong,
+  adaptMultiDimensionalData,
+  checkDimensionOverload,
+  checkFieldCardinality,
+  detectWideFormatData,
+  transformWideToLong,
 } from '../../../utils/visualizationAdapter';
 
 interface ChartRendererProps {
-    data: Record<string, any>[];
-    visualization: VisualizationRecommendation;
-    columns: string[];
+  data: Record<string, any>[];
+  visualization: VisualizationRecommendation;
+  columns: string[];
 }
 
 export function ChartRenderer({ data, visualization, columns }: ChartRendererProps) {
-    const [isExpanded, setIsExpanded] = useState(false);
-    const [showDataTable, setShowDataTable] = useState(false);
-    const chartRef = useRef<HTMLDivElement>(null);
-    const { trackVisualizationInteraction, showFeedback } = useFeedback();
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showDataTable, setShowDataTable] = useState(false);
+  const chartRef = useRef<HTMLDivElement>(null);
+  const { trackVisualizationInteraction, showFeedback } = useFeedback();
 
-    // Normalize visualization object to handle both old and new backend formats
-    const normalizedVisualization = React.useMemo(() => {
-        const viz = { ...visualization };
+  // Normalize visualization object to handle both old and new backend formats
+  const normalizedVisualization = React.useMemo(() => {
+    const viz = { ...visualization };
 
-        // Handle visualization_type vs type
-        const vizTypeValue = viz.type || viz.visualization_type;
-        viz.visualization_type = vizTypeValue;
+    // Handle visualization_type vs type
+    const vizTypeValue = viz.type || viz.visualization_type;
+    viz.visualization_type = vizTypeValue;
 
-        const dim = viz.dimensions;
-        const enc = viz.encoding ?? {};
-        const fieldFromDim = (key: keyof NonNullable<typeof dim>) => {
-            const d = dim?.[key];
-            return typeof d === 'string' && d.trim() ? d.trim() : undefined;
-        };
-        const mergeAxis = (
-            axis: 'x' | 'y' | 'series' | 'color' | 'size' | 'facet',
-            defaultType: 'categorical' | 'quantitative'
-        ) => {
-            const existing = enc[axis];
-            const dimField = fieldFromDim(axis);
-            const field = existing?.field?.trim() || dimField;
-            if (!field) return existing;
-            return {
-                ...existing,
-                field,
-                type: existing?.type ?? defaultType,
-                label: existing?.label || field,
-            };
-        };
-
-        if (dim || enc) {
-            viz.encoding = {
-                ...enc,
-                x: mergeAxis('x', 'categorical'),
-                y: mergeAxis('y', 'quantitative'),
-                series: mergeAxis('series', 'categorical'),
-                color: mergeAxis('color', 'categorical'),
-                size: mergeAxis('size', 'quantitative'),
-                facet: mergeAxis('facet', 'categorical'),
-            };
-        }
-
-        return viz;
-    }, [visualization]);
-
-    // Normalize visualization type from backend format to internal format
-    const normalizeVisualizationType = (type: string | undefined): string => {
-        if (!type) {
-            return 'NONE';
-        }
-        const typeMap: Record<string, string> = {
-            'line': 'LINE_CHART',
-            'multiline': 'MULTI_LINE_CHART',
-            'bar': 'BAR_CHART',
-            'stacked_bar': 'STACKED_BAR_CHART',
-            'heatmap': 'HEATMAP',
-            'scatter': 'SCATTER_PLOT',
-            'pie': 'PIE_CHART',
-            'table': 'TABLE',
-            'auto': 'NONE',
-        };
-        return typeMap[type.toLowerCase()] || type.toUpperCase();
+    const dim = viz.dimensions;
+    const enc = viz.encoding ?? {};
+    const fieldFromDim = (key: keyof NonNullable<typeof dim>) => {
+      const d = dim?.[key];
+      return typeof d === 'string' && d.trim() ? d.trim() : undefined;
+    };
+    const mergeAxis = (
+      axis: 'x' | 'y' | 'series' | 'color' | 'size' | 'facet',
+      defaultType: 'categorical' | 'quantitative',
+    ) => {
+      const existing = enc[axis];
+      const dimField = fieldFromDim(axis);
+      const field = existing?.field?.trim() || dimField;
+      if (!field) return existing;
+      return {
+        ...existing,
+        field,
+        type: existing?.type ?? defaultType,
+        label: existing?.label || field,
+      };
     };
 
-    const vizType = normalizeVisualizationType(normalizedVisualization.visualization_type);
+    if (dim || enc) {
+      viz.encoding = {
+        ...enc,
+        x: mergeAxis('x', 'categorical'),
+        y: mergeAxis('y', 'quantitative'),
+        series: mergeAxis('series', 'categorical'),
+        color: mergeAxis('color', 'categorical'),
+        size: mergeAxis('size', 'quantitative'),
+        facet: mergeAxis('facet', 'categorical'),
+      };
+    }
 
-    const handleExpand = () => {
-        setIsExpanded(true);
-        // Track visualization interaction for feedback
-        trackVisualizationInteraction();
-        // Show UX feedback after chart interaction (longer delay for user to view chart)
-        setTimeout(() => {
-            showFeedback(FEEDBACK_TRIGGERS.UX);
-        }, 5000); // 5 seconds - give user time to explore the chart
+    return viz;
+  }, [visualization]);
+
+  // Normalize visualization type from backend format to internal format
+  const normalizeVisualizationType = (type: string | undefined): string => {
+    if (!type) {
+      return 'NONE';
+    }
+    const typeMap: Record<string, string> = {
+      line: 'LINE_CHART',
+      multiline: 'MULTI_LINE_CHART',
+      bar: 'BAR_CHART',
+      stacked_bar: 'STACKED_BAR_CHART',
+      heatmap: 'HEATMAP',
+      scatter: 'SCATTER_PLOT',
+      pie: 'PIE_CHART',
+      table: 'TABLE',
+      auto: 'NONE',
     };
+    return typeMap[type.toLowerCase()] || type.toUpperCase();
+  };
 
-    const handleClose = () => {
-        setIsExpanded(false);
-    };
+  const vizType = normalizeVisualizationType(normalizedVisualization.visualization_type);
 
-    const handleDownloadCSV = () => {
-        // Convert data to CSV
-        const csvContent = convertToCSV(data, columns);
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
+  const handleExpand = () => {
+    setIsExpanded(true);
+    // Track visualization interaction for feedback
+    trackVisualizationInteraction();
+    // Show UX feedback after chart interaction (longer delay for user to view chart)
+    setTimeout(() => {
+      showFeedback(FEEDBACK_TRIGGERS.UX);
+    }, 5000); // 5 seconds - give user time to explore the chart
+  };
+
+  const handleClose = () => {
+    setIsExpanded(false);
+  };
+
+  const handleDownloadCSV = () => {
+    // Convert data to CSV
+    const csvContent = convertToCSV(data, columns);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `chart-data-${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleDownloadPNG = async () => {
+    if (!chartRef.current) return;
+
+    try {
+      // Dynamically import html2canvas
+      const html2canvas = (await import('html2canvas')).default;
+
+      const canvas = await html2canvas(chartRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2, // Higher quality
+        logging: false,
+      });
+
+      canvas.toBlob((blob) => {
+        if (!blob) return;
         const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `chart-data-${Date.now()}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `chart-${Date.now()}.png`;
         link.click();
-        document.body.removeChild(link);
-    };
+        URL.revokeObjectURL(url);
+      });
+    } catch (error) {
+      console.error('Failed to download PNG:', error);
+    }
+  };
 
-    const handleDownloadPNG = async () => {
-        if (!chartRef.current) return;
+  const handleViewData = () => {
+    setShowDataTable(!showDataTable);
+  };
 
-        try {
-            // Dynamically import html2canvas
-            const html2canvas = (await import('html2canvas')).default;
+  const renderChart = (expanded: boolean = false) => {
+    // Check for dimension overload
+    const overloadCheck = checkDimensionOverload(normalizedVisualization, 5);
+    if (overloadCheck.overloaded && normalizedVisualization.use_fallback) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+          <p>{overloadCheck.message}</p>
+          <p style={{ marginTop: '1rem' }}>Falling back to table view.</p>
+          <div style={{ marginTop: '1.5rem' }}>
+            <DataTable columns={columns} data={data} isExpanded={expanded} />
+          </div>
+        </div>
+      );
+    }
 
-            const canvas = await html2canvas(chartRef.current, {
-                backgroundColor: '#ffffff',
-                scale: 2, // Higher quality
-                logging: false,
-            });
-
-            canvas.toBlob((blob) => {
-                if (!blob) return;
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = url;
-                link.download = `chart-${Date.now()}.png`;
-                link.click();
-                URL.revokeObjectURL(url);
-            });
-        } catch (error) {
-            console.error('Failed to download PNG:', error);
-        }
-    };
-
-    const handleViewData = () => {
-        setShowDataTable(!showDataTable);
-    };
-
-    const renderChart = (expanded: boolean = false) => {
-        // Check for dimension overload
-        const overloadCheck = checkDimensionOverload(normalizedVisualization, 5);
-        if (overloadCheck.overloaded && normalizedVisualization.use_fallback) {
+    switch (vizType) {
+      case 'BAR_CHART': {
+        // Check if this is actually a multi-bar chart (has series encoding)
+        if (normalizedVisualization.encoding?.series) {
+          const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
+          if (!chartData.seriesField) {
             return (
-                <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                    <p>{overloadCheck.message}</p>
-                    <p style={{ marginTop: '1rem' }}>Falling back to table view.</p>
-                    <div style={{ marginTop: '1.5rem' }}>
-                        <DataTable columns={columns} data={data} isExpanded={expanded} />
-                    </div>
-                </div>
+              <div style={{ padding: '2rem', color: '#ef4444' }}>
+                Error: Series field is required for grouped/stacked bar chart
+              </div>
             );
+          }
+
+          // Check cardinality
+          const cardinalityCheck = checkFieldCardinality(data, chartData.seriesField, 15);
+          if (!cardinalityCheck.valid) {
+            return (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                <p>{cardinalityCheck.message}</p>
+                <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
+              </div>
+            );
+          }
+
+          // Default to grouped mode (unless explicitly set as stacked)
+          return (
+            <MultiBarChart
+              data={data}
+              xLabel={chartData.xLabel}
+              yLabel={chartData.yLabel}
+              seriesField={chartData.seriesField}
+              xField={chartData.xField}
+              yField={chartData.yField}
+              timeGrain={chartData.timeGrain}
+              mode="grouped"
+              isExpanded={expanded}
+            />
+          );
         }
 
-        switch (vizType) {
-            case 'BAR_CHART': {
-                // Check if this is actually a multi-bar chart (has series encoding)
-                if (normalizedVisualization.encoding?.series) {
-                    const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
-                    if (!chartData.seriesField) {
-                        return <div style={{ padding: '2rem', color: '#ef4444' }}>Error: Series field is required for grouped/stacked bar chart</div>;
-                    }
+        // Regular bar chart
+        return (
+          <BarChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />
+        );
+      }
 
-                    // Check cardinality
-                    const cardinalityCheck = checkFieldCardinality(data, chartData.seriesField, 15);
-                    if (!cardinalityCheck.valid) {
-                        return (
-                            <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                <p>{cardinalityCheck.message}</p>
-                                <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
-                            </div>
-                        );
-                    }
+      case 'STACKED_BAR_CHART': {
+        try {
+          const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
 
-                    // Default to grouped mode (unless explicitly set as stacked)
-                    return (
-                        <MultiBarChart
-                            data={data}
-                            xLabel={chartData.xLabel}
-                            yLabel={chartData.yLabel}
-                            seriesField={chartData.seriesField}
-                            xField={chartData.xField}
-                            yField={chartData.yField}
-                            timeGrain={chartData.timeGrain}
-                            mode="grouped"
-                            isExpanded={expanded}
-                        />
-                    );
-                }
+          // If no series field, check if data is in wide format (multiple metric columns)
+          // and transform it to long format for proper visualization
+          if (!chartData.seriesField) {
+            const xField = chartData.xField;
+            const { isWideFormat, numericColumns } = detectWideFormatData(
+              data,
+              xField,
+              chartData.yField,
+            );
 
-                // Regular bar chart
-                return <BarChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />;
-            }
+            if (isWideFormat && numericColumns.length >= 2) {
+              // Transform wide-format data to long-format
+              const {
+                data: longData,
+                seriesField,
+                valueField,
+              } = transformWideToLong(data, xField, numericColumns);
 
-            case 'STACKED_BAR_CHART': {
-                try {
-                    const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
-
-                    // If no series field, check if data is in wide format (multiple metric columns)
-                    // and transform it to long format for proper visualization
-                    if (!chartData.seriesField) {
-                        const xField = chartData.xField;
-                        const { isWideFormat, numericColumns } = detectWideFormatData(data, xField, chartData.yField);
-
-                        if (isWideFormat && numericColumns.length >= 2) {
-                            // Transform wide-format data to long-format
-                            const { data: longData, seriesField, valueField } = transformWideToLong(
-                                data,
-                                xField,
-                                numericColumns
-                            );
-
-                            // Check cardinality on the new series field (metric names)
-                            const cardinalityCheck = checkFieldCardinality(longData, seriesField, 15);
-                            if (!cardinalityCheck.valid) {
-                                return (
-                                    <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                        <p>{cardinalityCheck.message}</p>
-                                        <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
-                                    </div>
-                                );
-                            }
-
-                            // Render with transformed data - use grouped mode for better comparison
-                            // when comparing different metrics (sales vs profit)
-                            return (
-                                <MultiBarChart
-                                    data={longData}
-                                    xLabel={chartData.xLabel}
-                                    yLabel="Value"
-                                    seriesField={seriesField}
-                                    xField={xField}
-                                    yField={valueField}
-                                    timeGrain={chartData.timeGrain}
-                                    mode="grouped"
-                                    isExpanded={expanded}
-                                />
-                            );
-                        }
-
-                        // If not wide format and no series field, fall back to regular bar chart
-                        console.warn('Stacked bar chart requested but no series field and data is not in wide format. Falling back to bar chart.');
-                        return <BarChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />;
-                    }
-
-                    // Check cardinality
-                    const cardinalityCheck = checkFieldCardinality(data, chartData.seriesField, 15);
-                    if (!cardinalityCheck.valid) {
-                        return (
-                            <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                <p>{cardinalityCheck.message}</p>
-                                <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
-                            </div>
-                        );
-                    }
-
-                    return (
-                        <MultiBarChart
-                            data={data}
-                            xLabel={chartData.xLabel}
-                            yLabel={chartData.yLabel}
-                            seriesField={chartData.seriesField}
-                            xField={chartData.xField}
-                            yField={chartData.yField}
-                            timeGrain={chartData.timeGrain}
-                            mode="stacked"
-                            isExpanded={expanded}
-                        />
-                    );
-                } catch (error) {
-                    console.error('Stacked bar chart rendering error:', error);
-                    // Final fallback: try to render as a simple bar chart
-                    try {
-                        return <BarChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />;
-                    } catch {
-                        return (
-                            <div style={{ padding: '2rem', color: '#ef4444' }}>
-                                Error rendering chart: {error instanceof Error ? error.message : 'Unknown error'}
-                            </div>
-                        );
-                    }
-                }
-            }
-
-            case 'LINE_CHART': {
-                // Check if this is actually a multi-line chart (has series encoding)
-                if (normalizedVisualization.encoding?.series) {
-                    const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
-                    if (!chartData.seriesField) {
-                        return <div style={{ padding: '2rem', color: '#ef4444' }}>Error: Series field is required for multi-line chart</div>;
-                    }
-
-                    // Check cardinality
-                    const cardinalityCheck = checkFieldCardinality(data, chartData.seriesField, 20);
-                    if (!cardinalityCheck.valid) {
-                        return (
-                            <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                <p>{cardinalityCheck.message}</p>
-                                <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
-                            </div>
-                        );
-                    }
-
-                    return (
-                        <MultiLineChart
-                            data={data}
-                            xLabel={chartData.xLabel}
-                            yLabel={chartData.yLabel}
-                            seriesField={chartData.seriesField}
-                            xField={chartData.xField}
-                            yField={chartData.yField}
-                            timeGrain={chartData.timeGrain}
-                            isExpanded={expanded}
-                        />
-                    );
-                }
-
-                // Regular line chart
-                return <LineChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />;
-            }
-
-            case 'PIE_CHART':
-                return <PieChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />;
-
-            case 'TABLE':
-                return <DataTable columns={columns} data={data} isExpanded={expanded} />;
-
-            case 'MULTI_LINE_CHART': {
-                const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
-                if (!chartData.seriesField) {
-                    return <div style={{ padding: '2rem', color: '#ef4444' }}>Error: Series field is required for multi-line chart</div>;
-                }
-
-                // Check cardinality
-                const cardinalityCheck = checkFieldCardinality(data, chartData.seriesField, 20);
-                if (!cardinalityCheck.valid) {
-                    return (
-                        <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                            <p>{cardinalityCheck.message}</p>
-                            <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
-                        </div>
-                    );
-                }
-
+              // Check cardinality on the new series field (metric names)
+              const cardinalityCheck = checkFieldCardinality(longData, seriesField, 15);
+              if (!cardinalityCheck.valid) {
                 return (
-                    <MultiLineChart
-                        data={data}
-                        xLabel={chartData.xLabel}
-                        yLabel={chartData.yLabel}
-                        seriesField={chartData.seriesField}
-                        xField={chartData.xField}
-                        yField={chartData.yField}
-                        timeGrain={chartData.timeGrain}
-                        isExpanded={expanded}
-                    />
+                  <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                    <p>{cardinalityCheck.message}</p>
+                    <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
+                  </div>
                 );
+              }
+
+              // Render with transformed data - use grouped mode for better comparison
+              // when comparing different metrics (sales vs profit)
+              return (
+                <MultiBarChart
+                  data={longData}
+                  xLabel={chartData.xLabel}
+                  yLabel="Value"
+                  seriesField={seriesField}
+                  xField={xField}
+                  yField={valueField}
+                  timeGrain={chartData.timeGrain}
+                  mode="grouped"
+                  isExpanded={expanded}
+                />
+              );
             }
 
-            case 'SCATTER_PLOT': {
-                const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
+            // If not wide format and no series field, fall back to regular bar chart
+            console.warn(
+              'Stacked bar chart requested but no series field and data is not in wide format. Falling back to bar chart.',
+            );
+            return (
+              <BarChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />
+            );
+          }
 
-                // Check color field cardinality if present - relaxed for scatter plots
-                if (chartData.colorField) {
-                    const cardinalityCheck = checkFieldCardinality(data, chartData.colorField, 50);
-                    if (!cardinalityCheck.valid) {
-                        return (
-                            <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                                <p>{cardinalityCheck.message}</p>
-                                <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
-                            </div>
-                        );
-                    }
-                }
+          // Check cardinality
+          const cardinalityCheck = checkFieldCardinality(data, chartData.seriesField, 15);
+          if (!cardinalityCheck.valid) {
+            return (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                <p>{cardinalityCheck.message}</p>
+                <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
+              </div>
+            );
+          }
 
-                return (
-                    <ScatterPlotChart
-                        data={data}
-                        xLabel={chartData.xLabel}
-                        yLabel={chartData.yLabel}
-                        xField={chartData.xField}
-                        yField={chartData.yField}
-                        sizeField={chartData.sizeField}
-                        sizeLabel={chartData.sizeLabel}
-                        colorField={chartData.colorField}
-                        colorLabel={chartData.colorLabel}
-                        isExpanded={expanded}
-                    />
-                );
-            }
-
-            case 'HEATMAP': {
-                try {
-                    const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
-                    if (!chartData.colorField) {
-                        return <div style={{ padding: '2rem', color: '#ef4444' }}>Error: Color field is required for heatmap</div>;
-                    }
-
-                    return (
-                        <HeatmapChart
-                            data={data}
-                            xLabel={chartData.xLabel}
-                            yLabel={chartData.yLabel}
-                            colorLabel={chartData.colorLabel || chartData.colorField}
-                            xField={chartData.xField}
-                            yField={chartData.yField}
-                            colorField={chartData.colorField}
-                            timeGrain={chartData.timeGrain}
-                            isExpanded={expanded}
-                        />
-                    );
-                } catch (error) {
-                    console.error('Heatmap rendering error:', error);
-                    return (
-                        <div style={{ padding: '2rem', color: '#ef4444' }}>
-                            Error rendering heatmap: {error instanceof Error ? error.message : 'Unknown error'}
-                        </div>
-                    );
-                }
-            }
-
-            case 'NONE':
-                return (
-                    <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                        No visualization available for this query.
-                    </div>
-                );
-
-            default:
-                return (
-                    <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-                        Unsupported visualization type: {normalizedVisualization.type || normalizedVisualization.visualization_type} (normalized: {vizType})
-                    </div>
-                );
+          return (
+            <MultiBarChart
+              data={data}
+              xLabel={chartData.xLabel}
+              yLabel={chartData.yLabel}
+              seriesField={chartData.seriesField}
+              xField={chartData.xField}
+              yField={chartData.yField}
+              timeGrain={chartData.timeGrain}
+              mode="stacked"
+              isExpanded={expanded}
+            />
+          );
+        } catch (error) {
+          console.error('Stacked bar chart rendering error:', error);
+          // Final fallback: try to render as a simple bar chart
+          try {
+            return (
+              <BarChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />
+            );
+          } catch {
+            return (
+              <div style={{ padding: '2rem', color: '#ef4444' }}>
+                Error rendering chart: {error instanceof Error ? error.message : 'Unknown error'}
+              </div>
+            );
+          }
         }
-    };
+      }
 
-    const isTable = vizType === 'TABLE';
+      case 'LINE_CHART': {
+        // Check if this is actually a multi-line chart (has series encoding)
+        if (normalizedVisualization.encoding?.series) {
+          const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
+          if (!chartData.seriesField) {
+            return (
+              <div style={{ padding: '2rem', color: '#ef4444' }}>
+                Error: Series field is required for multi-line chart
+              </div>
+            );
+          }
 
-    return (
-        <>
-            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', width: '100%' }}>
-                <div style={{
-                    flex: showDataTable && !isTable ? '1 1 55%' : '1 1 100%',
-                    minWidth: showDataTable && !isTable ? '300px' : 'auto',
-                    maxWidth: showDataTable && !isTable ? undefined : '100%'
-                }}>
-                    <ChartCard
-                        title={normalizedVisualization.title}
-                        description={normalizedVisualization.description}
-                        onExpand={handleExpand}
-                        onDownloadCSV={handleDownloadCSV}
-                        onDownloadPNG={!isTable ? handleDownloadPNG : undefined}
-                        onViewData={!isTable ? handleViewData : undefined}
-                    >
-                        <div ref={chartRef}>
-                            {renderChart(false)}
-                        </div>
-                    </ChartCard>
-                </div>
+          // Check cardinality
+          const cardinalityCheck = checkFieldCardinality(data, chartData.seriesField, 20);
+          if (!cardinalityCheck.valid) {
+            return (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                <p>{cardinalityCheck.message}</p>
+                <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
+              </div>
+            );
+          }
 
-                {showDataTable && !isTable && (
-                    <div style={{ flex: '1 1 40%', minWidth: '300px' }}>
-                        <ChartCard
-                            title="Data Table"
-                            onClose={() => setShowDataTable(false)}
-                        >
-                            <DataTable columns={columns} data={data} />
-                        </ChartCard>
-                    </div>
-                )}
+          return (
+            <MultiLineChart
+              data={data}
+              xLabel={chartData.xLabel}
+              yLabel={chartData.yLabel}
+              seriesField={chartData.seriesField}
+              xField={chartData.xField}
+              yField={chartData.yField}
+              timeGrain={chartData.timeGrain}
+              isExpanded={expanded}
+            />
+          );
+        }
+
+        // Regular line chart
+        return (
+          <LineChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />
+        );
+      }
+
+      case 'PIE_CHART':
+        return (
+          <PieChart data={data} visualization={normalizedVisualization} isExpanded={expanded} />
+        );
+
+      case 'TABLE':
+        return <DataTable columns={columns} data={data} isExpanded={expanded} />;
+
+      case 'MULTI_LINE_CHART': {
+        const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
+        if (!chartData.seriesField) {
+          return (
+            <div style={{ padding: '2rem', color: '#ef4444' }}>
+              Error: Series field is required for multi-line chart
             </div>
+          );
+        }
 
-            {isExpanded && (
-                <ExpandedChartModal
-                    title={normalizedVisualization.title}
-                    description={normalizedVisualization.description}
-                    onClose={handleClose}
-                >
-                    {renderChart(true)}
-                </ExpandedChartModal>
-            )}
-        </>
-    );
+        // Check cardinality
+        const cardinalityCheck = checkFieldCardinality(data, chartData.seriesField, 20);
+        if (!cardinalityCheck.valid) {
+          return (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+              <p>{cardinalityCheck.message}</p>
+              <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
+            </div>
+          );
+        }
+
+        return (
+          <MultiLineChart
+            data={data}
+            xLabel={chartData.xLabel}
+            yLabel={chartData.yLabel}
+            seriesField={chartData.seriesField}
+            xField={chartData.xField}
+            yField={chartData.yField}
+            timeGrain={chartData.timeGrain}
+            isExpanded={expanded}
+          />
+        );
+      }
+
+      case 'SCATTER_PLOT': {
+        const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
+
+        // Check color field cardinality if present - relaxed for scatter plots
+        if (chartData.colorField) {
+          const cardinalityCheck = checkFieldCardinality(data, chartData.colorField, 50);
+          if (!cardinalityCheck.valid) {
+            return (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+                <p>{cardinalityCheck.message}</p>
+                <p style={{ marginTop: '1rem' }}>Consider filtering or grouping your data.</p>
+              </div>
+            );
+          }
+        }
+
+        return (
+          <ScatterPlotChart
+            data={data}
+            xLabel={chartData.xLabel}
+            yLabel={chartData.yLabel}
+            xField={chartData.xField}
+            yField={chartData.yField}
+            sizeField={chartData.sizeField}
+            sizeLabel={chartData.sizeLabel}
+            colorField={chartData.colorField}
+            colorLabel={chartData.colorLabel}
+            isExpanded={expanded}
+          />
+        );
+      }
+
+      case 'HEATMAP': {
+        try {
+          const chartData = adaptMultiDimensionalData(normalizedVisualization, data);
+          if (!chartData.colorField) {
+            return (
+              <div style={{ padding: '2rem', color: '#ef4444' }}>
+                Error: Color field is required for heatmap
+              </div>
+            );
+          }
+
+          return (
+            <HeatmapChart
+              data={data}
+              xLabel={chartData.xLabel}
+              yLabel={chartData.yLabel}
+              colorLabel={chartData.colorLabel || chartData.colorField}
+              xField={chartData.xField}
+              yField={chartData.yField}
+              colorField={chartData.colorField}
+              timeGrain={chartData.timeGrain}
+              isExpanded={expanded}
+            />
+          );
+        } catch (error) {
+          console.error('Heatmap rendering error:', error);
+          return (
+            <div style={{ padding: '2rem', color: '#ef4444' }}>
+              Error rendering heatmap: {error instanceof Error ? error.message : 'Unknown error'}
+            </div>
+          );
+        }
+      }
+
+      case 'NONE':
+        return (
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+            No visualization available for this query.
+          </div>
+        );
+
+      default:
+        return (
+          <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
+            Unsupported visualization type:{' '}
+            {normalizedVisualization.type || normalizedVisualization.visualization_type}{' '}
+            (normalized: {vizType})
+          </div>
+        );
+    }
+  };
+
+  const isTable = vizType === 'TABLE';
+
+  return (
+    <>
+      <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', width: '100%' }}>
+        <div
+          style={{
+            flex: showDataTable && !isTable ? '1 1 55%' : '1 1 100%',
+            minWidth: showDataTable && !isTable ? '300px' : 'auto',
+            maxWidth: showDataTable && !isTable ? undefined : '100%',
+          }}
+        >
+          <ChartCard
+            title={normalizedVisualization.title}
+            description={normalizedVisualization.description}
+            onExpand={handleExpand}
+            onDownloadCSV={handleDownloadCSV}
+            onDownloadPNG={!isTable ? handleDownloadPNG : undefined}
+            onViewData={!isTable ? handleViewData : undefined}
+          >
+            <div ref={chartRef}>{renderChart(false)}</div>
+          </ChartCard>
+        </div>
+
+        {showDataTable && !isTable && (
+          <div style={{ flex: '1 1 40%', minWidth: '300px' }}>
+            <ChartCard title="Data Table" onClose={() => setShowDataTable(false)}>
+              <DataTable columns={columns} data={data} />
+            </ChartCard>
+          </div>
+        )}
+      </div>
+
+      {isExpanded && (
+        <ExpandedChartModal
+          title={normalizedVisualization.title}
+          description={normalizedVisualization.description}
+          onClose={handleClose}
+        >
+          {renderChart(true)}
+        </ExpandedChartModal>
+      )}
+    </>
+  );
 }
 
 // Helper function to convert data to CSV
 function convertToCSV(data: Record<string, any>[], columns: string[]): string {
-    if (data.length === 0) return '';
+  if (data.length === 0) return '';
 
-    const cols = columns.length > 0 ? columns : Object.keys(data[0]);
+  const cols = columns.length > 0 ? columns : Object.keys(data[0]);
 
-    // Header row
-    const header = cols.join(',');
+  // Header row
+  const header = cols.join(',');
 
-    // Data rows
-    const rows = data.map(row => {
-        return cols.map(col => {
-            const value = row[col];
-            if (value === null || value === undefined) return '';
+  // Data rows
+  const rows = data.map((row) => {
+    return cols
+      .map((col) => {
+        const value = row[col];
+        if (value === null || value === undefined) return '';
 
-            // Escape quotes and wrap in quotes if contains comma or quote
-            const stringValue = String(value);
-            if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-                return `"${stringValue.replace(/"/g, '""')}"`;
-            }
-            return stringValue;
-        }).join(',');
-    });
+        // Escape quotes and wrap in quotes if contains comma or quote
+        const stringValue = String(value);
+        if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+          return `"${stringValue.replace(/"/g, '""')}"`;
+        }
+        return stringValue;
+      })
+      .join(',');
+  });
 
-    return [header, ...rows].join('\n');
+  return [header, ...rows].join('\n');
 }

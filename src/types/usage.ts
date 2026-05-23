@@ -149,7 +149,10 @@ export interface UsageContextValue extends UsageState {
   refreshUsage: () => Promise<void>;
   checkQuota: (operation: 'query' | 'datasource' | 'member') => Promise<QuotaCheckResponse>;
   hasWarning: (level: 'warning' | 'critical') => boolean;
-  getHistoricalUsage: (days?: number, workspaceId?: string) => Promise<HistoricalUsageResponse | null>;
+  getHistoricalUsage: (
+    days?: number,
+    workspaceId?: string,
+  ) => Promise<HistoricalUsageResponse | null>;
   canExecuteQuery: boolean;
   decrementQueryCount: () => void;
   refreshUsageAfterAction: () => Promise<void>;

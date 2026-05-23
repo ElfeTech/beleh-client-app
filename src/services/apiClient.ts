@@ -34,7 +34,7 @@ import type {
   HistoricalUsageResponse,
   DailyUsage,
   PlanListResponse,
-  PlanResponse
+  PlanResponse,
 } from '../types/usage';
 import type { FeedbackSubmission } from '../types/feedback';
 import { formatApiErrorMessage } from '../utils/apiErrorMessage';
@@ -51,12 +51,12 @@ class APIClient {
   private async request<T>(
     endpoint: string,
     options: RequestInit = {},
-    isRetry: boolean = false
+    isRetry: boolean = false,
   ): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
 
     const headers: Record<string, string> = {
-      ...options.headers as Record<string, string>,
+      ...(options.headers as Record<string, string>),
     };
 
     // If body is NOT FormData, default to application/json
@@ -66,14 +66,18 @@ class APIClient {
 
     // Never send invalid auth: fix missing or invalid Bearer token before request
     const auth = headers['Authorization'];
-    const isProtectedRoute = url.includes('/api/') && !url.includes('/login') && !url.includes('/register');
-    const isInvalidAuth = !auth || auth === 'Bearer undefined' || auth === 'Bearer null' || (typeof auth === 'string' && auth.trim() === 'Bearer');
-    
+    const isProtectedRoute =
+      url.includes('/api/') && !url.includes('/login') && !url.includes('/register');
+    const isInvalidAuth =
+      !auth ||
+      auth === 'Bearer undefined' ||
+      auth === 'Bearer null' ||
+      (typeof auth === 'string' && auth.trim() === 'Bearer');
+
     if (isProtectedRoute && isInvalidAuth) {
       const { authService } = await import('./authService');
       let token =
-        (await authService.getValidIdToken(false)) ??
-        (await authService.getValidIdToken(true));
+        (await authService.getValidIdToken(false)) ?? (await authService.getValidIdToken(true));
 
       if (!token) {
         token = authService.getAuthToken();
@@ -91,7 +95,6 @@ class APIClient {
       headers,
     };
 
-
     try {
       let response = await fetch(url, config);
 
@@ -99,31 +102,35 @@ class APIClient {
       if (endpoint.includes('/messages') && options.method === 'POST') {
         const body = JSON.parse(options.body as string);
         if (body.prompt === 'VERIFY_CLARIFICATION') {
-          response = new Response(JSON.stringify({
-            intent: {
-              clarification_needed: true,
-              clarification_message: "VERIFIED: Only this clarification message should be visible. Insight summary and limitations must be hidden because execution status is FAILED."
+          response = new Response(
+            JSON.stringify({
+              intent: {
+                clarification_needed: true,
+                clarification_message:
+                  'VERIFIED: Only this clarification message should be visible. Insight summary and limitations must be hidden because execution status is FAILED.',
+              },
+              execution: {
+                status: 'FAILED',
+                row_count: 0,
+                message: 'Execution Error (Hidden)',
+              },
+              insight: {
+                summary: 'Insight Summary (Hidden)',
+                limitations: 'Insight Limitations (Hidden)',
+              },
+            }),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
             },
-            execution: {
-              status: "FAILED",
-              row_count: 0,
-              message: "Execution Error (Hidden)"
-            },
-            insight: {
-              summary: "Insight Summary (Hidden)",
-              limitations: "Insight Limitations (Hidden)"
-            }
-          }), {
-            status: 200,
-            headers: { 'Content-Type': 'application/json' }
-          });
+          );
         }
       }
 
       // Handle 401 Unauthorized - token expired
       if (response.status === 401 && !isRetry) {
         console.warn(`[API] 401 Unauthorized on ${url}. Attempting token refresh...`);
-        
+
         try {
           // Attempt to refresh the token
           const { authService } = await import('./authService');
@@ -134,14 +141,18 @@ class APIClient {
             // Update the Authorization header with the new token
             const updatedHeaders = {
               ...headers,
-              'Authorization': `Bearer ${newToken}`,
+              Authorization: `Bearer ${newToken}`,
             };
 
             // Retry the request with the new token
-            return this.request<T>(endpoint, {
-              ...options,
-              headers: updatedHeaders,
-            }, true); // Mark as retry to prevent infinite loop
+            return this.request<T>(
+              endpoint,
+              {
+                ...options,
+                headers: updatedHeaders,
+              },
+              true,
+            ); // Mark as retry to prevent infinite loop
           } else {
             // Refresh failed, redirect to sign-in (avoid hijacking OAuth return tab)
             console.error('[API] Token refresh failed (no user or token), redirecting to sign-in');
@@ -170,12 +181,16 @@ class APIClient {
           if (newToken) {
             const updatedHeaders = {
               ...headers,
-              'Authorization': `Bearer ${newToken}`,
+              Authorization: `Bearer ${newToken}`,
             };
-            return this.request<T>(endpoint, {
-              ...options,
-              headers: updatedHeaders,
-            }, true);
+            return this.request<T>(
+              endpoint,
+              {
+                ...options,
+                headers: updatedHeaders,
+              },
+              true,
+            );
           }
         } catch {
           // Fall through to normal error handling
@@ -237,7 +252,7 @@ class APIClient {
     return this.request<WorkspaceResponse>('/api/workspaces/default', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -246,27 +261,28 @@ class APIClient {
     return this.request<PaginatedResponse<WorkspaceResponse>>('/api/workspaces/', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
 
   async listWorkspacesPaginated(
     authToken: string,
-    params: PaginationParams
+    params: PaginationParams,
   ): Promise<PaginatedResponse<WorkspaceResponse>> {
     const queryParams = new URLSearchParams();
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
-    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
 
     return this.request<PaginatedResponse<WorkspaceResponse>>(
       `/api/workspaces/?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${authToken}`,
+          Authorization: `Bearer ${authToken}`,
         },
-      }
+      },
     );
   }
 
@@ -276,19 +292,23 @@ class APIClient {
     return this.request<WorkspaceResponse>('/api/workspaces/', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
   }
 
-  async updateWorkspace(authToken: string, workspaceId: string, name: string): Promise<WorkspaceResponse> {
+  async updateWorkspace(
+    authToken: string,
+    workspaceId: string,
+    name: string,
+  ): Promise<WorkspaceResponse> {
     const payload: WorkspaceCreate = { name };
 
     return this.request<WorkspaceResponse>(`/api/workspaces/${workspaceId}`, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
@@ -298,37 +318,44 @@ class APIClient {
     return this.request<void>(`/api/workspaces/${workspaceId}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
 
-  async listWorkspaceDatasources(authToken: string, workspaceId: string): Promise<PaginatedResponse<DataSourceResponse>> {
-    return this.request<PaginatedResponse<DataSourceResponse>>(`/api/datasets/workspaces/${workspaceId}/datasources`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
+  async listWorkspaceDatasources(
+    authToken: string,
+    workspaceId: string,
+  ): Promise<PaginatedResponse<DataSourceResponse>> {
+    return this.request<PaginatedResponse<DataSourceResponse>>(
+      `/api/datasets/workspaces/${workspaceId}/datasources`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
       },
-    });
+    );
   }
 
   async listWorkspaceDatasourcesPaginated(
     authToken: string,
     workspaceId: string,
-    params: PaginationParams
+    params: PaginationParams,
   ): Promise<PaginatedResponse<DataSourceResponse>> {
     const queryParams = new URLSearchParams();
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
-    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
 
     return this.request<PaginatedResponse<DataSourceResponse>>(
       `/api/datasets/workspaces/${workspaceId}/datasources?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${authToken}`,
+          Authorization: `Bearer ${authToken}`,
         },
-      }
+      },
     );
   }
 
@@ -336,7 +363,7 @@ class APIClient {
     return this.request<DataSourceResponse>(`/api/datasets/datasources/${datasourceId}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -345,7 +372,7 @@ class APIClient {
     authToken: string,
     workspaceId: string,
     file: File,
-    name?: string
+    name?: string,
   ): Promise<DataSourceResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -356,7 +383,7 @@ class APIClient {
     return this.request<DataSourceResponse>(`/api/datasets/workspaces/${workspaceId}/datasources`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: formData,
     });
@@ -365,12 +392,12 @@ class APIClient {
   async renameDatasource(
     authToken: string,
     datasourceId: string,
-    name: string
+    name: string,
   ): Promise<DataSourceResponse> {
     return this.request<DataSourceResponse>(`/api/datasets/datasources/${datasourceId}/rename`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify({ name }),
     });
@@ -380,7 +407,7 @@ class APIClient {
     authToken: string,
     datasourceId: string,
     file: File,
-    name?: string
+    name?: string,
   ): Promise<DataSourceResponse> {
     const formData = new FormData();
     formData.append('file', file);
@@ -391,7 +418,7 @@ class APIClient {
     return this.request<DataSourceResponse>(`/api/datasets/datasources/${datasourceId}`, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: formData,
     });
@@ -401,12 +428,12 @@ class APIClient {
     authToken: string,
     datasourceId: string,
     sheetName: string,
-    rowIndex: number
+    rowIndex: number,
   ): Promise<DataSourceResponse> {
     return this.request<DataSourceResponse>(`/api/datasets/datasources/${datasourceId}/header`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -419,23 +446,26 @@ class APIClient {
   async recoverDatasource(
     authToken: string,
     datasourceId: string,
-    request: DataSourceRecoveryRequest
+    request: DataSourceRecoveryRequest,
   ): Promise<DataSourceRecoveryResponse> {
-    return this.request<DataSourceRecoveryResponse>(`/api/datasets/datasources/${datasourceId}/recover`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
-        'Content-Type': 'application/json',
+    return this.request<DataSourceRecoveryResponse>(
+      `/api/datasets/datasources/${datasourceId}/recover`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
       },
-      body: JSON.stringify(request),
-    });
+    );
   }
 
   async deleteDatasource(authToken: string, datasourceId: string): Promise<void> {
     return this.request<void>(`/api/datasets/datasources/${datasourceId}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -443,7 +473,7 @@ class APIClient {
   async sendChatMessage(
     authToken: string,
     question: string,
-    datasourceId: string
+    datasourceId: string,
   ): Promise<ChatWorkflowResponse> {
     const payload: IntentRequest = {
       prompt: question,
@@ -453,7 +483,7 @@ class APIClient {
     return this.request<ChatWorkflowResponse>('/api/chat/', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
@@ -461,12 +491,12 @@ class APIClient {
 
   async getDatasourceMetadata(
     authToken: string,
-    datasourceId: string
+    datasourceId: string,
   ): Promise<DataSourceMetadata> {
     return this.request<DataSourceMetadata>(`/api/datasets/datasources/${datasourceId}/metadata`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -475,14 +505,14 @@ class APIClient {
   async createChatSession(
     authToken: string,
     datasetId: string,
-    title?: string
+    title?: string,
   ): Promise<ChatSessionRead> {
     const payload: ChatSessionCreate = title ? { title } : {};
 
     return this.request<ChatSessionRead>(`/api/datasets/${datasetId}/sessions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
@@ -492,10 +522,10 @@ class APIClient {
     authToken: string,
     workspaceId: string,
     title?: string,
-    datasetId?: string
+    datasetId?: string,
   ): Promise<ChatSessionRead> {
     if (!workspaceId || workspaceId === 'undefined') {
-        throw new Error('Workspace ID is required to create a session');
+      throw new Error('Workspace ID is required to create a session');
     }
     const payload: ChatSessionCreate & { dataset_id?: string } = {
       title,
@@ -505,7 +535,7 @@ class APIClient {
     return this.request<ChatSessionRead>(`/api/workspaces/${workspaceId}/sessions`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
@@ -513,12 +543,12 @@ class APIClient {
 
   async listChatSessions(
     authToken: string,
-    datasetId: string
+    datasetId: string,
   ): Promise<PaginatedResponse<ChatSessionRead>> {
     return this.request<PaginatedResponse<ChatSessionRead>>(`/api/datasets/${datasetId}/sessions`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -526,72 +556,77 @@ class APIClient {
   async listChatSessionsPaginated(
     authToken: string,
     datasetId: string,
-    params: PaginationParams
+    params: PaginationParams,
   ): Promise<PaginatedResponse<ChatSessionRead>> {
     const queryParams = new URLSearchParams();
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
-    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
 
     return this.request<PaginatedResponse<ChatSessionRead>>(
       `/api/datasets/${datasetId}/sessions?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${authToken}`,
+          Authorization: `Bearer ${authToken}`,
         },
-      }
+      },
     );
   }
 
   async listWorkspaceSessions(
     authToken: string,
-    workspaceId: string
+    workspaceId: string,
   ): Promise<PaginatedResponse<ChatSessionRead>> {
     if (!workspaceId || workspaceId === 'undefined') {
-        throw new Error('Workspace ID is required to list sessions');
+      throw new Error('Workspace ID is required to list sessions');
     }
-    return this.request<PaginatedResponse<ChatSessionRead>>(`/api/workspaces/${workspaceId}/sessions`, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
+    return this.request<PaginatedResponse<ChatSessionRead>>(
+      `/api/workspaces/${workspaceId}/sessions`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
       },
-    });
+    );
   }
 
   async listWorkspaceSessionsPaginated(
     authToken: string,
     workspaceId: string,
-    params: PaginationParams
+    params: PaginationParams,
   ): Promise<PaginatedResponse<ChatSessionRead>> {
     if (!workspaceId || workspaceId === 'undefined') {
-        throw new Error('Workspace ID is required to list sessions');
+      throw new Error('Workspace ID is required to list sessions');
     }
     const queryParams = new URLSearchParams();
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
-    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
 
     return this.request<PaginatedResponse<ChatSessionRead>>(
       `/api/workspaces/${workspaceId}/sessions?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${authToken}`,
+          Authorization: `Bearer ${authToken}`,
         },
-      }
+      },
     );
   }
 
   async getSessionMessages(
     authToken: string,
-    sessionId: string
+    sessionId: string,
   ): Promise<PaginatedResponse<ChatMessageRead>> {
     if (!sessionId || sessionId === 'undefined') {
-        throw new Error('Session ID is required to get messages');
+      throw new Error('Session ID is required to get messages');
     }
     return this.request<PaginatedResponse<ChatMessageRead>>(`/api/sessions/${sessionId}/messages`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -599,23 +634,24 @@ class APIClient {
   async getSessionMessagesPaginated(
     authToken: string,
     sessionId: string,
-    params: PaginationParams
+    params: PaginationParams,
   ): Promise<PaginatedResponse<ChatMessageRead>> {
     if (!sessionId || sessionId === 'undefined') {
-        throw new Error('Session ID is required to get messages');
+      throw new Error('Session ID is required to get messages');
     }
     const queryParams = new URLSearchParams();
     if (params.page !== undefined) queryParams.append('page', params.page.toString());
-    if (params.page_size !== undefined) queryParams.append('page_size', params.page_size.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
 
     return this.request<PaginatedResponse<ChatMessageRead>>(
       `/api/sessions/${sessionId}/messages?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${authToken}`,
+          Authorization: `Bearer ${authToken}`,
         },
-      }
+      },
     );
   }
 
@@ -623,10 +659,10 @@ class APIClient {
     authToken: string,
     sessionId: string,
     prompt: string,
-    datasetId: string | null
+    datasetId: string | null,
   ): Promise<ChatWorkflowResponse> {
     if (!sessionId || sessionId === 'undefined') {
-        throw new Error('Session ID is required to send a message');
+      throw new Error('Session ID is required to send a message');
     }
     const payload: IntentRequest = {
       prompt,
@@ -636,20 +672,17 @@ class APIClient {
     return this.request<ChatWorkflowResponse>(`/api/sessions/${sessionId}/messages`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
   }
 
-  async deleteChatSession(
-    authToken: string,
-    sessionId: string
-  ): Promise<void> {
+  async deleteChatSession(authToken: string, sessionId: string): Promise<void> {
     await this.request<void>(`/api/sessions/${sessionId}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -657,27 +690,24 @@ class APIClient {
   async updateChatSession(
     authToken: string,
     sessionId: string,
-    payload: { title: string }
+    payload: { title: string },
   ): Promise<ChatSessionRead> {
     return this.request<ChatSessionRead>(`/api/sessions/${sessionId}`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
   }
 
   // Usage and Quota Methods
-  async getCurrentUsage(
-    authToken: string,
-    workspaceId?: string
-  ): Promise<CurrentUsageResponse> {
+  async getCurrentUsage(authToken: string, workspaceId?: string): Promise<CurrentUsageResponse> {
     const params = workspaceId ? `?workspace_id=${workspaceId}` : '';
     return this.request<CurrentUsageResponse>(`/api/usage/${params}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -686,7 +716,7 @@ class APIClient {
     return this.request<RemainingQuotaResponse>('/api/usage/remaining', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -695,7 +725,7 @@ class APIClient {
     return this.request<UsageSummary>('/api/usage/summary', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -703,17 +733,17 @@ class APIClient {
   async checkQuota(
     authToken: string,
     operation: 'query' | 'datasource' | 'member',
-    workspaceId?: string
+    workspaceId?: string,
   ): Promise<QuotaCheckResponse> {
     const payload: QuotaCheckRequest = {
       operation,
-      ...(workspaceId && { workspace_id: workspaceId })
+      ...(workspaceId && { workspace_id: workspaceId }),
     };
 
     return this.request<QuotaCheckResponse>('/api/usage/check', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
@@ -722,7 +752,7 @@ class APIClient {
   async getHistoricalUsage(
     authToken: string,
     workspaceId?: string,
-    days: number = 30
+    days: number = 30,
   ): Promise<HistoricalUsageResponse> {
     const params = new URLSearchParams();
     if (workspaceId) params.append('workspace_id', workspaceId);
@@ -731,7 +761,7 @@ class APIClient {
     return this.request<HistoricalUsageResponse>(`/api/usage/history?${params.toString()}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -739,7 +769,7 @@ class APIClient {
   async getDailyUsage(
     authToken: string,
     workspaceId?: string,
-    days: number = 7
+    days: number = 7,
   ): Promise<DailyUsage[]> {
     const params = new URLSearchParams();
     if (workspaceId) params.append('workspace_id', workspaceId);
@@ -748,7 +778,7 @@ class APIClient {
     return this.request<DailyUsage[]>(`/api/usage/daily?${params.toString()}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -763,7 +793,7 @@ class APIClient {
     return this.request<PlanResponse>('/api/usage/plan', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -771,12 +801,12 @@ class APIClient {
   // Workspace State Methods
   async getWorkspaceContext(
     authToken: string,
-    workspaceId: string
+    workspaceId: string,
   ): Promise<WorkspaceContextResponse> {
     return this.request<WorkspaceContextResponse>(`/api/workspaces/${workspaceId}/context`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -784,40 +814,34 @@ class APIClient {
   async updateWorkspaceState(
     authToken: string,
     workspaceId: string,
-    payload: UpdateWorkspaceStateRequest
+    payload: UpdateWorkspaceStateRequest,
   ): Promise<void> {
     return this.request<void>(`/api/workspaces/${workspaceId}/state`, {
       method: 'PATCH',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
   }
 
   // Feedback Methods
-  async submitFeedback(
-    authToken: string,
-    feedback: FeedbackSubmission
-  ): Promise<void> {
+  async submitFeedback(authToken: string, feedback: FeedbackSubmission): Promise<void> {
     return this.request<void>('/api/feedback', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(feedback),
     });
   }
 
   // Dataset Preview Methods
-  async listDatasetTables(
-    authToken: string,
-    datasetId: string
-  ): Promise<DatasetTablesResponse> {
+  async listDatasetTables(authToken: string, datasetId: string): Promise<DatasetTablesResponse> {
     return this.request<DatasetTablesResponse>(`/api/datasets/${datasetId}/tables`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -827,7 +851,7 @@ class APIClient {
     datasetId: string,
     tableName: string,
     page: number = 1,
-    pageSize: number = 50
+    pageSize: number = 50,
   ): Promise<DatasetTablePreviewResponse> {
     const queryParams = new URLSearchParams({
       page: page.toString(),
@@ -839,9 +863,9 @@ class APIClient {
       {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${authToken}`,
+          Authorization: `Bearer ${authToken}`,
         },
-      }
+      },
     );
   }
 
@@ -849,12 +873,12 @@ class APIClient {
   async createPostgresConnector(
     authToken: string,
     workspaceId: string,
-    payload: ConnectorCreate
+    payload: ConnectorCreate,
   ): Promise<ConnectorResponse> {
     return this.request<ConnectorResponse>(`/api/connectors/workspaces/${workspaceId}/postgresql`, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
       body: JSON.stringify(payload),
     });
@@ -863,25 +887,25 @@ class APIClient {
   async testPostgresConnection(
     authToken: string,
     workspaceId: string,
-    payload: ConnectionTestRequest
+    payload: ConnectionTestRequest,
   ): Promise<ConnectionTestResponse> {
-    return this.request<ConnectionTestResponse>(`/api/connectors/workspaces/${workspaceId}/postgresql/test`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${authToken}`,
+    return this.request<ConnectionTestResponse>(
+      `/api/connectors/workspaces/${workspaceId}/postgresql/test`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+    );
   }
 
-  async listConnectors(
-    authToken: string,
-    workspaceId: string
-  ): Promise<ConnectorResponse[]> {
+  async listConnectors(authToken: string, workspaceId: string): Promise<ConnectorResponse[]> {
     return this.request<ConnectorResponse[]>(`/api/connectors/workspaces/${workspaceId}`, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }
@@ -889,12 +913,12 @@ class APIClient {
   async deleteConnector(
     authToken: string,
     workspaceId: string,
-    connectorId: string
+    connectorId: string,
   ): Promise<void> {
     return this.request<void>(`/api/connectors/workspaces/${workspaceId}/${connectorId}`, {
       method: 'DELETE',
       headers: {
-        'Authorization': `Bearer ${authToken}`,
+        Authorization: `Bearer ${authToken}`,
       },
     });
   }

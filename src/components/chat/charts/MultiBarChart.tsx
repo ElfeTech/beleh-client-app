@@ -1,13 +1,5 @@
 import React, { useState } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ChartLegend } from './ChartLegend';
 import type { LegendItem } from './ChartLegend';
 import { formatTimeLabel, formatTimeLabelTooltip } from '../../../utils/formatters';
@@ -123,7 +115,10 @@ export const MultiBarChart: React.FC<MultiBarChartProps> = ({
 
       // Get the raw value from payload for proper formatting
       const dataPoint = payload[0]?.payload;
-      const formattedTimeLabel = formatTimeLabelTooltip(dataPoint?.rawValue || dataPoint?.name, timeGrain);
+      const formattedTimeLabel = formatTimeLabelTooltip(
+        dataPoint?.rawValue || dataPoint?.name,
+        timeGrain,
+      );
 
       return (
         <div
@@ -136,9 +131,7 @@ export const MultiBarChart: React.FC<MultiBarChartProps> = ({
             fontSize: '13px',
           }}
         >
-          <div style={{ marginBottom: '8px', fontWeight: '600' }}>
-            {formattedTimeLabel}
-          </div>
+          <div style={{ marginBottom: '8px', fontWeight: '600' }}>{formattedTimeLabel}</div>
           {payload
             .filter((p: any) => !hiddenSeries.has(p.dataKey))
             .map((p: any, idx: number) => (
@@ -204,10 +197,7 @@ export const MultiBarChart: React.FC<MultiBarChartProps> = ({
           interactive={true}
         />
         <ResponsiveContainer width="100%" height={height}>
-          <BarChart
-            data={chartData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-          >
+          <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
             <defs>
               {seriesKeys.map((key, index) => (
                 <linearGradient
@@ -273,7 +263,10 @@ export const MultiBarChart: React.FC<MultiBarChartProps> = ({
     console.error('MultiBarChart rendering error:', error, { data, seriesField, xField, yField });
     return (
       <div className="chart-error">
-        <p>Unable to render multi-bar chart: {error instanceof Error ? error.message : 'Unknown error'}</p>
+        <p>
+          Unable to render multi-bar chart:{' '}
+          {error instanceof Error ? error.message : 'Unknown error'}
+        </p>
       </div>
     );
   }

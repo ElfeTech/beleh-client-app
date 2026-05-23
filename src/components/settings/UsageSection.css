@@ -272,7 +272,9 @@
   font-size: var(--text-xs);
   font-weight: 700;
   cursor: pointer;
-  transition: opacity 0.15s ease, border-color 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    border-color 0.15s ease;
 }
 
 .billing-tier-card__btn--active {

@@ -1,33 +1,53 @@
-import { createContext, useState, useContext, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useCallback,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { useAuth } from './useAuth';
 import { apiClient } from '../services/apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
-import type { WorkspaceResponse, DataSourceResponse, WorkspaceContextResponse, ConnectorResponse } from '../types/api';
+import type {
+  WorkspaceResponse,
+  DataSourceResponse,
+  WorkspaceContextResponse,
+  ConnectorResponse,
+} from '../types/api';
 import {
-    isDatasetStateError,
-    isValidSessionIdForState,
-    resolveDatasetIdForStateEndpoint,
+  isDatasetStateError,
+  isValidSessionIdForState,
+  resolveDatasetIdForStateEndpoint,
 } from '../lib/workspaceStateValidation';
 import { writeSelectedDatasetId } from '../lib/selectedDatasourceStorage';
 
 interface WorkspaceContextType {
-    workspaces: WorkspaceResponse[];
-    currentWorkspace: WorkspaceResponse | null;
-    setCurrentWorkspace: (workspace: WorkspaceResponse | null) => void;
-    datasources: DataSourceResponse[];
-    /** Set datasources directly (e.g. after hydration fetches them) so UI has data without waiting for context effect */
-    setDatasources: (datasources: DataSourceResponse[]) => void;
-    connectors: ConnectorResponse[];
-    setConnectors: (connectors: ConnectorResponse[]) => void;
-    // usage: WorkspaceContextResponse | null; // Renamed for clarity? No, let's call it workspaceContext to avoid confusion with UsageContext
-    workspaceContext: WorkspaceContextResponse | null;
-    loading: boolean;
-    refreshWorkspaces: () => Promise<void>;
-    refreshDatasources: () => Promise<void>;
-    refreshConnectors: () => Promise<void>;
-    loadWorkspaceContext: (workspaceId: string, forceRefresh?: boolean) => Promise<WorkspaceContextResponse | null>;
-    saveWorkspaceState: (workspaceId: string, datasetId?: string | null, sessionId?: string | null) => Promise<void>;
-    invalidateContextCache: (workspaceId: string) => void;
+  workspaces: WorkspaceResponse[];
+  currentWorkspace: WorkspaceResponse | null;
+  setCurrentWorkspace: (workspace: WorkspaceResponse | null) => void;
+  datasources: DataSourceResponse[];
+  /** Set datasources directly (e.g. after hydration fetches them) so UI has data without waiting for context effect */
+  setDatasources: (datasources: DataSourceResponse[]) => void;
+  connectors: ConnectorResponse[];
+  setConnectors: (connectors: ConnectorResponse[]) => void;
+  // usage: WorkspaceContextResponse | null; // Renamed for clarity? No, let's call it workspaceContext to avoid confusion with UsageContext
+  workspaceContext: WorkspaceContextResponse | null;
+  loading: boolean;
+  refreshWorkspaces: () => Promise<void>;
+  refreshDatasources: () => Promise<void>;
+  refreshConnectors: () => Promise<void>;
+  loadWorkspaceContext: (
+    workspaceId: string,
+    forceRefresh?: boolean,
+  ) => Promise<WorkspaceContextResponse | null>;
+  saveWorkspaceState: (
+    workspaceId: string,
+    datasetId?: string | null,
+    sessionId?: string | null,
+  ) => Promise<void>;
+  invalidateContextCache: (workspaceId: string) => void;
 }
 
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined);
@@ -36,383 +56,396 @@ const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefin
 const STATE_SAVE_DEBOUNCE_MS = 500;
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
-    const { user } = useAuth();
-    const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>([]);
-    const [currentWorkspace, setCurrentWorkspace] = useState<WorkspaceResponse | null>(null);
-    const [datasources, setDatasources] = useState<DataSourceResponse[]>([]);
-    const [connectors, setConnectors] = useState<ConnectorResponse[]>([]);
-    const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContextResponse | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [isInitialized, setIsInitialized] = useState(false);
+  const { user } = useAuth();
+  const [workspaces, setWorkspaces] = useState<WorkspaceResponse[]>([]);
+  const [currentWorkspace, setCurrentWorkspace] = useState<WorkspaceResponse | null>(null);
+  const [datasources, setDatasources] = useState<DataSourceResponse[]>([]);
+  const [connectors, setConnectors] = useState<ConnectorResponse[]>([]);
+  const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContextResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
-    // Ref to track if we've already loaded datasources for current workspace
-    const loadedWorkspaceRef = useRef<string | null>(null);
+  // Ref to track if we've already loaded datasources for current workspace
+  const loadedWorkspaceRef = useRef<string | null>(null);
 
-    // Debounce timer for state saves
-    const stateSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Debounce timer for state saves
+  const stateSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Pending state to save (accumulated during debounce period)
-    const pendingStateRef = useRef<{
-        workspaceId: string;
-        datasetId?: string | null;
-        sessionId?: string | null;
-    } | null>(null);
+  // Pending state to save (accumulated during debounce period)
+  const pendingStateRef = useRef<{
+    workspaceId: string;
+    datasetId?: string | null;
+    sessionId?: string | null;
+  } | null>(null);
 
-    const datasourcesRef = useRef(datasources);
-    const connectorsRef = useRef(connectors);
-    const loadingRef = useRef(loading);
-    const sanitizedServerStateRef = useRef<string | null>(null);
+  const datasourcesRef = useRef(datasources);
+  const connectorsRef = useRef(connectors);
+  const loadingRef = useRef(loading);
+  const sanitizedServerStateRef = useRef<string | null>(null);
 
-    useEffect(() => {
-        datasourcesRef.current = datasources;
-        connectorsRef.current = connectors;
-        loadingRef.current = loading;
-    }, [datasources, connectors, loading]);
+  useEffect(() => {
+    datasourcesRef.current = datasources;
+    connectorsRef.current = connectors;
+    loadingRef.current = loading;
+  }, [datasources, connectors, loading]);
 
-    // Persist workspace changes
-    useEffect(() => {
-        if (currentWorkspace) {
-            localStorage.setItem('activeWorkspaceId', currentWorkspace.id);
-        }
-    }, [currentWorkspace]);
+  // Persist workspace changes
+  useEffect(() => {
+    if (currentWorkspace) {
+      localStorage.setItem('activeWorkspaceId', currentWorkspace.id);
+    }
+  }, [currentWorkspace]);
 
-    // Full reset when user signs out so the next login never inherits another account's workspace UI
-    useEffect(() => {
-        if (user) return;
-        setWorkspaces([]);
-        setCurrentWorkspace(null);
-        setDatasources([]);
-        setConnectors([]);
-        setWorkspaceContext(null);
-        setIsInitialized(false);
-        loadedWorkspaceRef.current = null;
-        sanitizedServerStateRef.current = null;
-    }, [user]);
+  // Full reset when user signs out so the next login never inherits another account's workspace UI
+  useEffect(() => {
+    if (user) return;
+    setWorkspaces([]);
+    setCurrentWorkspace(null);
+    setDatasources([]);
+    setConnectors([]);
+    setWorkspaceContext(null);
+    setIsInitialized(false);
+    loadedWorkspaceRef.current = null;
+    sanitizedServerStateRef.current = null;
+  }, [user]);
 
-    // Clear stale last_active_dataset_id on the server (e.g. deleted dataset still in DB state)
-    useEffect(() => {
-        if (!user || !currentWorkspace || !workspaceContext) return;
-        if (workspaceContext.workspace.id !== currentWorkspace.id) return;
-        if (loading) return;
-        if (sanitizedServerStateRef.current === currentWorkspace.id) return;
+  // Clear stale last_active_dataset_id on the server (e.g. deleted dataset still in DB state)
+  useEffect(() => {
+    if (!user || !currentWorkspace || !workspaceContext) return;
+    if (workspaceContext.workspace.id !== currentWorkspace.id) return;
+    if (loading) return;
+    if (sanitizedServerStateRef.current === currentWorkspace.id) return;
 
-        sanitizedServerStateRef.current = currentWorkspace.id;
-        const serverDatasetId = workspaceContext.state.last_active_dataset_id;
-        const resolved = resolveDatasetIdForStateEndpoint(
-            serverDatasetId,
-            datasources,
-            connectors
-        );
-        if (!serverDatasetId || resolved !== null) return;
+    sanitizedServerStateRef.current = currentWorkspace.id;
+    const serverDatasetId = workspaceContext.state.last_active_dataset_id;
+    const resolved = resolveDatasetIdForStateEndpoint(serverDatasetId, datasources, connectors);
+    if (!serverDatasetId || resolved !== null) return;
 
-        void (async () => {
-            try {
-                const token = await user.getIdToken();
-                await apiClient.updateWorkspaceState(token, currentWorkspace.id, {
-                    last_active_dataset_id: null,
-                    last_active_session_id: isValidSessionIdForState(
-                        workspaceContext.state.last_active_session_id
-                    )
-                        ? workspaceContext.state.last_active_session_id
-                        : null,
-                });
-                apiCacheManager.invalidate('workspace-context', [token, currentWorkspace.id]);
-            } catch (err) {
-                if (!isDatasetStateError(err)) {
-                    console.warn('[WorkspaceContext] Could not clear stale server dataset state:', err);
-                }
-            }
-        })();
-    }, [user, currentWorkspace, workspaceContext, datasources, connectors, loading]);
-
-    // Fetch workspaces - removed currentWorkspace from dependencies
-    const refreshWorkspaces = useCallback(async () => {
-        if (!user) {
-            setWorkspaces([]);
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const token = await user.getIdToken();
-            const response = await apiClient.listWorkspaces(token);
-
-            // Extract items from paginated response
-            const fetchedWorkspaces = response.items;
-            setWorkspaces(fetchedWorkspaces);
-
-            // Only set default workspace on initial load
-            if (!isInitialized && fetchedWorkspaces.length > 0) {
-                const savedWorkspaceId = localStorage.getItem('activeWorkspaceId');
-                let workspaceToSet: WorkspaceResponse | null = null;
-
-                if (savedWorkspaceId) {
-                    workspaceToSet = fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === savedWorkspaceId) || null;
-                }
-
-                if (!workspaceToSet) {
-                    workspaceToSet = fetchedWorkspaces.find((ws: WorkspaceResponse) => ws.is_default) || fetchedWorkspaces[0];
-                }
-
-                setCurrentWorkspace(workspaceToSet);
-                setIsInitialized(true);
-            }
-        } catch (error) {
-            console.error('Failed to fetch workspaces:', error);
-            setWorkspaces([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [user, isInitialized]);
-
-    // Refresh datasources function using unified cache manager
-    const refreshDatasources = useCallback(async () => {
-        if (!user || !currentWorkspace) {
-            setDatasources([]);
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const token = await user.getIdToken();
-            if (!token || typeof token !== 'string' || token.length < 10) {
-                console.warn('[WorkspaceContext] No valid token for datasources, skipping fetch');
-                return;
-            }
-
-            // Always bypass stale cache so add/delete on other routes reflects immediately
-            apiCacheManager.invalidate('datasources', [token, currentWorkspace.id]);
-
-            const data = await apiCacheManager.fetch(
-                'datasources',
-                async (authToken: string, wId: string) => {
-                    const response = await apiClient.listWorkspaceDatasources(authToken, wId);
-                    return response.items;
-                },
-                [token, currentWorkspace.id]
-            );
-
-            setDatasources(data);
-        } catch (error) {
-            console.error('[WorkspaceContext] Failed to fetch datasources:', error);
-            setDatasources([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [user, currentWorkspace]);
-
-    // Refresh connectors function
-    const refreshConnectors = useCallback(async () => {
-        if (!user || !currentWorkspace) {
-            setConnectors([]);
-            return;
-        }
-
-        try {
-            setLoading(true);
-            const token = await user.getIdToken();
-
-            apiCacheManager.invalidate('connectors', [token, currentWorkspace.id]);
-
-            const data = await apiCacheManager.fetch(
-                'connectors',
-                async (authToken: string, wId: string) => {
-                    return apiClient.listConnectors(authToken, wId);
-                },
-                [token, currentWorkspace.id]
-            );
-
-            setConnectors(data);
-        } catch (error) {
-            console.error('[WorkspaceContext] Failed to fetch connectors:', error);
-            setConnectors([]);
-        } finally {
-            setLoading(false);
-        }
-    }, [user, currentWorkspace]);
-
-    // Load workspace context (state + metadata) using unified cache manager
-    const loadWorkspaceContext = useCallback(async (
-        workspaceId: string,
-        forceRefresh: boolean = false
-    ): Promise<WorkspaceContextResponse | null> => {
-        if (!user) return null;
-
-        try {
-            const token = await user.getIdToken();
-
-            const data = await apiCacheManager.fetch(
-                'workspace-context',
-                async (authToken: string, wId: string) => {
-                    return apiClient.getWorkspaceContext(authToken, wId);
-                },
-                [token, workspaceId],
-                forceRefresh ? { ttl: 0 } : undefined // Force refresh by setting TTL to 0
-            );
-
-            setWorkspaceContext(data);
-            return data;
-        } catch (error) {
-            console.error('[WorkspaceContext] Failed to load workspace context:', error);
-            setWorkspaceContext(null);
-            return null;
-        }
-    }, [user]);
-
-    // Fetch datasources and connectors when workspace changes
-    useEffect(() => {
-        if (!user || !currentWorkspace) {
-            loadedWorkspaceRef.current = null;
-            setDatasources([]);
-            setConnectors([]);
-            setWorkspaceContext(null); // Clear context when workspace changes/clears
-            return;
-        }
-
-        // Only load if we haven't already loaded for this workspace
-        if (loadedWorkspaceRef.current === currentWorkspace.id) {
-            return;
-        }
-
-        loadedWorkspaceRef.current = currentWorkspace.id;
-        void (async () => {
-            try {
-                await Promise.all([refreshDatasources(), refreshConnectors()]);
-            } catch {
-                // Individual refresh paths already log; continue to load persisted UI state
-            }
-            await loadWorkspaceContext(currentWorkspace.id);
-        })();
-    }, [user, currentWorkspace, refreshDatasources, refreshConnectors, loadWorkspaceContext]);
-
-    // Fetch workspaces on mount - only runs once when user changes
-    useEffect(() => {
-        if (user && !isInitialized) {
-            refreshWorkspaces();
-        }
-    }, [user, isInitialized, refreshWorkspaces]);
-
-    // Invalidate context cache for a workspace
-    const invalidateContextCache = useCallback((workspaceId: string) => {
-        // We need to get the token to match the cache key
-        if (!user) return;
-
-        user.getIdToken().then(token => {
-            apiCacheManager.invalidate('workspace-context', [token, workspaceId]);
-            apiCacheManager.invalidate('workspace-sessions', [token, workspaceId]);
-            console.log('[WorkspaceContext] Invalidated context and sessions cache for workspace:', workspaceId);
-        }).catch(err => {
-            console.error('[WorkspaceContext] Failed to invalidate cache:', err);
+    void (async () => {
+      try {
+        const token = await user.getIdToken();
+        await apiClient.updateWorkspaceState(token, currentWorkspace.id, {
+          last_active_dataset_id: null,
+          last_active_session_id: isValidSessionIdForState(
+            workspaceContext.state.last_active_session_id,
+          )
+            ? workspaceContext.state.last_active_session_id
+            : null,
         });
-    }, [user]);
+        apiCacheManager.invalidate('workspace-context', [token, currentWorkspace.id]);
+      } catch (err) {
+        if (!isDatasetStateError(err)) {
+          console.warn('[WorkspaceContext] Could not clear stale server dataset state:', err);
+        }
+      }
+    })();
+  }, [user, currentWorkspace, workspaceContext, datasources, connectors, loading]);
 
-    // Save workspace state with debouncing to prevent multiple rapid API calls
-    const saveWorkspaceState = useCallback(async (
-        workspaceId: string,
-        datasetId?: string | null,
-        sessionId?: string | null
-    ): Promise<void> => {
-        if (!user) return;
+  // Fetch workspaces - removed currentWorkspace from dependencies
+  const refreshWorkspaces = useCallback(async () => {
+    if (!user) {
+      setWorkspaces([]);
+      return;
+    }
 
-        // Store the pending state (will be merged/overwritten with subsequent calls)
-        pendingStateRef.current = {
-            workspaceId,
-            datasetId,
-            sessionId,
-        };
+    try {
+      setLoading(true);
+      const token = await user.getIdToken();
+      const response = await apiClient.listWorkspaces(token);
 
-        // Clear existing timer
-        if (stateSaveTimerRef.current) {
-            clearTimeout(stateSaveTimerRef.current);
+      // Extract items from paginated response
+      const fetchedWorkspaces = response.items;
+      setWorkspaces(fetchedWorkspaces);
+
+      // Only set default workspace on initial load
+      if (!isInitialized && fetchedWorkspaces.length > 0) {
+        const savedWorkspaceId = localStorage.getItem('activeWorkspaceId');
+        let workspaceToSet: WorkspaceResponse | null = null;
+
+        if (savedWorkspaceId) {
+          workspaceToSet =
+            fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === savedWorkspaceId) || null;
         }
 
-        // Set up debounced save
-        stateSaveTimerRef.current = setTimeout(async () => {
-            const stateToSave = pendingStateRef.current;
-            if (!stateToSave) return;
+        if (!workspaceToSet) {
+          workspaceToSet =
+            fetchedWorkspaces.find((ws: WorkspaceResponse) => ws.is_default) ||
+            fetchedWorkspaces[0];
+        }
 
-            pendingStateRef.current = null;
+        setCurrentWorkspace(workspaceToSet);
+        setIsInitialized(true);
+      }
+    } catch (error) {
+      console.error('Failed to fetch workspaces:', error);
+      setWorkspaces([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, isInitialized]);
 
-            const dsList = datasourcesRef.current;
-            const connList = connectorsRef.current;
-            const listsEmpty = dsList.length === 0 && connList.length === 0;
+  // Refresh datasources function using unified cache manager
+  const refreshDatasources = useCallback(async () => {
+    if (!user || !currentWorkspace) {
+      setDatasources([]);
+      return;
+    }
 
-            // Do not PATCH a dataset id until sources are loaded (prevents stale localStorage ids on hard refresh)
-            if (listsEmpty && stateToSave.datasetId) {
-                return;
-            }
+    try {
+      setLoading(true);
+      const token = await user.getIdToken();
+      if (!token || typeof token !== 'string' || token.length < 10) {
+        console.warn('[WorkspaceContext] No valid token for datasources, skipping fetch');
+        return;
+      }
 
-            const lastActiveDatasetId = resolveDatasetIdForStateEndpoint(
-                stateToSave.datasetId,
-                dsList,
-                connList
+      // Always bypass stale cache so add/delete on other routes reflects immediately
+      apiCacheManager.invalidate('datasources', [token, currentWorkspace.id]);
+
+      const data = await apiCacheManager.fetch(
+        'datasources',
+        async (authToken: string, wId: string) => {
+          const response = await apiClient.listWorkspaceDatasources(authToken, wId);
+          return response.items;
+        },
+        [token, currentWorkspace.id],
+      );
+
+      setDatasources(data);
+    } catch (error) {
+      console.error('[WorkspaceContext] Failed to fetch datasources:', error);
+      setDatasources([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, currentWorkspace]);
+
+  // Refresh connectors function
+  const refreshConnectors = useCallback(async () => {
+    if (!user || !currentWorkspace) {
+      setConnectors([]);
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const token = await user.getIdToken();
+
+      apiCacheManager.invalidate('connectors', [token, currentWorkspace.id]);
+
+      const data = await apiCacheManager.fetch(
+        'connectors',
+        async (authToken: string, wId: string) => {
+          return apiClient.listConnectors(authToken, wId);
+        },
+        [token, currentWorkspace.id],
+      );
+
+      setConnectors(data);
+    } catch (error) {
+      console.error('[WorkspaceContext] Failed to fetch connectors:', error);
+      setConnectors([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, currentWorkspace]);
+
+  // Load workspace context (state + metadata) using unified cache manager
+  const loadWorkspaceContext = useCallback(
+    async (
+      workspaceId: string,
+      forceRefresh: boolean = false,
+    ): Promise<WorkspaceContextResponse | null> => {
+      if (!user) return null;
+
+      try {
+        const token = await user.getIdToken();
+
+        const data = await apiCacheManager.fetch(
+          'workspace-context',
+          async (authToken: string, wId: string) => {
+            return apiClient.getWorkspaceContext(authToken, wId);
+          },
+          [token, workspaceId],
+          forceRefresh ? { ttl: 0 } : undefined, // Force refresh by setting TTL to 0
+        );
+
+        setWorkspaceContext(data);
+        return data;
+      } catch (error) {
+        console.error('[WorkspaceContext] Failed to load workspace context:', error);
+        setWorkspaceContext(null);
+        return null;
+      }
+    },
+    [user],
+  );
+
+  // Fetch datasources and connectors when workspace changes
+  useEffect(() => {
+    if (!user || !currentWorkspace) {
+      loadedWorkspaceRef.current = null;
+      setDatasources([]);
+      setConnectors([]);
+      setWorkspaceContext(null); // Clear context when workspace changes/clears
+      return;
+    }
+
+    // Only load if we haven't already loaded for this workspace
+    if (loadedWorkspaceRef.current === currentWorkspace.id) {
+      return;
+    }
+
+    loadedWorkspaceRef.current = currentWorkspace.id;
+    void (async () => {
+      try {
+        await Promise.all([refreshDatasources(), refreshConnectors()]);
+      } catch {
+        // Individual refresh paths already log; continue to load persisted UI state
+      }
+      await loadWorkspaceContext(currentWorkspace.id);
+    })();
+  }, [user, currentWorkspace, refreshDatasources, refreshConnectors, loadWorkspaceContext]);
+
+  // Fetch workspaces on mount - only runs once when user changes
+  useEffect(() => {
+    if (user && !isInitialized) {
+      refreshWorkspaces();
+    }
+  }, [user, isInitialized, refreshWorkspaces]);
+
+  // Invalidate context cache for a workspace
+  const invalidateContextCache = useCallback(
+    (workspaceId: string) => {
+      // We need to get the token to match the cache key
+      if (!user) return;
+
+      user
+        .getIdToken()
+        .then((token) => {
+          apiCacheManager.invalidate('workspace-context', [token, workspaceId]);
+          apiCacheManager.invalidate('workspace-sessions', [token, workspaceId]);
+          console.log(
+            '[WorkspaceContext] Invalidated context and sessions cache for workspace:',
+            workspaceId,
+          );
+        })
+        .catch((err) => {
+          console.error('[WorkspaceContext] Failed to invalidate cache:', err);
+        });
+    },
+    [user],
+  );
+
+  // Save workspace state with debouncing to prevent multiple rapid API calls
+  const saveWorkspaceState = useCallback(
+    async (
+      workspaceId: string,
+      datasetId?: string | null,
+      sessionId?: string | null,
+    ): Promise<void> => {
+      if (!user) return;
+
+      // Store the pending state (will be merged/overwritten with subsequent calls)
+      pendingStateRef.current = {
+        workspaceId,
+        datasetId,
+        sessionId,
+      };
+
+      // Clear existing timer
+      if (stateSaveTimerRef.current) {
+        clearTimeout(stateSaveTimerRef.current);
+      }
+
+      // Set up debounced save
+      stateSaveTimerRef.current = setTimeout(async () => {
+        const stateToSave = pendingStateRef.current;
+        if (!stateToSave) return;
+
+        pendingStateRef.current = null;
+
+        const dsList = datasourcesRef.current;
+        const connList = connectorsRef.current;
+        const listsEmpty = dsList.length === 0 && connList.length === 0;
+
+        // Do not PATCH a dataset id until sources are loaded (prevents stale localStorage ids on hard refresh)
+        if (listsEmpty && stateToSave.datasetId) {
+          return;
+        }
+
+        const lastActiveDatasetId = resolveDatasetIdForStateEndpoint(
+          stateToSave.datasetId,
+          dsList,
+          connList,
+        );
+        const lastActiveSessionId = isValidSessionIdForState(stateToSave.sessionId)
+          ? stateToSave.sessionId!
+          : null;
+
+        try {
+          const token = await user.getIdToken();
+          await apiClient.updateWorkspaceState(token, stateToSave.workspaceId, {
+            last_active_dataset_id: lastActiveDatasetId,
+            last_active_session_id: lastActiveSessionId,
+          });
+
+          apiCacheManager.invalidate('workspace-context', [token, stateToSave.workspaceId]);
+        } catch (error) {
+          if (isDatasetStateError(error)) {
+            writeSelectedDatasetId(user.uid, stateToSave.workspaceId, null);
+            console.warn(
+              '[WorkspaceContext] Skipped invalid dataset in workspace state (cleared local selection)',
             );
-            const lastActiveSessionId = isValidSessionIdForState(stateToSave.sessionId)
-                ? stateToSave.sessionId!
-                : null;
+            return;
+          }
+          console.error('[WorkspaceContext] Failed to save workspace state:', error);
+        }
+      }, STATE_SAVE_DEBOUNCE_MS);
+    },
+    [user],
+  );
 
-            try {
-                const token = await user.getIdToken();
-                await apiClient.updateWorkspaceState(token, stateToSave.workspaceId, {
-                    last_active_dataset_id: lastActiveDatasetId,
-                    last_active_session_id: lastActiveSessionId,
-                });
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (stateSaveTimerRef.current) {
+        clearTimeout(stateSaveTimerRef.current);
+      }
+    };
+  }, []);
 
-                apiCacheManager.invalidate('workspace-context', [token, stateToSave.workspaceId]);
-            } catch (error) {
-                if (isDatasetStateError(error)) {
-                    writeSelectedDatasetId(user.uid, stateToSave.workspaceId, null);
-                    console.warn(
-                        '[WorkspaceContext] Skipped invalid dataset in workspace state (cleared local selection)'
-                    );
-                    return;
-                }
-                console.error('[WorkspaceContext] Failed to save workspace state:', error);
-            }
-        }, STATE_SAVE_DEBOUNCE_MS);
-    }, [user]);
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => {
-            if (stateSaveTimerRef.current) {
-                clearTimeout(stateSaveTimerRef.current);
-            }
-        };
-    }, []);
-
-    return (
-        <WorkspaceContext.Provider
-            value={{
-                workspaces,
-                currentWorkspace,
-                setCurrentWorkspace,
-                datasources,
-                setDatasources,
-                connectors,
-                setConnectors,
-                workspaceContext,
-                loading,
-                refreshWorkspaces,
-                refreshDatasources,
-                refreshConnectors,
-                loadWorkspaceContext,
-                saveWorkspaceState,
-                invalidateContextCache,
-            }}
-        >
-            {children}
-        </WorkspaceContext.Provider>
-    );
+  return (
+    <WorkspaceContext.Provider
+      value={{
+        workspaces,
+        currentWorkspace,
+        setCurrentWorkspace,
+        datasources,
+        setDatasources,
+        connectors,
+        setConnectors,
+        workspaceContext,
+        loading,
+        refreshWorkspaces,
+        refreshDatasources,
+        refreshConnectors,
+        loadWorkspaceContext,
+        saveWorkspaceState,
+        invalidateContextCache,
+      }}
+    >
+      {children}
+    </WorkspaceContext.Provider>
+  );
 }
 
 export { WorkspaceContext };
 
 export function useWorkspace() {
-    const context = useContext(WorkspaceContext);
-    if (context === undefined) {
-        throw new Error('useWorkspace must be used within a WorkspaceProvider');
-    }
-    return context;
+  const context = useContext(WorkspaceContext);
+  if (context === undefined) {
+    throw new Error('useWorkspace must be used within a WorkspaceProvider');
+  }
+  return context;
 }
-

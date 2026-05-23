@@ -57,9 +57,7 @@ export function UsageSection() {
     }
   };
 
-  const queryPercentage = remaining
-    ? (remaining.queries_used / remaining.queries_limit) * 100
-    : 0;
+  const queryPercentage = remaining ? (remaining.queries_used / remaining.queries_limit) * 100 : 0;
 
   const datasetsPercentage = currentUsage
     ? (currentUsage.metrics.datasets_used / currentUsage.metrics.datasets_limit) * 100
@@ -150,10 +148,15 @@ export function UsageSection() {
               </div>
             </div>
             <div className="progress-labels">
-              <span className="progress-percentage" style={{ color: getProgressColor(queryPercentage) }}>
+              <span
+                className="progress-percentage"
+                style={{ color: getProgressColor(queryPercentage) }}
+              >
                 {queryPercentage.toFixed(0)}%
               </span>
-              <span className="progress-remaining">{remaining?.queries_remaining.toLocaleString()} left</span>
+              <span className="progress-remaining">
+                {remaining?.queries_remaining.toLocaleString()} left
+              </span>
             </div>
           </div>
         </div>
@@ -191,10 +194,15 @@ export function UsageSection() {
                 </div>
               </div>
               <div className="progress-labels">
-                <span className="progress-percentage" style={{ color: getProgressColor(datasetsPercentage) }}>
+                <span
+                  className="progress-percentage"
+                  style={{ color: getProgressColor(datasetsPercentage) }}
+                >
                   {datasetsPercentage.toFixed(0)}%
                 </span>
-                <span className="progress-remaining">{currentUsage.metrics.datasets_remaining} available</span>
+                <span className="progress-remaining">
+                  {currentUsage.metrics.datasets_remaining} available
+                </span>
               </div>
             </div>
           </div>
@@ -216,8 +224,12 @@ export function UsageSection() {
               </div>
             </div>
             <div className="stat-numbers">
-              <div className="stat-value">{(currentUsage.metrics.llm_tokens_used / 1000).toFixed(1)}K</div>
-              <div className="stat-limit">of {(currentUsage.metrics.llm_tokens_limit / 1000).toFixed(0)}K</div>
+              <div className="stat-value">
+                {(currentUsage.metrics.llm_tokens_used / 1000).toFixed(1)}K
+              </div>
+              <div className="stat-limit">
+                of {(currentUsage.metrics.llm_tokens_limit / 1000).toFixed(0)}K
+              </div>
             </div>
             <div className="stat-progress">
               <div className="progress-track">
@@ -232,7 +244,10 @@ export function UsageSection() {
                 </div>
               </div>
               <div className="progress-labels">
-                <span className="progress-percentage" style={{ color: getProgressColor(tokensPercentage) }}>
+                <span
+                  className="progress-percentage"
+                  style={{ color: getProgressColor(tokensPercentage) }}
+                >
                   {tokensPercentage.toFixed(0)}%
                 </span>
                 <span className="progress-remaining">
@@ -297,7 +312,9 @@ export function UsageSection() {
                 </svg>
               </div>
               <div className="feature-content">
-                <div className="feature-value">{currentUsage.plan.limits.monthly_query_limit.toLocaleString()}</div>
+                <div className="feature-value">
+                  {currentUsage.plan.limits.monthly_query_limit.toLocaleString()}
+                </div>
                 <div className="feature-label">Queries per month</div>
               </div>
             </div>
@@ -322,7 +339,9 @@ export function UsageSection() {
                 </svg>
               </div>
               <div className="feature-content">
-                <div className="feature-value">{(currentUsage.plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K</div>
+                <div className="feature-value">
+                  {(currentUsage.plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K
+                </div>
                 <div className="feature-label">AI tokens per month</div>
               </div>
             </div>
@@ -335,7 +354,9 @@ export function UsageSection() {
                 </svg>
               </div>
               <div className="feature-content">
-                <div className="feature-value">{currentUsage.plan.limits.monthly_chart_renders_limit}</div>
+                <div className="feature-value">
+                  {currentUsage.plan.limits.monthly_chart_renders_limit}
+                </div>
                 <div className="feature-label">Chart renders</div>
               </div>
             </div>
@@ -347,7 +368,9 @@ export function UsageSection() {
               </div>
               <div className="feature-content">
                 <div className="feature-value">{currentUsage.plan.limits.max_workspaces}</div>
-                <div className="feature-label">Workspace{currentUsage.plan.limits.max_workspaces > 1 ? 's' : ''}</div>
+                <div className="feature-label">
+                  Workspace{currentUsage.plan.limits.max_workspaces > 1 ? 's' : ''}
+                </div>
               </div>
             </div>
           </div>
@@ -364,7 +387,9 @@ export function UsageSection() {
           </div>
           <div className="cta-content">
             <h3>Running low on queries?</h3>
-            <p>Upgrade to a higher plan for more capacity, advanced features, and priority support</p>
+            <p>
+              Upgrade to a higher plan for more capacity, advanced features, and priority support
+            </p>
           </div>
           <button className="cta-button" onClick={() => setShowUpgradeModal(true)}>
             Explore Plans

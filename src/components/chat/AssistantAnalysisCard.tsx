@@ -57,7 +57,10 @@ export function AssistantAnalysisCard({
 
       {needsClarification && hasResults ? (
         <div className="assistant-analysis-card__clarification">
-          <Sparkles className="h-4 w-4 shrink-0 text-[color:var(--accent-teal-500)]" strokeWidth={2} />
+          <Sparkles
+            className="h-4 w-4 shrink-0 text-[color:var(--accent-teal-500)]"
+            strokeWidth={2}
+          />
           <p>{intent.clarification_message}</p>
         </div>
       ) : null}

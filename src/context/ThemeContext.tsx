@@ -42,7 +42,9 @@ interface ThemeProviderProps {
 }
 
 export function ThemeProvider({ children }: ThemeProviderProps) {
-  const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() => getStoredPreference());
+  const [themePreference, setThemePreferenceState] = useState<ThemePreference>(() =>
+    getStoredPreference(),
+  );
   const [theme, setTheme] = useState<Theme>(() => resolveTheme(getStoredPreference()));
 
   // Apply theme to document
@@ -54,20 +56,23 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
   }, []);
 
   // Handle preference change
-  const setThemePreference = useCallback((preference: ThemePreference) => {
-    setThemePreferenceState(preference);
-    localStorage.setItem(THEME_STORAGE_KEY, preference);
-    const resolvedTheme = resolveTheme(preference);
-    setTheme(resolvedTheme);
-    applyTheme(resolvedTheme);
-  }, [applyTheme]);
+  const setThemePreference = useCallback(
+    (preference: ThemePreference) => {
+      setThemePreferenceState(preference);
+      localStorage.setItem(THEME_STORAGE_KEY, preference);
+      const resolvedTheme = resolveTheme(preference);
+      setTheme(resolvedTheme);
+      applyTheme(resolvedTheme);
+    },
+    [applyTheme],
+  );
 
   // Listen for system theme changes when preference is 'system'
   useEffect(() => {
     if (themePreference !== 'system') return;
 
     const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    
+
     const handleChange = (e: MediaQueryListEvent) => {
       const newTheme = e.matches ? 'dark' : 'light';
       setTheme(newTheme);
@@ -99,4 +104,3 @@ export function useTheme() {
 }
 
 export { ThemeContext };
-

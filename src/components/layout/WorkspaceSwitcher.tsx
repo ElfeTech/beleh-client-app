@@ -14,7 +14,11 @@ interface WorkspaceSwitcherProps {
   onCreateWorkspace?: () => void;
 }
 
-const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, onCreateWorkspace }) => {
+const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
+  isOpen,
+  onClose,
+  onCreateWorkspace,
+}) => {
   const navigate = useNavigate();
   const context = useContext(WorkspaceContext);
   const { user } = useAuth();
@@ -190,7 +194,12 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, 
           <h2>Switch Workspace</h2>
           <button className="bottom-sheet-close" onClick={onClose} aria-label="Close">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
             </svg>
           </button>
         </div>
@@ -204,7 +213,12 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, 
             >
               <div className="workspace-icon create-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 4v16m8-8H4"
+                  />
                 </svg>
               </div>
               <div className="workspace-info">
@@ -224,7 +238,12 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, 
                 >
                   <div className="workspace-icon">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                      />
                     </svg>
                   </div>
                   <div className="workspace-info">
@@ -232,8 +251,18 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, 
                     {workspace.is_default && <span className="default-badge">Default</span>}
                   </div>
                   {currentWorkspace?.id === workspace.id && (
-                    <svg className="check-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    <svg
+                      className="check-icon"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
                     </svg>
                   )}
                 </button>
@@ -323,7 +352,11 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({ isOpen, onClose, 
                 >
                   Cancel
                 </button>
-                <button type="submit" className="primary-btn" disabled={!editName.trim() || isEditing}>
+                <button
+                  type="submit"
+                  className="primary-btn"
+                  disabled={!editName.trim() || isEditing}
+                >
                   {isEditing ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>

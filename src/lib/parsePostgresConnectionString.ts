@@ -173,7 +173,9 @@ function tryParseJdbcOrUri(raw: string): {
  * libpq-style: host=… port=… dbname=… user=… password=… sslmode=…
  * Values may be single-quoted; inside quotes, '' is an escaped quote.
  */
-function parseKeywordValueConninfo(input: string): { partial: Partial<ParsedPostgresFields>; warnings: string[] } | null {
+function parseKeywordValueConninfo(
+  input: string,
+): { partial: Partial<ParsedPostgresFields>; warnings: string[] } | null {
   const s = input.trim();
   if (!s || !s.includes('=')) {
     return null;

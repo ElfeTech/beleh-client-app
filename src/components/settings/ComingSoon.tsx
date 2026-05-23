@@ -10,11 +10,7 @@ interface ComingSoonProps {
   breadcrumbLabel?: string;
 }
 
-export const ComingSoon: React.FC<ComingSoonProps> = ({
-  title,
-  description,
-  breadcrumbLabel,
-}) => {
+export const ComingSoon: React.FC<ComingSoonProps> = ({ title, description, breadcrumbLabel }) => {
   const crumb = breadcrumbLabel || title.toUpperCase().replace(/\s+/g, ' ');
 
   return (

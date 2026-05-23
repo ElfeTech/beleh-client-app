@@ -56,7 +56,6 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
 
       // Set billing cycle from current plan response
       setBillingCycle(currentPlanResponse.billing_cycle);
-
     } catch (err) {
       console.error('Failed to fetch plans:', err);
       setError('Failed to load available plans. Please try again.');
@@ -160,7 +159,9 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                       <div className="plan-price">
                         <span className="price-currency">$</span>
                         <span className="price-value">{getPrice(plan)}</span>
-                        <span className="price-period">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                        <span className="price-period">
+                          /{billingCycle === 'monthly' ? 'mo' : 'yr'}
+                        </span>
                       </div>
                     </div>
 
@@ -170,7 +171,9 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        <span>{plan.limits.monthly_query_limit.toLocaleString()} queries/month</span>
+                        <span>
+                          {plan.limits.monthly_query_limit.toLocaleString()} queries/month
+                        </span>
                       </div>
                       <div className="feature-item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -182,13 +185,18 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        <span>{(plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K AI tokens/month</span>
+                        <span>
+                          {(plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K AI tokens/month
+                        </span>
                       </div>
                       <div className="feature-item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        <span>{plan.limits.max_workspaces} workspace{plan.limits.max_workspaces > 1 ? 's' : ''}</span>
+                        <span>
+                          {plan.limits.max_workspaces} workspace
+                          {plan.limits.max_workspaces > 1 ? 's' : ''}
+                        </span>
                       </div>
                       <div className="feature-item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -201,14 +209,17 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                         <span>
-                          {plan.limits.max_members_per_workspace} member{plan.limits.max_members_per_workspace > 1 ? 's' : ''} per
-                          workspace
+                          {plan.limits.max_members_per_workspace} member
+                          {plan.limits.max_members_per_workspace > 1 ? 's' : ''} per workspace
                         </span>
                       </div>
                     </div>
 
                     {/* CTA Button */}
-                    <button className={`plan-cta ${isCurrent ? 'current' : ''}`} disabled={isCurrent}>
+                    <button
+                      className={`plan-cta ${isCurrent ? 'current' : ''}`}
+                      disabled={isCurrent}
+                    >
                       {isCurrent ? 'Current Plan' : 'Upgrade to ' + plan.name}
                     </button>
                   </div>
