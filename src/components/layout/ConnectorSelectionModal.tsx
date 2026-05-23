@@ -112,26 +112,32 @@ const SECTIONS: CatalogSection[] = [
   },
 ];
 
-export function ConnectorSelectionModal({ onClose, onSelect, hideFileSources = false }: ConnectorSelectionModalProps) {
+export function ConnectorSelectionModal({
+  onClose,
+  onSelect,
+  hideFileSources = false,
+}: ConnectorSelectionModalProps) {
   const [query, setQuery] = useState('');
 
   const catalogSections = useMemo(
     () => (hideFileSources ? SECTIONS.filter((section) => section.id !== 'files') : SECTIONS),
-    [hideFileSources]
+    [hideFileSources],
   );
 
   const filteredSections = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return catalogSections;
-    return catalogSections.map((section) => ({
-      ...section,
-      items: section.items.filter(
-        (item) =>
-          item.label.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          section.label.toLowerCase().includes(q)
-      ),
-    })).filter((s) => s.items.length > 0);
+    return catalogSections
+      .map((section) => ({
+        ...section,
+        items: section.items.filter(
+          (item) =>
+            item.label.toLowerCase().includes(q) ||
+            item.description.toLowerCase().includes(q) ||
+            section.label.toLowerCase().includes(q),
+        ),
+      }))
+      .filter((s) => s.items.length > 0);
   }, [query, catalogSections]);
 
   const handleItemClick = (item: CatalogItem) => {
@@ -153,18 +159,31 @@ export function ConnectorSelectionModal({ onClose, onSelect, hideFileSources = f
       >
         <div className="connector-catalog-header">
           <div>
-            <p className="connector-catalog-eyebrow">Connectors</p>
-            <h2 id="connector-catalog-title">Choose a platform</h2>
-            <p className="connector-catalog-subtitle">Select a platform to start analyzing your data.</p>
+            <p className="connector-catalog-eyebrow">Enterprise connection</p>
+            <h2 id="connector-catalog-title">Connect a data platform</h2>
+            <p className="connector-catalog-subtitle">
+              Add encrypted pipelines to your schema catalog. File uploads and cloud sources are
+              available where noted.
+            </p>
           </div>
-          <button type="button" className="close-btn connector-catalog-close" onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className="close-btn connector-catalog-close"
+            onClick={onClose}
+            aria-label="Close"
+          >
             <X size={20} strokeWidth={2} />
           </button>
         </div>
 
         <div className="connector-catalog-toolbar">
           <div className="connector-catalog-search">
-            <Search size={18} strokeWidth={2} aria-hidden className="connector-catalog-search-icon" />
+            <Search
+              size={18}
+              strokeWidth={2}
+              aria-hidden
+              className="connector-catalog-search-icon"
+            />
             <input
               type="search"
               className="connector-catalog-search-input"
@@ -190,7 +209,7 @@ export function ConnectorSelectionModal({ onClose, onSelect, hideFileSources = f
                       <button
                         key={item.id}
                         type="button"
-                        className={`connector-catalog-card ${item.action.kind === 'toast' ? 'is-soon' : ''}`}
+                        className={`connector-catalog-card ${item.action.kind === 'toast' ? 'is-soon' : ''} ${item.id === 'postgres' ? 'is-enterprise' : ''}`}
                         onClick={() => handleItemClick(item)}
                       >
                         <div className="connector-catalog-card-icon" aria-hidden>
@@ -200,7 +219,9 @@ export function ConnectorSelectionModal({ onClose, onSelect, hideFileSources = f
                           <span className="connector-catalog-card-title">{item.label}</span>
                           <span className="connector-catalog-card-desc">{item.description}</span>
                         </div>
-                        {item.badge && <span className="connector-catalog-badge">{item.badge}</span>}
+                        {item.badge && (
+                          <span className="connector-catalog-badge">{item.badge}</span>
+                        )}
                       </button>
                     );
                   })}

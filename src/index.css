@@ -123,7 +123,7 @@
     --chart-fill: var(--accent-teal-500);
   }
 
-  html[data-theme="dark"] {
+  html[data-theme='dark'] {
     --primary-50: rgba(59, 130, 246, 0.12);
     --primary-100: rgba(59, 130, 246, 0.18);
     --gray-50: #111827;
@@ -215,7 +215,9 @@
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
-    font-feature-settings: "rlig" 1, "calt" 1;
+    font-feature-settings:
+      'rlig' 1,
+      'calt' 1;
     -webkit-tap-highlight-color: transparent;
   }
 }
@@ -281,9 +283,21 @@
     transition: background-color 0.35s ease;
     background-color: var(--bg-secondary);
     background-image:
-      radial-gradient(ellipse 120% 80% at 50% -30%, color-mix(in srgb, var(--primary-500) 14%, transparent), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 100% 0%, color-mix(in srgb, #8b5cf6 8%, transparent), transparent 45%),
-      radial-gradient(ellipse 60% 40% at 0% 20%, color-mix(in srgb, #06b6d4 7%, transparent), transparent 50%);
+      radial-gradient(
+        ellipse 120% 80% at 50% -30%,
+        color-mix(in srgb, var(--primary-500) 14%, transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 70% 50% at 100% 0%,
+        color-mix(in srgb, #8b5cf6 8%, transparent),
+        transparent 45%
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 0% 20%,
+        color-mix(in srgb, #06b6d4 7%, transparent),
+        transparent 50%
+      );
   }
 
   html[data-theme='dark'] .app-page-root {
@@ -308,11 +322,28 @@
     max-height: 100dvh;
     isolation: isolate;
     transition: background-color 0.35s ease;
+    /* User column: grows with prompt length, capped at 40vw; assistant: thread % */
+    --chat-user-message-max-width: 40vw;
+    --chat-assistant-message-width: 75%;
+    --chat-user-message-max-width-mobile: 40vw;
+    --chat-assistant-message-width-mobile: 92%;
     background-color: var(--bg-secondary);
     background-image:
-      radial-gradient(ellipse 120% 80% at 50% -30%, color-mix(in srgb, var(--primary-500) 14%, transparent), transparent 55%),
-      radial-gradient(ellipse 70% 50% at 100% 0%, color-mix(in srgb, #8b5cf6 8%, transparent), transparent 45%),
-      radial-gradient(ellipse 60% 40% at 0% 20%, color-mix(in srgb, #06b6d4 7%, transparent), transparent 50%);
+      radial-gradient(
+        ellipse 120% 80% at 50% -30%,
+        color-mix(in srgb, var(--primary-500) 14%, transparent),
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse 70% 50% at 100% 0%,
+        color-mix(in srgb, #8b5cf6 8%, transparent),
+        transparent 45%
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 0% 20%,
+        color-mix(in srgb, #06b6d4 7%, transparent),
+        transparent 50%
+      );
   }
 
   .chat-container--enterprise {
@@ -366,44 +397,186 @@
     border-radius: 999px;
   }
 
-  /* Chat bubbles — token-based surfaces (no gray Tailwind muted) + wide layout */
+  /*
+   * Chat column widths — tune on .chat-container
+   * User: fit-content up to --chat-user-message-max-width (default 40vw)
+   * Assistant: --chat-assistant-message-width (default 75% of thread)
+   */
+  .chat-message-width--user {
+    width: fit-content;
+    max-width: var(--chat-user-message-max-width, 40vw);
+    min-width: 0;
+  }
+
+  .chat-message-width--assistant {
+    width: var(--chat-assistant-message-width, 75%);
+    max-width: var(--chat-assistant-message-max-width, var(--chat-assistant-message-width, 75%));
+    min-width: 0;
+  }
+
+  @media (max-width: 640px) {
+    .chat-message-width--user {
+      width: fit-content;
+      max-width: var(--chat-user-message-max-width-mobile, 40vw);
+    }
+
+    .chat-message-width--assistant {
+      width: var(--chat-assistant-message-width-mobile, 92%);
+      max-width: var(
+        --chat-assistant-message-max-width-mobile,
+        var(--chat-assistant-message-width-mobile, 92%)
+      );
+    }
+  }
+
+  /* Plain text messages (user + assistant) — no bubble background */
+  .message-plain {
+    width: 100%;
+    padding: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    color: var(--text-primary);
+  }
+
+  @media (min-width: 640px) {
+    .message-plain {
+      font-size: var(--text-md);
+    }
+  }
+
+  /* User request — mock: header + dark pill bubble + avatar (width via .chat-message-width--user) */
+  .user-request {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+    width: fit-content;
+    max-width: 100%;
+    margin-left: auto;
+  }
+
+  .user-request__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    width: fit-content;
+    max-width: 100%;
+    padding-right: 2.75rem;
+  }
+
+  .user-request__label {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+  }
+
+  .user-request__time {
+    font-size: var(--text-xs);
+    font-weight: 500;
+    color: var(--text-muted);
+  }
+
+  .user-request__body {
+    display: flex;
+    align-items: flex-start;
+    justify-content: flex-end;
+    gap: 0.625rem;
+    width: fit-content;
+    max-width: 100%;
+  }
+
+  .user-request__bubble {
+    width: fit-content;
+    max-width: 100%;
+    min-width: 0;
+    padding: 0.875rem 1.375rem;
+    border-radius: 1.5rem;
+    background: #0f172a;
+    color: #f8fafc;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+  }
+
+  html[data-theme='dark'] .user-request__bubble {
+    background: #0f172a;
+    color: #f8fafc;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  }
+
+  .user-request__text {
+    margin: 0;
+    font-size: var(--text-base);
+    line-height: var(--leading-relaxed);
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  @media (min-width: 640px) {
+    .user-request__text {
+      font-size: var(--text-md);
+    }
+  }
+
+  .user-request__avatar {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0f172a;
+    color: #94a3b8;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+  }
+
+  .message-plain--assistant {
+    text-align: left;
+    color: var(--text-primary);
+  }
+
+  .message-plain__meta {
+    margin-top: 0.5rem;
+    font-size: 0.5625rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    opacity: 0.65;
+  }
+
+  .message-plain--user .message-plain__meta {
+    text-align: right;
+  }
+
+  /* Card surfaces for rich UI (charts, tables, SQL tabs) — applied on analysis card, not plain text */
   .message-bubble {
     width: fit-content;
-    max-width: min(100%, calc(100vw - 1.5rem));
+    max-width: 100%;
     border-radius: var(--radius-xl, 1rem);
     padding: 0.875rem 1rem;
     font-size: var(--text-base);
     line-height: var(--leading-relaxed);
     box-shadow: var(--ds-shadow-card, 0 1px 2px rgba(15, 23, 42, 0.06));
-    transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+    transition:
+      background-color 0.2s ease,
+      border-color 0.2s ease,
+      box-shadow 0.2s ease;
   }
 
   @media (min-width: 640px) {
     .message-bubble {
-      max-width: min(96%, 52rem);
       padding: 1rem 1.125rem;
       font-size: var(--text-md);
     }
-  }
-
-  @media (min-width: 1024px) {
-    .message-bubble {
-      max-width: min(94%, 58rem);
-    }
-  }
-
-  .message-user {
-    align-self: flex-end;
-    border-top-right-radius: 0.35rem;
-    background: var(--btn-primary-bg);
-    color: var(--btn-primary-text);
-    border: 1px solid color-mix(in srgb, var(--btn-primary-bg) 85%, #000 15%);
-    box-shadow: 0 2px 12px color-mix(in srgb, var(--primary-500) 28%, transparent);
-  }
-
-  html[data-theme='dark'] .message-user {
-    border-color: color-mix(in srgb, var(--btn-primary-bg) 70%, #fff 12%);
-    box-shadow: 0 4px 20px color-mix(in srgb, var(--primary-500) 35%, transparent);
   }
 
   .message-assistant {
@@ -413,18 +586,6 @@
     color: var(--text-primary);
     border: 1px solid var(--ds-border-subtle);
     box-shadow: var(--ds-shadow-card);
-  }
-
-  /* Full-width bubble when showing suggested follow-ups (avoids fit-content + float layout bugs) */
-  .message-bubble--with-suggestions {
-    width: 100%;
-    max-width: min(96%, 52rem);
-  }
-
-  @media (min-width: 1024px) {
-    .message-bubble--with-suggestions {
-      max-width: min(94%, 58rem);
-    }
   }
 
   html[data-theme='dark'] .message-assistant {
@@ -441,8 +602,14 @@
 
 /* Animations */
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .animate-slide-up {
@@ -519,7 +686,9 @@
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .close-btn:hover {
@@ -534,7 +703,10 @@
   font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease,
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
     transform 0.1s ease;
 }
 
@@ -580,7 +752,10 @@
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.22) inset,
     var(--btn-gradient-shadow);
-  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    filter 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .btn-gradient-primary:hover:not(:disabled) {
@@ -603,6 +778,18 @@
   border-radius: var(--radius-md);
 }
 
+.composer-send-btn--active {
+  background: linear-gradient(
+    90deg,
+    var(--btn-gradient-start) 0%,
+    var(--btn-gradient-mid) 48%,
+    var(--btn-gradient-end) 100%
+  );
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.2) inset,
+    var(--btn-gradient-shadow);
+}
+
 .secondary-btn {
   background: var(--btn-secondary-bg);
   color: var(--btn-secondary-text);
@@ -621,6 +808,6 @@
   flex-wrap: wrap;
 }
 
-html[data-theme="dark"] .modal-container:not(.large) {
+html[data-theme='dark'] .modal-container:not(.large) {
   background: var(--card-background);
 }

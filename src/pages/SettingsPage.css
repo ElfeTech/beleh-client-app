@@ -171,6 +171,10 @@
     padding: var(--space-3) 0;
   }
 
+  .settings-nav-hidden {
+    display: none !important;
+  }
+
   .settings-mobile-section {
     margin-bottom: var(--space-4);
   }
@@ -204,7 +208,9 @@
     border-radius: var(--radius-md);
     cursor: pointer;
     text-align: left;
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .settings-menu-item:active {

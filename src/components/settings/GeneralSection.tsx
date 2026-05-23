@@ -7,6 +7,8 @@ import { apiClient } from '../../services/apiClient';
 import { authService } from '../../services/authService';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 import { ThemeSegmentControl } from './ThemeSegmentControl';
+import { AlertDialog } from '../common/AlertDialog';
+import { ConfirmDialog } from '../common/ConfirmDialog';
 import './SettingsShared.css';
 import './GeneralSection.css';
 
@@ -40,6 +42,8 @@ export function GeneralSection() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportErrorAlert, setExportErrorAlert] = useState<string | null>(null);
+  const [showDeleteAccountConfirm, setShowDeleteAccountConfirm] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -174,17 +178,14 @@ export function GeneralSection() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Export failed.');
+      setExportErrorAlert(e instanceof Error ? e.message : 'Export failed.');
     } finally {
       setExporting(false);
     }
   };
 
-  const handleDeleteRequest = () => {
-    const ok = window.confirm(
-      'Account deletion is handled by our team so we can remove your data safely. Continue to email support?'
-    );
-    if (!ok) return;
+  const handleDeleteAccountConfirm = () => {
+    setShowDeleteAccountConfirm(false);
     window.location.href =
       'mailto:support@beleh.ai?subject=Account%20deletion%20request&body=Please%20delete%20my%20account%20(email%20below).%0A%0A';
   };
@@ -216,10 +217,16 @@ export function GeneralSection() {
                 <span>{getInitials(displayName || firebaseUser?.email || 'U')}</span>
               )}
             </div>
-            <button type="button" className="settings-outline-btn profile-google-btn" onClick={handleOpenGoogleProfile}>
+            <button
+              type="button"
+              className="settings-outline-btn profile-google-btn"
+              onClick={handleOpenGoogleProfile}
+            >
               Google profile photo
             </button>
-            <p className="profile-avatar-hint">Profile photos are managed in your Google account.</p>
+            <p className="profile-avatar-hint">
+              Profile photos are managed in your Google account.
+            </p>
           </div>
 
           <div className="profile-layout__form">
@@ -251,7 +258,13 @@ export function GeneralSection() {
                   disabled
                 />
                 <span className="verified-badge">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    aria-hidden
+                  >
                     <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
                     <polyline points="22 4 12 14.01 9 11.01" />
                   </svg>
@@ -347,7 +360,11 @@ export function GeneralSection() {
                 identity and complete the process safely.
               </p>
             </div>
-            <button type="button" className="danger-btn" onClick={handleDeleteRequest}>
+            <button
+              type="button"
+              className="danger-btn"
+              onClick={() => setShowDeleteAccountConfirm(true)}
+            >
               Request deletion
             </button>
           </div>
@@ -364,6 +381,26 @@ export function GeneralSection() {
           {isSaving ? 'Saving…' : saveSuccess ? 'Saved!' : 'Save changes'}
         </button>
       </div>
+
+      <AlertDialog
+        isOpen={exportErrorAlert !== null}
+        title="Export failed"
+        message={exportErrorAlert ?? ''}
+        confirmText="OK"
+        variant="danger"
+        onClose={() => setExportErrorAlert(null)}
+      />
+
+      <ConfirmDialog
+        isOpen={showDeleteAccountConfirm}
+        title="Request account deletion?"
+        message="Account deletion is handled by our team so we can remove your data safely. You will be taken to email support to continue."
+        confirmText="Continue"
+        cancelText="Cancel"
+        variant="warning"
+        onConfirm={handleDeleteAccountConfirm}
+        onCancel={() => setShowDeleteAccountConfirm(false)}
+      />
     </div>
   );
 }

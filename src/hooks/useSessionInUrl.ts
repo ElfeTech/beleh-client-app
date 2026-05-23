@@ -4,10 +4,16 @@ import { useChatSession } from '../context/ChatSessionContext';
 
 export const SESSION_URL_PARAM = 'session';
 
+function deleteSessionSearchParam(prev: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(prev);
+  next.delete(SESSION_URL_PARAM);
+  return next;
+}
+
 /** Keep active chat session in ?session= so hard refresh restores the thread. */
 export function useSessionInUrl(workspaceId: string | undefined) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeSessionId, setActiveSessionId, sessions } = useChatSession();
+  const { activeSessionId, setActiveSessionId, sessions, isNewChatDraft } = useChatSession();
   const skipUrlWriteRef = useRef(false);
   const hydratedRef = useRef(false);
 
@@ -16,21 +22,38 @@ export function useSessionInUrl(workspaceId: string | undefined) {
     hydratedRef.current = false;
   }, [workspaceId]);
 
+  // New chat: strip ?session= from URL and never re-apply the old id from the query string
+  useEffect(() => {
+    if (!workspaceId || !isNewChatDraft) return;
+
+    const fromUrl = searchParams.get(SESSION_URL_PARAM);
+    if (fromUrl) {
+      skipUrlWriteRef.current = true;
+      setSearchParams(deleteSessionSearchParam, { replace: true });
+    }
+    if (activeSessionId) {
+      skipUrlWriteRef.current = true;
+      setActiveSessionId(null);
+    }
+    hydratedRef.current = true;
+  }, [
+    workspaceId,
+    isNewChatDraft,
+    searchParams,
+    activeSessionId,
+    setActiveSessionId,
+    setSearchParams,
+  ]);
+
   // URL → context (once sessions are loaded)
   useEffect(() => {
     if (!workspaceId) return;
+    if (isNewChatDraft) return;
 
     const fromUrl = searchParams.get(SESSION_URL_PARAM);
     if (!fromUrl || fromUrl === 'undefined' || fromUrl === '1') {
       if (fromUrl === 'undefined' || fromUrl === '1') {
-        setSearchParams(
-          (prev) => {
-            const next = new URLSearchParams(prev);
-            next.delete(SESSION_URL_PARAM);
-            return next;
-          },
-          { replace: true }
-        );
+        setSearchParams(deleteSessionSearchParam, { replace: true });
       }
       hydratedRef.current = true;
       return;
@@ -40,14 +63,7 @@ export function useSessionInUrl(workspaceId: string | undefined) {
 
     const exists = sessions.some((s) => s.id === fromUrl);
     if (!exists) {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.delete(SESSION_URL_PARAM);
-          return next;
-        },
-        { replace: true }
-      );
+      setSearchParams(deleteSessionSearchParam, { replace: true });
       if (activeSessionId === fromUrl) {
         skipUrlWriteRef.current = true;
         setActiveSessionId(null);
@@ -63,6 +79,7 @@ export function useSessionInUrl(workspaceId: string | undefined) {
     hydratedRef.current = true;
   }, [
     workspaceId,
+    isNewChatDraft,
     searchParams,
     sessions,
     activeSessionId,
@@ -72,14 +89,26 @@ export function useSessionInUrl(workspaceId: string | undefined) {
 
   // context → URL
   useEffect(() => {
-    if (!workspaceId || !hydratedRef.current) return;
+    if (!workspaceId) return;
+
+    const fromUrl = searchParams.get(SESSION_URL_PARAM);
+
+    if (isNewChatDraft) {
+      if (!activeSessionId && fromUrl) {
+        skipUrlWriteRef.current = true;
+        setSearchParams(deleteSessionSearchParam, { replace: true });
+      }
+      hydratedRef.current = true;
+      return;
+    }
+
+    if (!hydratedRef.current) return;
 
     if (skipUrlWriteRef.current) {
       skipUrlWriteRef.current = false;
       return;
     }
 
-    const fromUrl = searchParams.get(SESSION_URL_PARAM);
     if (activeSessionId) {
       if (fromUrl === activeSessionId) return;
       setSearchParams(
@@ -88,19 +117,12 @@ export function useSessionInUrl(workspaceId: string | undefined) {
           next.set(SESSION_URL_PARAM, activeSessionId);
           return next;
         },
-        { replace: true }
+        { replace: true },
       );
     } else if (fromUrl) {
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.delete(SESSION_URL_PARAM);
-          return next;
-        },
-        { replace: true }
-      );
+      setSearchParams(deleteSessionSearchParam, { replace: true });
     }
-  }, [activeSessionId, workspaceId, searchParams, setSearchParams]);
+  }, [activeSessionId, workspaceId, isNewChatDraft, searchParams, setSearchParams]);
 }
 
 export function workspaceChatPath(workspaceId: string, sessionId?: string | null): string {

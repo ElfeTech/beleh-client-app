@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { handleBackdropClick, useModalDismiss } from './useModalDismiss';
 import './ConfirmDialog.css';
 
 export interface ConfirmDialogProps {
@@ -24,6 +25,8 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
+  useModalDismiss(isOpen, onCancel);
+
   if (!isOpen) return null;
 
   const dialogContent = (
@@ -32,6 +35,7 @@ export function ConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
+      onMouseDown={(e) => handleBackdropClick(e, onCancel)}
     >
       <div className="confirm-dialog-container">
         <div className={`confirm-dialog-icon ${variant}`}>

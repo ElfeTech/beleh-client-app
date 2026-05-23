@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   BarChart,
   Bar,
@@ -60,7 +60,6 @@ function TimeRangeControls({
   );
 }
 
-
 function AnalyticsSkeleton() {
   return (
     <>
@@ -113,6 +112,7 @@ function ChartCard({
 }
 
 const UsageStatisticsPage: React.FC = () => {
+  const navigate = useNavigate();
   const { id: workspaceId } = useParams<{ id: string }>();
   const { currentUsage, getHistoricalUsage } = useUsage();
   const [history, setHistory] = useState<HistoricalUsageResponse | null>(null);
@@ -164,7 +164,7 @@ const UsageStatisticsPage: React.FC = () => {
         iconClass: 'text-purple-500 bg-purple-500/10',
       },
     ],
-    [history]
+    [history],
   );
 
   const chartData =
@@ -244,7 +244,13 @@ const UsageStatisticsPage: React.FC = () => {
                           stroke="var(--border-primary)"
                           opacity={0.5}
                         />
-                        <XAxis dataKey="formattedDate" axisLine={false} tickLine={false} tick={TICK_STYLE} dy={10} />
+                        <XAxis
+                          dataKey="formattedDate"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={TICK_STYLE}
+                          dy={10}
+                        />
                         <YAxis axisLine={false} tickLine={false} tick={TICK_STYLE} />
                         <Tooltip contentStyle={TOOLTIP_STYLE} />
                         <Area
@@ -277,7 +283,12 @@ const UsageStatisticsPage: React.FC = () => {
                           stroke="var(--border-primary)"
                           opacity={0.5}
                         />
-                        <XAxis dataKey="formattedDate" axisLine={false} tickLine={false} tick={TICK_STYLE} />
+                        <XAxis
+                          dataKey="formattedDate"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={TICK_STYLE}
+                        />
                         <YAxis axisLine={false} tickLine={false} tick={TICK_STYLE} />
                         <Tooltip
                           cursor={{ fill: 'var(--bg-tertiary)', opacity: 0.4 }}
@@ -309,7 +320,12 @@ const UsageStatisticsPage: React.FC = () => {
                           stroke="var(--border-primary)"
                           opacity={0.5}
                         />
-                        <XAxis dataKey="formattedDate" axisLine={false} tickLine={false} tick={TICK_STYLE} />
+                        <XAxis
+                          dataKey="formattedDate"
+                          axisLine={false}
+                          tickLine={false}
+                          tick={TICK_STYLE}
+                        />
                         <YAxis axisLine={false} tickLine={false} tick={TICK_STYLE} />
                         <Tooltip
                           cursor={{ fill: 'var(--bg-tertiary)', opacity: 0.4 }}
@@ -342,7 +358,9 @@ const UsageStatisticsPage: React.FC = () => {
                       <Layers className="w-6 h-6" />
                     </div>
                     <div>
-                      <h4 className="text-base font-semibold font-display">{currentUsage.plan.name} Tier</h4>
+                      <h4 className="text-base font-semibold font-display">
+                        {currentUsage.plan.name} Tier
+                      </h4>
                       <p className="usage-footer-card__reset mt-1">
                         Billing cycle resets {format(parseISO(currentUsage.reset_at), 'PPP')}
                       </p>
@@ -358,6 +376,7 @@ const UsageStatisticsPage: React.FC = () => {
                     <button
                       type="button"
                       className="px-6 py-2.5 rounded-xl bg-[color:var(--accent-teal-600)] text-white font-bold text-xs uppercase tracking-widest shadow-md hover:opacity-90 transition-all active:scale-[0.98]"
+                      onClick={() => navigate('/settings/billing')}
                     >
                       Upgrade Capacity
                     </button>

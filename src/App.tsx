@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AuthProvider } from './context/AuthContext';
 import { WorkspaceProvider } from './context/WorkspaceContext';
@@ -15,15 +15,23 @@ import { SignUp } from './pages/SignUp';
 import { Workspace } from './pages/Workspace';
 import DatasetsPage from './pages/DatasetsPage';
 import { DatasetPreviewPage } from './pages/DatasetPreviewPage';
-import SessionsPage from './pages/SessionsPage';
 import SettingsPage from './pages/SettingsPage';
 import UsageStatisticsPage from './pages/UsageStatisticsPage';
 import { MainLayout } from './components/layout/MainLayout';
 import FeedbackModal from './components/common/FeedbackModal';
+import { ClarityInit } from './components/analytics/ClarityInit';
+import { GoogleAnalyticsInit } from './components/analytics/GoogleAnalyticsInit';
+
+function WorkspaceSessionsRedirect() {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={id ? `/workspace/${id}` : '/settings/workspaces'} replace />;
+}
 
 function App() {
   return (
     <BrowserRouter>
+      <ClarityInit />
+      <GoogleAnalyticsInit />
       <ThemeProvider>
         <AuthProvider>
           <UsageProvider>
@@ -47,11 +55,23 @@ function App() {
                       <Route path="/" element={<LandingPage />} />
                       <Route path="/signin" element={<SignIn />} />
                       <Route path="/signup" element={<SignUp />} />
-                      <Route element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
+                      <Route
+                        element={
+                          <ProtectedRoute>
+                            <MainLayout />
+                          </ProtectedRoute>
+                        }
+                      >
                         <Route path="/workspace/:id" element={<Workspace />} />
                         <Route path="/workspace/:id/datasets" element={<DatasetsPage />} />
-                        <Route path="/workspace/:id/datasets/:datasetId/preview" element={<DatasetPreviewPage />} />
-                        <Route path="/workspace/:id/sessions" element={<SessionsPage />} />
+                        <Route
+                          path="/workspace/:id/datasets/:datasetId/preview"
+                          element={<DatasetPreviewPage />}
+                        />
+                        <Route
+                          path="/workspace/:id/sessions"
+                          element={<WorkspaceSessionsRedirect />}
+                        />
                         <Route path="/workspace/:id/statistics" element={<UsageStatisticsPage />} />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/settings/general" element={<SettingsPage />} />

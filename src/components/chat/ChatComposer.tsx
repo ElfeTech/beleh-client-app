@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Check, ChevronDown, Search, Database, FileText } from 'lucide-react';
+import { Check, ChevronDown, Search, Database, FileText, Send } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { DataSourceResponse, ConnectorResponse } from '../../types/api';
 
@@ -40,7 +40,7 @@ const COMPOSER_MAX_ROWS = 4;
 function tagLabel(
   selectedDatasourceId: string | null,
   datasources: DataSourceResponse[],
-  connectors: ConnectorResponse[] = []
+  connectors: ConnectorResponse[] = [],
 ): string {
   if (selectedDatasourceId === null || selectedDatasourceId === '') return 'GENERAL';
 
@@ -86,8 +86,7 @@ export function ChatComposer({
     ta.style.height = 'auto';
     const styles = getComputedStyle(ta);
     const lineHeight = Number.parseFloat(styles.lineHeight) || 20;
-    const paddingY =
-      Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
+    const paddingY = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
     const maxHeight = lineHeight * COMPOSER_MAX_ROWS + paddingY;
     const contentHeight = ta.scrollHeight;
 
@@ -113,7 +112,10 @@ export function ChatComposer({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
 
-    const allSources = [...datasources.map((ds) => ({ ...ds, sourceKind: 'datasource' as const })), ...connectors.map((c) => ({ ...c, sourceKind: 'connector' as const }))].sort((a, b) => a.name.localeCompare(b.name));
+    const allSources = [
+      ...datasources.map((ds) => ({ ...ds, sourceKind: 'datasource' as const })),
+      ...connectors.map((c) => ({ ...c, sourceKind: 'connector' as const })),
+    ].sort((a, b) => a.name.localeCompare(b.name));
 
     if (!q) return allSources;
 
@@ -198,7 +200,7 @@ export function ChatComposer({
       setOpen(false);
       setQuery('');
     },
-    [onDatasourceChange]
+    [onDatasourceChange],
   );
 
   const canSend = value.trim().length > 0 && !disabled;
@@ -216,7 +218,7 @@ export function ChatComposer({
           'rounded-xl border shadow-2xl py-2 outline-none',
           'border-[color:var(--border-primary)] bg-[color:var(--bg-card)] text-[color:var(--text-primary)]',
           'ring-1 ring-black/5 dark:ring-white/10',
-          'max-h-[min(20rem,52vh)] flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-200'
+          'max-h-[min(20rem,52vh)] flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-200',
         )}
       >
         <div className="shrink-0 border-b border-[color:var(--border-primary)] px-2 pb-2">
@@ -243,7 +245,7 @@ export function ChatComposer({
               'flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-all active:scale-[0.99]',
               selectedDatasourceId === null || selectedDatasourceId === ''
                 ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-[color:var(--text-primary)] hover:bg-[color:var(--bg-card-hover)]'
+                : 'text-[color:var(--text-primary)] hover:bg-[color:var(--bg-card-hover)]',
             )}
             onClick={() => pick(null)}
           >
@@ -259,7 +261,7 @@ export function ChatComposer({
                   'text-[10px] font-bold uppercase tracking-wider opacity-80',
                   selectedDatasourceId === null || selectedDatasourceId === ''
                     ? 'text-primary-foreground/85'
-                    : 'text-[color:var(--text-muted)]'
+                    : 'text-[color:var(--text-muted)]',
                 )}
               >
                 Workspace
@@ -299,13 +301,12 @@ export function ChatComposer({
                 const meta = c.metadata_status;
                 // Allow selection as soon as the connector is active; metadata may still be catching up.
                 ready = c.status === 'ACTIVE' && meta !== 'FAILED';
-                statusLabel =
-                  meta === 'COMPLETED'
-                    ? c.status
-                    : `METADATA ${meta}`;
+                statusLabel = meta === 'COMPLETED' ? c.status : `METADATA ${meta}`;
               }
 
-              const typeLabel = isDatasource ? formatSourceType(s as DataSourceResponse) : (s as ConnectorResponse).type.toUpperCase();
+              const typeLabel = isDatasource
+                ? formatSourceType(s as DataSourceResponse)
+                : (s as ConnectorResponse).type.toUpperCase();
 
               return (
                 <button
@@ -322,18 +323,24 @@ export function ChatComposer({
                   className={cn(
                     'flex w-full items-start gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition-all active:scale-[0.99]',
                     selected && 'bg-primary text-primary-foreground shadow-sm',
-                    !selected && ready && 'text-[color:var(--text-primary)] hover:bg-[color:var(--bg-card-hover)]',
-                    !ready && 'cursor-not-allowed opacity-40 grayscale'
+                    !selected &&
+                      ready &&
+                      'text-[color:var(--text-primary)] hover:bg-[color:var(--bg-card-hover)]',
+                    !ready && 'cursor-not-allowed opacity-40 grayscale',
                   )}
                   onClick={() => ready && pick(s.id)}
                 >
                   <div
                     className={cn(
                       'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg transition-colors',
-                      selected ? 'bg-white/20' : 'bg-[color:var(--ds-surface-muted)]'
+                      selected ? 'bg-white/20' : 'bg-[color:var(--ds-surface-muted)]',
                     )}
                   >
-                    {isDatasource ? <FileText className="h-4 w-4" /> : <Database className="h-4 w-4" />}
+                    {isDatasource ? (
+                      <FileText className="h-4 w-4" />
+                    ) : (
+                      <Database className="h-4 w-4" />
+                    )}
                   </div>
 
                   <div className="min-w-0 flex-1 pt-0.5">
@@ -344,7 +351,7 @@ export function ChatComposer({
                     <span
                       className={cn(
                         'block text-[10px] font-bold uppercase tracking-widest',
-                        selected ? 'text-primary-foreground/80' : 'text-[color:var(--text-muted)]'
+                        selected ? 'text-primary-foreground/80' : 'text-[color:var(--text-muted)]',
                       )}
                     >
                       {typeLabel} • {statusLabel.toLowerCase()}
@@ -356,7 +363,7 @@ export function ChatComposer({
           )}
         </div>
       </div>,
-      document.body
+      document.body,
     );
 
   return (
@@ -366,22 +373,29 @@ export function ChatComposer({
           'flex w-full min-h-[48px] items-end gap-1.5 md:gap-2 rounded-2xl border px-2 py-1.5 md:px-3 md:py-2 shadow-sm transition-[box-shadow,border-color]',
           'border-[color:var(--border-primary)] bg-[color:var(--bg-primary)]',
           'focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/20',
-          'dark:border-border/80 dark:bg-[color:var(--bg-card)] dark:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.65)]'
+          'dark:border-border/80 dark:bg-[color:var(--bg-card)] dark:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.65)]',
         )}
       >
         <button
           type="button"
           className={cn(
             'inline-flex shrink-0 max-w-[40%] items-center gap-1 rounded-xl bg-primary/10 px-2.5 py-1.5 text-[11px] font-extrabold tracking-wide text-primary sm:max-w-none',
-            'hover:bg-primary/15 active:scale-[0.98] transition-all'
+            'hover:bg-primary/15 active:scale-[0.98] transition-all',
           )}
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={listId}
           onClick={() => setOpen((o) => !o)}
         >
-          <span className="truncate">{tagLabel(selectedDatasourceId, datasources, connectors)}</span>
-          <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 opacity-80 transition-transform', open && 'rotate-180')} />
+          <span className="truncate">
+            {tagLabel(selectedDatasourceId, datasources, connectors)}
+          </span>
+          <ChevronDown
+            className={cn(
+              'h-3.5 w-3.5 shrink-0 opacity-80 transition-transform',
+              open && 'rotate-180',
+            )}
+          />
         </button>
 
         <textarea
@@ -404,7 +418,7 @@ export function ChatComposer({
           wrap="soft"
           className={cn(
             'composer-textarea min-h-[2.25rem] flex-1 resize-none bg-transparent py-2 text-sm leading-snug text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-muted)]',
-            'disabled:cursor-not-allowed disabled:opacity-60'
+            'disabled:cursor-not-allowed disabled:opacity-60',
           )}
         />
 
@@ -412,14 +426,15 @@ export function ChatComposer({
           type="button"
           onClick={() => canSend && onSubmit()}
           disabled={!canSend}
+          aria-label="Send message"
           className={cn(
-            'self-center shrink-0 rounded-xl px-4 py-2 text-[11px] font-extrabold tracking-widest transition-all active:scale-[0.97]',
+            'composer-send-btn self-center shrink-0 flex h-9 w-9 items-center justify-center rounded-xl transition-all active:scale-[0.97]',
             canSend
-              ? 'bg-[color:var(--accent-teal-600)] text-white shadow-md hover:opacity-95'
-              : 'cursor-not-allowed bg-muted text-muted-foreground'
+              ? 'composer-send-btn--active text-white shadow-md hover:opacity-95'
+              : 'cursor-not-allowed bg-[color:var(--bg-secondary)] text-[color:var(--text-muted)]',
           )}
         >
-          SEND
+          <Send className="h-4 w-4" strokeWidth={2.25} aria-hidden />
         </button>
       </div>
 

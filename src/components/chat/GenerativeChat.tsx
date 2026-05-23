@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Database, Loader2 } from 'lucide-react';
@@ -10,7 +10,8 @@ import { ChatWorkspaceHeader } from './ChatWorkspaceHeader';
 import { AssistantAnalysisCard } from './AssistantAnalysisCard';
 import { ChartVisualization } from './ChartVisualization';
 import { SuggestedPrompts } from './SuggestedPrompts';
-import { getResponseViewAvailability } from '../../utils/responseViewAvailability';
+import { ChatWelcome } from './ChatWelcome';
+import { workflowHasRichUi } from '../../utils/responseViewAvailability';
 import { getWorkspaceSourceContext, countSchemaTables } from '../../utils/datasourceDisplay';
 import { ChatFailureCard } from './ChatFailureCard';
 import { getWorkflowFailure, formatChatRequestError } from '../../utils/chatWorkflowStatus';
@@ -55,9 +56,18 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     loadWorkspaceContext,
   } = useWorkspace();
   const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
-  const { activeSessionId, setActiveSessionId, addSession, sessions: availableSessions } = useChatSession();
+  const {
+    activeSessionId,
+    setActiveSessionId,
+    addSession,
+    sessions: availableSessions,
+  } = useChatSession();
 
-  const { messages: apiMessages, loading: loadingHistory, refetch: refetchMessages } = useMessages(activeSessionId);
+  const {
+    messages: apiMessages,
+    loading: loadingHistory,
+    refetch: refetchMessages,
+  } = useMessages(activeSessionId);
 
   const [showConnectorSelectionModal, setShowConnectorSelectionModal] = useState(false);
   const [showPostgresModal, setShowPostgresModal] = useState(false);
@@ -65,13 +75,22 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
 
   const schemaTableCount = useMemo(
     () => countSchemaTables(selectedDatasourceId, datasources, connectors),
-    [selectedDatasourceId, datasources, connectors]
+    [selectedDatasourceId, datasources, connectors],
   );
 
   const schemaTargetLabel = useMemo(() => {
     const ctx = getWorkspaceSourceContext(selectedDatasourceId, datasources, connectors);
     return ctx.kind !== 'general' ? ctx.displayName : null;
   }, [selectedDatasourceId, datasources, connectors]);
+
+  const userInitial = useMemo(() => {
+    const name = user?.displayName?.trim() || user?.email?.split('@')[0] || 'U';
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return `${parts[0][0] ?? ''}${parts[1][0] ?? ''}`.toUpperCase();
+    }
+    return (parts[0]?.[0] ?? 'U').toUpperCase();
+  }, [user?.displayName, user?.email]);
 
   const handleHeaderRefresh = useCallback(async () => {
     setHeaderRefreshing(true);
@@ -104,7 +123,9 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     }
 
     const sessionSourceId =
-      currentSession.dataset_id ?? (currentSession as { connector_id?: string | null }).connector_id ?? null;
+      currentSession.dataset_id ??
+      (currentSession as { connector_id?: string | null }).connector_id ??
+      null;
 
     const switchingFromAnotherSession =
       lastSessionDatasourceSyncRef.current !== null &&
@@ -153,6 +174,20 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    const container = scrollRef.current;
+    const end = messagesEndRef.current;
+    const apply = () => {
+      if (container) {
+        container.scrollTop = container.scrollHeight;
+      }
+      end?.scrollIntoView({ block: 'end', behavior: 'instant' });
+    };
+    apply();
+    requestAnimationFrame(apply);
+  }, []);
 
   // Sync API messages to local state
   useEffect(() => {
@@ -163,38 +198,60 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         content: m.content,
         metadata: m.message_metadata,
         timestamp: new Date(m.created_at),
-        status: 'sent'
+        status: 'sent',
       }));
       // Sort by timestamp ascending for display
       setLocalMessages(mapped.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
     } else if (!loadingHistory) {
-      const welcome: Message = {
-        id: 'welcome',
-        role: 'assistant',
-        content:
-          "Hello! I'm your AI Data Assistant. To get started, select a data source from the dropdown below or just start typing for a general conversation.",
-        timestamp: new Date(),
-      };
-      // With an active session, avoid replacing optimistic/live thread with welcome when history is briefly empty (cache/refetch race).
       if (activeSessionId) {
+        const welcome: Message = {
+          id: 'welcome',
+          role: 'assistant',
+          content:
+            "Hello! I'm your AI Data Assistant. To get started, select a data source from the dropdown below or just start typing for a general conversation.",
+          timestamp: new Date(),
+        };
         setLocalMessages((prev) => {
           const hasRealThread = prev.some(
-            (m) => m.role === 'user' || (m.role === 'assistant' && m.id !== 'welcome')
+            (m) => m.role === 'user' || (m.role === 'assistant' && m.id !== 'welcome'),
           );
           if (hasRealThread) return prev;
           return [welcome];
         });
       } else {
-        setLocalMessages([welcome]);
+        setLocalMessages([]);
       }
     }
   }, [apiMessages, loadingHistory, activeSessionId]);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    if (!activeSessionId) {
+      setInput('');
+      setLocalMessages([]);
     }
-  }, [localMessages, isLoading]);
+  }, [activeSessionId]);
+
+  useLayoutEffect(() => {
+    if (loadingHistory) return;
+    scrollToBottom();
+  }, [localMessages, isLoading, loadingHistory, activeSessionId, scrollToBottom]);
+
+  useEffect(() => {
+    const container = scrollRef.current;
+    if (!container || loadingHistory) return;
+    const content = container.firstElementChild;
+    if (!content) return;
+
+    const observer = new ResizeObserver(() => {
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      if (distanceFromBottom < 160) {
+        scrollToBottom();
+      }
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [loadingHistory, activeSessionId, scrollToBottom]);
 
   const sendMessage = useCallback(
     async (text: string, options?: { skipUserMessage?: boolean }) => {
@@ -214,9 +271,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         setLocalMessages((prev) => {
           const lastUser = [...prev].reverse().find((m) => m.role === 'user');
           if (!lastUser) return [...prev, userMessage];
-          return prev.map((m) =>
-            m.id === lastUser.id ? { ...m, status: 'sending' as const } : m
-          );
+          return prev.map((m) => (m.id === lastUser.id ? { ...m, status: 'sending' as const } : m));
         });
       } else {
         setLocalMessages((prev) => [...prev, userMessage]);
@@ -233,7 +288,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             token,
             workspaceId,
             trimmed.slice(0, 30),
-            selectedDatasourceId || undefined
+            selectedDatasourceId || undefined,
           );
           addSession(newSession);
           setActiveSessionId(newSession.id);
@@ -244,7 +299,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
           token,
           sessionId!,
           trimmed,
-          selectedDatasourceId || null
+          selectedDatasourceId || null,
         );
 
         const workflowFailure = getWorkflowFailure(response);
@@ -338,7 +393,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       addSession,
       setActiveSessionId,
       refetchMessages,
-    ]
+    ],
   );
 
   const handleSend = () => {
@@ -348,11 +403,24 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     void sendMessage(text);
   };
 
+  const handleWelcomePrompt = (prompt: string) => {
+    setInput(prompt);
+    void sendMessage(prompt);
+  };
+
+  const showWelcomeScreen = useMemo(() => {
+    if (activeSessionId) return false;
+    if (loadingHistory) return false;
+    if ((apiMessages?.length ?? 0) > 0) return false;
+    return localMessages.length === 0;
+  }, [activeSessionId, loadingHistory, apiMessages, localMessages]);
+
   const latestAssistantWithSuggestionsId = useMemo(() => {
     for (let i = localMessages.length - 1; i >= 0; i--) {
       const m = localMessages[i];
       if (m.role !== 'assistant' || m.id === 'welcome') continue;
-      const prompts = (m.metadata as ChatWorkflowResponse | undefined)?.insight?.suggested_next_prompts;
+      const prompts = (m.metadata as ChatWorkflowResponse | undefined)?.insight
+        ?.suggested_next_prompts;
       return prompts?.length ? m.id : null;
     }
     return null;
@@ -378,126 +446,153 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
 
       <div
         ref={scrollRef}
-        className="analytics-page flex-1 overflow-y-auto px-2 py-4 sm:px-4 md:px-6 lg:px-10 space-y-6 md:space-y-8 scroll-smooth"
+        className="analytics-page flex-1 overflow-y-auto px-2 py-4 sm:px-4 md:px-6 lg:px-10 space-y-6 md:space-y-8"
       >
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 md:max-w-7xl md:gap-8">
+          {showWelcomeScreen ? (
+            <ChatWelcome
+              onPromptClick={handleWelcomePrompt}
+              schemaTableCount={schemaTableCount ?? undefined}
+              disabled={isLoading}
+            />
+          ) : null}
           <AnimatePresence initial={false}>
-            {localMessages.map((msg) => (
-              <motion.div
-                key={msg.id}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className={cn(
-                  "flex w-full",
-                  msg.role === 'user' ? "justify-end" : "justify-start"
-                )}
-              >
-                {msg.role === 'user' ? (
-                  <div className="message-bubble message-user group max-w-[min(96%,52rem)]">
-                    <div className="leading-relaxed whitespace-pre-wrap">{msg.content}</div>
-                    <div className="mt-2 text-[9px] font-medium uppercase tracking-tighter opacity-40 text-right">
-                      {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {msg.status === 'sending' && ' • Sending'}
-                      {msg.status === 'error' && ' • Failed'}
+            {localMessages
+              .filter((msg) => msg.id !== 'welcome')
+              .map((msg) => (
+                <motion.div
+                  key={msg.id}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className={cn(
+                    'flex w-full',
+                    msg.role === 'user' ? 'justify-end' : 'justify-start',
+                  )}
+                >
+                  {msg.role === 'user' ? (
+                    <div className="chat-message-width--user user-request">
+                      <div className="user-request__body">
+                        <div className="user-request__bubble">
+                          <p className="user-request__text">{msg.content}</p>
+                        </div>
+                        <div className="user-request__avatar" aria-hidden="true">
+                          {userInitial}
+                        </div>
+                      </div>
+                      <div className="user-request__header">
+                        <span className="user-request__time">
+                          {msg.timestamp.toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                          {msg.status === 'sending' ? ' · Sending' : null}
+                          {msg.status === 'error' ? ' · Failed' : null}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div
-                    className={cn(
-                      'flex w-full max-w-[min(96%,58rem)] flex-col gap-3',
-                      msg.id === latestAssistantWithSuggestionsId && 'max-w-[min(94%,58rem)]'
-                    )}
-                  >
-                    {msg.failure ? (
-                      <ChatFailureCard
-                        title={msg.failure.title}
-                        detail={msg.failure.detail}
-                        canRetry={msg.failure.canRetry}
-                        disabled={isLoading}
-                        onRetry={
-                          msg.retryPrompt
-                            ? () => {
-                                setLocalMessages((prev) =>
-                                  prev.filter(
-                                    (m, i, arr) =>
-                                      !(i === arr.length - 1 && m.role === 'assistant' && m.failure)
-                                  )
-                                );
-                                void sendMessage(msg.retryPrompt!, { skipUserMessage: true });
-                              }
-                            : undefined
-                        }
-                      />
-                    ) : null}
+                  ) : (
+                    <div className="chat-message-width--assistant flex flex-col gap-3">
+                      {msg.failure ? (
+                        <ChatFailureCard
+                          title={msg.failure.title}
+                          detail={msg.failure.detail}
+                          canRetry={msg.failure.canRetry}
+                          disabled={isLoading}
+                          onRetry={
+                            msg.retryPrompt
+                              ? () => {
+                                  setLocalMessages((prev) =>
+                                    prev.filter(
+                                      (m, i, arr) =>
+                                        !(
+                                          i === arr.length - 1 &&
+                                          m.role === 'assistant' &&
+                                          m.failure
+                                        ),
+                                    ),
+                                  );
+                                  void sendMessage(msg.retryPrompt!, { skipUserMessage: true });
+                                }
+                              : undefined
+                          }
+                        />
+                      ) : null}
 
-                    {!msg.failure && msg.metadata ? (
-                      (() => {
-                        const workflow = msg.metadata as ChatWorkflowResponse;
-                        const availability = getResponseViewAvailability(workflow);
-                        if (availability.availableViews.length > 0) {
+                      {!msg.failure && msg.metadata ? (
+                        (() => {
+                          const workflow = msg.metadata as ChatWorkflowResponse;
+                          if (workflowHasRichUi(workflow)) {
+                            return (
+                              <AssistantAnalysisCard
+                                key={msg.id}
+                                response={workflow}
+                                summary={msg.content}
+                                timestamp={msg.timestamp}
+                                schemaTarget={schemaTargetLabel}
+                              />
+                            );
+                          }
                           return (
-                            <AssistantAnalysisCard
-                              key={msg.id}
-                              response={workflow}
-                              summary={msg.content}
-                              timestamp={msg.timestamp}
-                              schemaTarget={schemaTargetLabel}
+                            <>
+                              {msg.content ? (
+                                <p className="message-plain message-plain--assistant leading-relaxed whitespace-pre-wrap">
+                                  {msg.content}
+                                </p>
+                              ) : null}
+                              <ChartVisualization response={workflow} />
+                            </>
+                          );
+                        })()
+                      ) : !msg.failure ? (
+                        msg.content ? (
+                          <p className="message-plain message-plain--assistant leading-relaxed whitespace-pre-wrap">
+                            {msg.content}
+                          </p>
+                        ) : null
+                      ) : null}
+
+                      {msg.type === 'widget' && msg.widgetType === 'connector' ? (
+                        <div className="rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--panel-bg)] p-1">
+                          <ConnectorWidget onSelect={handleConnectorSelect} />
+                        </div>
+                      ) : null}
+
+                      {msg.role === 'assistant' &&
+                        !msg.failure &&
+                        msg.id === latestAssistantWithSuggestionsId &&
+                        (() => {
+                          const suggested = (msg.metadata as ChatWorkflowResponse | undefined)
+                            ?.insight?.suggested_next_prompts;
+                          if (!suggested?.length) return null;
+                          return (
+                            <SuggestedPrompts
+                              prompts={suggested}
+                              onSelect={(prompt) => void sendMessage(prompt)}
+                              disabled={isLoading}
                             />
                           );
-                        }
-                        return (
-                          <div className="assistant-analysis-card">
-                            <p className="assistant-analysis-card__summary">{msg.content}</p>
-                            <ChartVisualization response={workflow} />
-                          </div>
-                        );
-                      })()
-                    ) : !msg.failure ? (
-                      <div className="message-bubble message-assistant max-w-[min(96%,52rem)]">
-                        <p className="leading-relaxed whitespace-pre-wrap">{msg.content}</p>
-                      </div>
-                    ) : null}
-
-                    {msg.type === 'widget' && msg.widgetType === 'connector' ? (
-                      <div className="rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--panel-bg)] p-1">
-                        <ConnectorWidget onSelect={handleConnectorSelect} />
-                      </div>
-                    ) : null}
-
-                    {msg.role === 'assistant' &&
-                      !msg.failure &&
-                      msg.id === latestAssistantWithSuggestionsId &&
-                      (() => {
-                        const suggested =
-                          (msg.metadata as ChatWorkflowResponse | undefined)?.insight
-                            ?.suggested_next_prompts;
-                        if (!suggested?.length) return null;
-                        return (
-                          <SuggestedPrompts
-                            prompts={suggested}
-                            onSelect={(prompt) => void sendMessage(prompt)}
-                            disabled={isLoading}
-                          />
-                        );
-                      })()}
-                  </div>
-                )}
-              </motion.div>
-            ))}
+                        })()}
+                    </div>
+                  )}
+                </motion.div>
+              ))}
           </AnimatePresence>
           {isLoading && (
-            <motion.div 
-              initial={{ opacity: 0 }} 
+            <motion.div
+              initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="flex justify-start"
             >
-              <div className="message-bubble message-assistant flex items-center gap-3 py-3.5">
+              <div className="chat-message-width--assistant message-plain message-plain--assistant flex items-center gap-3">
                 <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <span className="text-sm font-medium text-[color:var(--text-muted)] animate-pulse">Processing analysis...</span>
+                <span className="text-sm font-medium text-[color:var(--text-muted)] animate-pulse">
+                  Processing analysis...
+                </span>
               </div>
             </motion.div>
           )}
+          <div ref={messagesEndRef} className="h-px w-full shrink-0" aria-hidden />
         </div>
       </div>
 
@@ -527,7 +622,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             <p className="text-sm text-muted-foreground text-center">Missing workspace context</p>
           )}
         </div>
-        
+
         {/* Quick Actions */}
         <div className="mx-auto mt-4 flex max-w-6xl items-center gap-4 overflow-x-auto no-scrollbar md:max-w-7xl">
           <button

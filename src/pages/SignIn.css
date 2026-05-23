@@ -49,7 +49,7 @@
   position: relative;
   width: 45%;
   min-height: 100vh;
-  background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 50%, #1E3A8A 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -101,7 +101,7 @@
 /* Alpha Badge */
 .auth-alpha-badge {
   display: inline-block;
-  background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
@@ -123,7 +123,6 @@
 }
 
 @keyframes pulse-alpha-auth {
-
   0%,
   100% {
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
@@ -191,7 +190,7 @@
 
 .brand-divider span {
   position: relative;
-  background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 50%, #1E3A8A 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
   padding: 0 1rem;
   color: rgba(255, 255, 255, 0.9);
   font-size: 0.8125rem;
@@ -214,7 +213,7 @@
 
 .brand-btn:hover {
   background: #ffffff;
-  color: #3B82F6;
+  color: #3b82f6;
 }
 
 /* Background decoration circles */
@@ -262,7 +261,7 @@
   right: 0;
   width: 340px;
   height: 440px;
-  background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 50%, #1E3A8A 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
 }
 
 .auth-form-panel::after {
@@ -303,7 +302,7 @@
 }
 
 .title-dot {
-  color: #3B82F6;
+  color: #3b82f6;
   font-weight: 700;
 }
 
@@ -538,7 +537,7 @@
     left: 0;
     width: 250px;
     height: 250px;
-    background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 50%, #1E3A8A 100%);
+    background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
     z-index: 0;
     border-top: none;
   }
@@ -603,5 +602,244 @@
   .auth-google-btn {
     padding: 0.875rem 1.25rem;
     font-size: 0.875rem;
+  }
+}
+
+/* ===============================================
+   SIGN-IN LEFT PANEL — workspace mock (content + colors)
+   Border radii unchanged on .auth-brand-panel
+   =============================================== */
+.auth-split-page:has(.auth-brand-panel--signin) .auth-form-panel::before {
+  background: radial-gradient(ellipse 130% 90% at 20% 15%, #2a4fd4 0%, #1a36b1 42%, #0f1f5c 100%);
+}
+
+.auth-brand-panel--signin {
+  --signin-brand-blue: #1a36b1;
+  --signin-brand-blue-deep: #0f1f5c;
+  --signin-brand-accent: #00f2a1;
+  --signin-brand-accent-soft: #5dffc8;
+  background: radial-gradient(
+    ellipse 130% 90% at 20% 15%,
+    #2a4fd4 0%,
+    var(--signin-brand-blue) 42%,
+    var(--signin-brand-blue-deep) 100%
+  );
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: clamp(1.75rem, 4vw, 3rem);
+}
+
+.brand-content--signin {
+  max-width: 440px;
+  width: 100%;
+  text-align: left;
+  margin: 0;
+}
+
+.signin-brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.signin-brand-eyebrow {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+/* Sign-in form column — logo on white canvas */
+.signin-form-brand {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.signin-form-logo {
+  width: auto;
+  height: 3.5rem;
+  display: block;
+}
+
+.signin-brand-alpha-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(147, 197, 253, 0.45);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(219, 234, 254, 0.95);
+  background: rgba(15, 31, 92, 0.35);
+}
+
+.signin-brand-alpha-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signin-brand-accent);
+  box-shadow: 0 0 8px var(--signin-brand-accent);
+}
+
+.signin-brand-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--signin-brand-accent);
+  line-height: 1.4;
+}
+
+.signin-brand-kicker__icon {
+  flex-shrink: 0;
+  color: var(--signin-brand-accent);
+}
+
+.signin-brand-title {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-display, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: clamp(2rem, 4.5vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+}
+
+.signin-brand-title__line {
+  display: block;
+  margin-top: 0.15rem;
+}
+
+.signin-brand-title__to {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.signin-brand-title__accent {
+  background: linear-gradient(
+    90deg,
+    var(--signin-brand-accent-soft) 0%,
+    var(--signin-brand-accent) 55%,
+    #00d4aa 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.signin-brand-description {
+  margin: 0 0 1.75rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.88);
+  max-width: 38rem;
+}
+
+.signin-brand-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.signin-brand-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.9rem 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: color-mix(in srgb, var(--signin-brand-blue-deep) 55%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.signin-brand-card__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #2563eb 0%, #1d4ed8 100%);
+  color: var(--signin-brand-accent);
+}
+
+.signin-brand-card__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: var(--signin-brand-accent-soft, #5dffc8);
+  letter-spacing: -0.01em;
+}
+
+.signin-brand-card__text {
+  margin: 0;
+  font-size: 0.6875rem;
+  line-height: 1.55;
+  color: #ffffff;
+  opacity: 0.92;
+}
+
+@media (max-width: 900px) {
+  .auth-brand-panel--signin {
+    align-items: center;
+  }
+
+  .brand-content--signin {
+    max-width: 320px;
+    text-align: center;
+  }
+
+  .signin-brand-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+  }
+
+  .signin-form-brand {
+    justify-content: center;
+  }
+
+  .signin-brand-kicker {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .signin-brand-title {
+    text-align: center;
+  }
+
+  .signin-brand-description {
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .signin-brand-title {
+    font-size: 1.65rem;
+  }
+
+  .signin-form-logo {
+    height: 3rem;
+  }
+
+  .signin-brand-card__title {
+    font-size: 0.75rem;
   }
 }

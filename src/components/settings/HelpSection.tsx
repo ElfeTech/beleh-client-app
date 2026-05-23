@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
+import { AlertDialog } from '../common/AlertDialog';
 import './SettingsShared.css';
 import './HelpSection.css';
 
@@ -13,27 +14,33 @@ export function HelpSection() {
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
   const [contactSubject, setContactSubject] = useState('');
   const [contactMessage, setContactMessage] = useState('');
+  const [showTicketSubmitted, setShowTicketSubmitted] = useState(false);
 
   const faqs: FAQItem[] = [
     {
       question: 'How do I upload a dataset?',
-      answer: 'To upload a dataset, navigate to your workspace and click the "Add Dataset" button. You can upload CSV, Excel (.xlsx), or JSON files. The maximum file size is 50MB for the free plan and 500MB for premium plans.'
+      answer:
+        'To upload a dataset, navigate to your workspace and click the "Add Dataset" button. You can upload CSV, Excel (.xlsx), or JSON files. The maximum file size is 50MB for the free plan and 500MB for premium plans.',
     },
     {
       question: 'What types of questions can I ask about my data?',
-      answer: 'You can ask natural language questions about your data such as "Show me total sales by region", "What was the average order value last month?", or "Create a chart showing trends over time". Our AI understands context and can generate SQL queries, visualizations, and insights.'
+      answer:
+        'You can ask natural language questions about your data such as "Show me total sales by region", "What was the average order value last month?", or "Create a chart showing trends over time". Our AI understands context and can generate SQL queries, visualizations, and insights.',
     },
     {
       question: 'How do I invite team members?',
-      answer: 'Go to Settings > Members and click "Invite Member". Enter their email address and select their role (Admin, Editor, or Viewer). They will receive an invitation email to join your workspace.'
+      answer:
+        'Go to Settings > Members and click "Invite Member". Enter their email address and select their role (Admin, Editor, or Viewer). They will receive an invitation email to join your workspace.',
     },
     {
       question: 'What happens when I reach my query limit?',
-      answer: 'When you reach your monthly query limit, you will need to upgrade your plan to continue making queries. Your existing data and visualizations will remain accessible. You can also wait until your billing cycle resets.'
+      answer:
+        'When you reach your monthly query limit, you will need to upgrade your plan to continue making queries. Your existing data and visualizations will remain accessible. You can also wait until your billing cycle resets.',
     },
     {
       question: 'Can I export my visualizations?',
-      answer: 'Yes! Click the export icon on any chart or visualization to download it as a PNG image or PDF. You can also export the underlying data as CSV or Excel format.'
+      answer:
+        'Yes! Click the export icon on any chart or visualization to download it as a PNG image or PDF. You can also export the underlying data as CSV or Excel format.',
     },
   ];
 
@@ -91,9 +98,9 @@ export function HelpSection() {
   const handleSubmitTicket = (e: React.FormEvent) => {
     e.preventDefault();
     // Handle ticket submission
-    alert('Support ticket submitted! We will get back to you within 24 hours.');
     setContactSubject('');
     setContactMessage('');
+    setShowTicketSubmitted(true);
   };
 
   return (
@@ -109,14 +116,23 @@ export function HelpSection() {
       <div className="quick-links-grid">
         {quickLinks.map((link, index) => (
           <button key={index} className="quick-link-card">
-            <div className="quick-link-icon" style={{ background: `${link.color}15`, color: link.color }}>
+            <div
+              className="quick-link-icon"
+              style={{ background: `${link.color}15`, color: link.color }}
+            >
               {link.icon}
             </div>
             <div className="quick-link-content">
               <h3>{link.title}</h3>
               <p>{link.description}</p>
             </div>
-            <svg className="arrow-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg
+              className="arrow-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
               <line x1="5" y1="12" x2="19" y2="12" />
               <polyline points="12 5 19 12 12 19" />
             </svg>
@@ -133,11 +149,8 @@ export function HelpSection() {
 
         <div className="faq-list">
           {faqs.map((faq, index) => (
-            <div 
-              key={index} 
-              className={`faq-item ${expandedFaq === index ? 'expanded' : ''}`}
-            >
-              <button 
+            <div key={index} className={`faq-item ${expandedFaq === index ? 'expanded' : ''}`}>
+              <button
                 className="faq-question"
                 onClick={() => setExpandedFaq(expandedFaq === index ? null : index)}
               >
@@ -235,7 +248,7 @@ export function HelpSection() {
         <div className="contact-method">
           <div className="method-icon twitter">
             <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
           </div>
           <div className="method-content">
@@ -256,7 +269,15 @@ export function HelpSection() {
           </div>
         </div>
       </div>
+
+      <AlertDialog
+        isOpen={showTicketSubmitted}
+        title="Ticket submitted"
+        message="Support ticket submitted! We will get back to you within 24 hours."
+        confirmText="Got it"
+        variant="success"
+        onClose={() => setShowTicketSubmitted(false)}
+      />
     </div>
   );
 }
-

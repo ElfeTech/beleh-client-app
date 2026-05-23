@@ -1,17 +1,11 @@
 .assistant-analysis-card {
   width: 100%;
-  max-width: min(96%, 58rem);
+  max-width: 100%;
   background: var(--panel-bg);
   border: 1px solid var(--border-primary);
   border-radius: var(--radius-lg);
   padding: var(--space-4) var(--space-5);
   box-shadow: var(--shadow-sm);
-}
-
-@media (min-width: 1024px) {
-  .assistant-analysis-card {
-    max-width: min(94%, 58rem);
-  }
 }
 
 .assistant-analysis-card__header {

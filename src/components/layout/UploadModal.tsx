@@ -16,7 +16,14 @@ interface UploadModalProps {
   onSuccess: () => void;
 }
 
-type UploadStatus = 'IDLE' | 'UPLOADING' | 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'NEEDS_INPUT';
+type UploadStatus =
+  | 'IDLE'
+  | 'UPLOADING'
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED'
+  | 'NEEDS_INPUT';
 
 export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProps) {
   const { user } = useAuth();
@@ -49,7 +56,7 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
           headers: {
             Authorization: `Bearer ${token}`,
           },
-        }
+        },
       );
 
       if (!response.ok) return;
@@ -190,7 +197,9 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
           <div className="upload-modal-header-text">
             <p className="upload-modal-eyebrow">Import data</p>
             <h2>Add new dataset</h2>
-            <p className="upload-modal-subtitle">Upload a spreadsheet to this workspace. We support CSV and Excel.</p>
+            <p className="upload-modal-subtitle">
+              Upload a spreadsheet to this workspace. We support CSV and Excel.
+            </p>
           </div>
           {!isProcessing && (
             <button type="button" className="close-btn" onClick={handleClose} aria-label="Close">
@@ -227,11 +236,11 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
                   </div>
                   <div className="upload-dropzone-file-meta">
                     <span className="upload-dropzone-file-name">{file.name}</span>
-                    <span className="upload-dropzone-file-size">{(file.size / 1024).toFixed(1)} KB</span>
+                    <span className="upload-dropzone-file-size">
+                      {(file.size / 1024).toFixed(1)} KB
+                    </span>
                   </div>
-                  {!isProcessing && (
-                    <span className="upload-dropzone-replace">Replace file</span>
-                  )}
+                  {!isProcessing && <span className="upload-dropzone-replace">Replace file</span>}
                 </div>
               ) : (
                 <div className="upload-dropzone-empty">
@@ -278,7 +287,13 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
                     </svg>
                   )}
                   {isProcessing && (
-                    <svg className="status-icon spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg
+                      className="status-icon spinner"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
                       <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" />
                     </svg>
                   )}
@@ -325,10 +340,19 @@ export function UploadModal({ workspaceId, onClose, onSuccess }: UploadModalProp
           {error && <div className="form-error upload-modal-error">{error}</div>}
 
           <div className="modal-actions upload-modal-actions">
-            <button type="button" className="secondary-btn" onClick={handleClose} disabled={isProcessing}>
+            <button
+              type="button"
+              className="secondary-btn"
+              onClick={handleClose}
+              disabled={isProcessing}
+            >
               {isComplete ? 'Close' : 'Cancel'}
             </button>
-            <button type="submit" className="primary-btn" disabled={!file || isProcessing || isComplete}>
+            <button
+              type="submit"
+              className="btn-gradient-primary"
+              disabled={!file || isProcessing || isComplete}
+            >
               {isProcessing ? 'Processing…' : isComplete ? 'Done' : 'Upload dataset'}
             </button>
           </div>

@@ -5,16 +5,14 @@ import {
   Settings,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Plus,
-  History,
+  Search,
   Sun,
   Moon,
   Monitor,
   LogOut,
   RefreshCw,
   LayoutGrid,
-  ArrowLeft,
   TrendingUp,
   MoreVertical,
   Pencil,
@@ -24,25 +22,29 @@ import { NavLink, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import logoImage from '../../assets/logo.webp';
-import { ChatSessionContext } from '../../context/ChatSessionContext';
+import { ChatSessionContext, useChatSession } from '../../context/ChatSessionContext';
 import { useTheme, type ThemePreference } from '../../context/ThemeContext';
 import { useAuth } from '../../context/useAuth';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useUsage } from '../../context/UsageContext';
 import { ContextMenu } from '../common/ContextMenu';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { PromptDialog } from '../common/PromptDialog';
 import { workspaceChatPath } from '../../hooks/useSessionInUrl';
-import WorkspaceSwitcher from './WorkspaceSwitcher';
-import { WorkspaceModal } from './WorkspaceModal';
+import { WorkspaceRegionDropdown } from './WorkspaceRegionDropdown';
 import './UnifiedSidebar.css';
 
-const THEME_OPTIONS: { value: ThemePreference; label: string; short: string; icon: typeof Sun }[] = [
-  { value: 'light', label: 'Light theme', short: 'Light', icon: Sun },
-  { value: 'dark', label: 'Dark theme', short: 'Dark', icon: Moon },
-  { value: 'system', label: 'Match system', short: 'System', icon: Monitor },
-];
+const THEME_OPTIONS: { value: ThemePreference; label: string; short: string; icon: typeof Sun }[] =
+  [
+    { value: 'light', label: 'Light theme', short: 'Light', icon: Sun },
+    { value: 'dark', label: 'Dark theme', short: 'Dark', icon: Moon },
+    { value: 'system', label: 'Match system', short: 'System', icon: Monitor },
+  ];
 
-function initialsFromUser(displayName: string | null | undefined, email: string | null | undefined): string {
+function initialsFromUser(
+  displayName: string | null | undefined,
+  email: string | null | undefined,
+): string {
   const name = (displayName || '').trim();
   if (name) {
     return name
@@ -67,29 +69,45 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   const isDrawer = variant === 'drawer';
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [refreshingChats, setRefreshingChats] = useState(false);
-  const [workspaceSwitcherOpen, setWorkspaceSwitcherOpen] = useState(false);
-  const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
+  const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
   const { id: workspaceId } = useParams<{ id: string }>();
   const path = location.pathname;
   const { user, signOut } = useAuth();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, workspaces } = useWorkspace();
   const { summary, currentUsage } = useUsage();
   const chatContext = useContext(ChatSessionContext);
+  const {
+    loadWorkspaceSessions,
+    invalidateWorkspaceSessions,
+    isLoading: sessionsLoading,
+  } = useChatSession();
   const { themePreference, setThemePreference } = useTheme();
 
   const sessions = chatContext?.sessions ?? [];
   const activeSessionId = chatContext?.activeSessionId ?? null;
-  const refreshSessions = chatContext?.refreshSessions;
-  const sessionsLoading = chatContext?.isLoading ?? false;
 
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
   const [actionSessionId, setActionSessionId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [showRenamePrompt, setShowRenamePrompt] = useState(false);
+  const [renameDefaultTitle, setRenameDefaultTitle] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
 
   const collapsed = !isDrawer && isCollapsed;
+
+  const filteredSessions = useMemo(() => {
+    const q = sessionSearchQuery.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((session) => {
+      const title = (session.title || `Chat ${session.id.slice(0, 8)}`).toLowerCase();
+      return title.includes(q) || session.id.toLowerCase().includes(q);
+    });
+  }, [sessions, sessionSearchQuery]);
 
   const handleSessionMenuClick = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
@@ -97,17 +115,31 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
     setActionSessionId(sessionId);
   };
 
-  const handleRename = async () => {
+  const handleRenameRequest = () => {
     if (!actionSessionId) return;
     const session = sessions.find((s) => s.id === actionSessionId);
     if (!session) return;
-
-    const newTitle = window.prompt('Rename chat session:', session.title || '');
-    if (newTitle !== null && newTitle.trim() !== '' && newTitle !== session.title) {
-      await chatContext?.renameSession(actionSessionId, newTitle.trim());
-    }
+    setRenameDefaultTitle(session.title || '');
+    setShowRenamePrompt(true);
     setMenuAnchorEl(null);
-    setActionSessionId(null);
+  };
+
+  const handleRenameConfirm = async (newTitle: string) => {
+    if (!actionSessionId) return;
+    const session = sessions.find((s) => s.id === actionSessionId);
+    if (!session || newTitle === session.title) {
+      setShowRenamePrompt(false);
+      setActionSessionId(null);
+      return;
+    }
+    setIsRenaming(true);
+    try {
+      await chatContext?.renameSession(actionSessionId, newTitle);
+      setShowRenamePrompt(false);
+      setActionSessionId(null);
+    } finally {
+      setIsRenaming(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -144,14 +176,11 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
 
   const effectiveWorkspaceId = routeWorkspaceId ?? currentWorkspace?.id ?? storedWorkspaceId;
   const workspaceBase = effectiveWorkspaceId ? `/workspace/${effectiveWorkspaceId}` : '';
-  const onSettingsRoute = path.startsWith('/settings');
 
   const planLabel = useMemo(() => {
     const name = summary?.plan_name || currentUsage?.plan?.name || 'Free';
     return `${name} plan`.toUpperCase();
   }, [summary?.plan_name, currentUsage?.plan?.name]);
-
-  const workspaceLabel = currentWorkspace?.name || (effectiveWorkspaceId ? 'Select workspace' : '');
 
   const handleSessionClick = (sessionId: string) => {
     if (!effectiveWorkspaceId) return;
@@ -161,27 +190,38 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
 
   const handleNewChat = () => {
     if (!effectiveWorkspaceId) return;
-    chatContext?.setActiveSessionId(null);
-    navigate(workspaceChatPath(effectiveWorkspaceId));
+    chatContext?.startNewChat();
+    navigate(`/workspace/${effectiveWorkspaceId}`, { replace: true });
   };
 
   const handleRefreshChats = async () => {
-    if (!refreshSessions) return;
+    if (!effectiveWorkspaceId) {
+      toast.error('Open a workspace to refresh chats');
+      return;
+    }
     setRefreshingChats(true);
     try {
-      await refreshSessions();
+      invalidateWorkspaceSessions(effectiveWorkspaceId);
+      await loadWorkspaceSessions(effectiveWorkspaceId, true);
+      toast.success('Chat list refreshed');
+    } catch (err) {
+      console.error('Failed to refresh chat sessions:', err);
+      toast.error('Could not refresh chats. Please try again.');
     } finally {
       setRefreshingChats(false);
     }
   };
 
-  const handleSignOut = async () => {
-    if (!window.confirm('Sign out of your account?')) return;
+  const handleSignOutConfirm = async () => {
+    setIsSigningOut(true);
     try {
       await signOut();
       navigate('/signin', { replace: true });
     } catch {
       navigate('/signin', { replace: true });
+    } finally {
+      setIsSigningOut(false);
+      setShowSignOutConfirm(false);
     }
   };
 
@@ -196,7 +236,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
       <aside
         className={cn(
           'unified-sidebar flex flex-col transition-[width] duration-300 ease-out relative z-20 pointer-events-auto',
-          isDrawer ? 'unified-sidebar--drawer w-full' : collapsed ? 'w-[3.75rem]' : 'w-[17.5rem]'
+          isDrawer ? 'unified-sidebar--drawer w-full' : collapsed ? 'w-[3.75rem]' : 'w-[17.5rem]',
         )}
       >
         {!isDrawer && (
@@ -210,14 +250,18 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
           </button>
         )}
 
-        <div className={cn('unified-sidebar__header', collapsed && 'flex flex-col items-center px-2')}>
+        <div
+          className={cn('unified-sidebar__header', collapsed && 'flex flex-col items-center px-2')}
+        >
           <div className={cn('unified-sidebar__brand-row', collapsed && 'justify-center')}>
             <img
               src={logoImage}
               alt="Beleh"
               className={cn(
                 'unified-sidebar__logo object-contain object-left',
-                collapsed ? 'mx-auto h-6 w-auto max-w-[2.5rem]' : 'h-7 w-auto max-w-[9.5rem] shrink-0'
+                collapsed
+                  ? 'mx-auto h-6 w-auto max-w-[2.5rem]'
+                  : 'h-7 w-auto max-w-[9.5rem] shrink-0',
               )}
             />
             {!collapsed && <span className="unified-sidebar__workspace-pill">Workspace</span>}
@@ -227,22 +271,9 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
           )}
         </div>
 
-        {!collapsed && effectiveWorkspaceId && workspaceLabel ? (
-          <div className="unified-sidebar__workspace-block">
-            <span className="sidebar-section-label">Workspace</span>
-            <button
-              type="button"
-              className="unified-sidebar__workspace-card"
-              onClick={() => setWorkspaceSwitcherOpen(true)}
-              aria-haspopup="dialog"
-            >
-              <span className="unified-sidebar__workspace-card-name">{workspaceLabel}</span>
-              <ChevronDown className="unified-sidebar__workspace-card-chevron h-4 w-4" strokeWidth={2} />
-            </button>
-          </div>
-        ) : null}
+        {!collapsed && workspaces.length > 0 ? <WorkspaceRegionDropdown /> : null}
 
-        {!collapsed && !effectiveWorkspaceId ? (
+        {!collapsed && workspaces.length === 0 ? (
           <p className="unified-sidebar__empty-workspace">
             Open Settings → Workspaces to get started.
           </p>
@@ -252,20 +283,12 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
           {effectiveWorkspaceId ? (
             <>
               <NavLink to={workspaceBase} end className={navClass}>
-                {onSettingsRoute ? (
-                  <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
-                ) : (
-                  <MessageSquare className="h-4 w-4 shrink-0" strokeWidth={2} />
-                )}
-                {!collapsed && <span>{onSettingsRoute ? 'Back to chat' : 'Chat'}</span>}
+                <MessageSquare className="h-4 w-4 shrink-0" strokeWidth={2} />
+                {!collapsed && <span>Chat</span>}
               </NavLink>
               <NavLink to={`${workspaceBase}/datasets`} className={navClass}>
                 <Database className="h-4 w-4 shrink-0" strokeWidth={2} />
                 {!collapsed && <span>Data sources</span>}
-              </NavLink>
-              <NavLink to={`${workspaceBase}/sessions`} className={navClass}>
-                <History className="h-4 w-4 shrink-0" strokeWidth={2} />
-                {!collapsed && <span>Sessions</span>}
               </NavLink>
               <NavLink to={`${workspaceBase}/statistics`} className={navClass}>
                 <TrendingUp className="h-4 w-4 shrink-0" strokeWidth={2} />
@@ -281,7 +304,9 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
 
           <NavLink
             to="/settings/general"
-            className={() => cn('sidebar-nav-link', settingsAreaActive && 'sidebar-nav-link--active')}
+            className={() =>
+              cn('sidebar-nav-link', settingsAreaActive && 'sidebar-nav-link--active')
+            }
           >
             <Settings className="h-4 w-4 shrink-0" strokeWidth={2} />
             {!collapsed && <span>Settings</span>}
@@ -305,7 +330,10 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                         aria-label="Refresh recent chats"
                       >
                         <RefreshCw
-                          className={cn('h-3.5 w-3.5', (sessionsLoading || refreshingChats) && 'animate-spin')}
+                          className={cn(
+                            'h-3.5 w-3.5',
+                            (sessionsLoading || refreshingChats) && 'animate-spin',
+                          )}
                         />
                       </button>
                       <button
@@ -319,16 +347,35 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                       </button>
                     </div>
                   </div>
+                  <div className="unified-sidebar__sessions-search">
+                    <Search
+                      className="unified-sidebar__sessions-search-icon"
+                      size={16}
+                      strokeWidth={2}
+                      aria-hidden
+                    />
+                    <input
+                      type="search"
+                      className="unified-sidebar__sessions-search-input"
+                      placeholder="Search chats…"
+                      value={sessionSearchQuery}
+                      onChange={(e) => setSessionSearchQuery(e.target.value)}
+                      aria-label="Search recent chats"
+                    />
+                  </div>
                   <div className="unified-sidebar__sessions-list no-scrollbar">
-                    {sessions.length > 0 ? (
-                      sessions.slice(0, 12).map((session) => (
-                        <div key={session.id} className="sidebar-session-row group relative flex items-center">
+                    {filteredSessions.length > 0 ? (
+                      filteredSessions.map((session) => (
+                        <div
+                          key={session.id}
+                          className="sidebar-session-row group relative flex items-center"
+                        >
                           <button
                             type="button"
                             onClick={() => handleSessionClick(session.id)}
                             className={cn(
                               'sidebar-session-btn flex-1',
-                              activeSessionId === session.id && 'sidebar-session-btn--active'
+                              activeSessionId === session.id && 'sidebar-session-btn--active',
                             )}
                           >
                             <span className="sidebar-session-title truncate">
@@ -340,13 +387,22 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                             onClick={(e) => handleSessionMenuClick(e, session.id)}
                             className={cn(
                               'sidebar-session-menu-btn',
-                              menuAnchorEl && actionSessionId === session.id && 'sidebar-session-menu-btn--open'
+                              menuAnchorEl &&
+                                actionSessionId === session.id &&
+                                'sidebar-session-menu-btn--open',
                             )}
                           >
                             <MoreVertical className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       ))
+                    ) : sessions.length > 0 ? (
+                      <div className="rounded-lg border border-dashed border-[color:var(--sidebar-border)] px-3 py-5 text-center">
+                        <p className="sidebar-empty-hint mb-1">No matching chats</p>
+                        <p className="text-[11px] text-[color:var(--sidebar-text-muted)]">
+                          Try another search term.
+                        </p>
+                      </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-[color:var(--sidebar-border)] px-3 py-6 text-center">
                         <p className="sidebar-empty-hint mb-1">No chats yet</p>
@@ -367,7 +423,10 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                     title="Refresh chats"
                   >
                     <RefreshCw
-                      className={cn('h-4 w-4', (sessionsLoading || refreshingChats) && 'animate-spin')}
+                      className={cn(
+                        'h-4 w-4',
+                        (sessionsLoading || refreshingChats) && 'animate-spin',
+                      )}
                     />
                   </button>
                   <button
@@ -385,14 +444,9 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
         </nav>
 
         <footer className={cn('unified-sidebar__footer', collapsed && 'px-2')}>
-          {!collapsed ? (
-            <span className="sidebar-section-label">Appearance</span>
-          ) : null}
+          {!collapsed ? <span className="sidebar-section-label">Appearance</span> : null}
           <div
-            className={cn(
-              'sidebar-theme-shell',
-              collapsed && 'mb-2 flex-col'
-            )}
+            className={cn('sidebar-theme-shell', collapsed && 'mb-2 flex-col')}
             role="group"
             aria-label="Color theme"
           >
@@ -409,7 +463,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                   className={cn(
                     'sidebar-theme-option',
                     selected && 'sidebar-theme-option--selected',
-                    collapsed && '!flex-row !py-2'
+                    collapsed && '!flex-row !py-2',
                   )}
                 >
                   <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
@@ -423,7 +477,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
             <div
               className={cn(
                 'unified-sidebar__profile-row',
-                collapsed && 'flex-col justify-center p-2'
+                collapsed && 'flex-col justify-center p-2',
               )}
             >
               <div className="unified-sidebar__avatar">
@@ -436,13 +490,15 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
               {!collapsed && (
                 <div className="unified-sidebar__profile-text">
                   <p className="unified-sidebar__footer-name">{user.displayName || 'Account'}</p>
-                  {user.email ? <p className="unified-sidebar__footer-email">{user.email}</p> : null}
+                  {user.email ? (
+                    <p className="unified-sidebar__footer-email">{user.email}</p>
+                  ) : null}
                   <p className="unified-sidebar__footer-plan">{planLabel}</p>
                 </div>
               )}
               <button
                 type="button"
-                onClick={() => void handleSignOut()}
+                onClick={() => setShowSignOutConfirm(true)}
                 className="unified-sidebar__sign-out-btn"
                 title="Sign out"
                 aria-label="Sign out"
@@ -462,7 +518,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
               id: 'rename',
               label: 'Rename',
               icon: <Pencil className="h-4 w-4" strokeWidth={2} />,
-              onClick: handleRename,
+              onClick: handleRenameRequest,
             },
             {
               id: 'delete',
@@ -488,25 +544,35 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
             setActionSessionId(null);
           }}
         />
-      </aside>
 
-      {workspaceSwitcherOpen && (
-        <WorkspaceSwitcher
-          isOpen={workspaceSwitcherOpen}
-          onClose={() => setWorkspaceSwitcherOpen(false)}
-          onCreateWorkspace={() => {
-            setWorkspaceSwitcherOpen(false);
-            setShowCreateWorkspaceModal(true);
+        <ConfirmDialog
+          isOpen={showSignOutConfirm}
+          title="Sign out?"
+          message="You will need to sign in again to access your workspaces and chats."
+          confirmText="Sign out"
+          cancelText="Cancel"
+          variant="warning"
+          isLoading={isSigningOut}
+          onConfirm={handleSignOutConfirm}
+          onCancel={() => setShowSignOutConfirm(false)}
+        />
+
+        <PromptDialog
+          isOpen={showRenamePrompt}
+          title="Rename chat"
+          message="Choose a name that helps you find this conversation later."
+          label="Session name"
+          defaultValue={renameDefaultTitle}
+          placeholder="e.g. Q4 revenue analysis"
+          confirmText="Save"
+          isLoading={isRenaming}
+          onConfirm={handleRenameConfirm}
+          onCancel={() => {
+            setShowRenamePrompt(false);
+            setActionSessionId(null);
           }}
         />
-      )}
-
-      {showCreateWorkspaceModal && (
-        <WorkspaceModal
-          onClose={() => setShowCreateWorkspaceModal(false)}
-          onSuccess={() => setShowCreateWorkspaceModal(false)}
-        />
-      )}
+      </aside>
     </>
   );
 }

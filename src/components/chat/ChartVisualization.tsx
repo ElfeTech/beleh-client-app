@@ -20,21 +20,17 @@ export function ChartVisualization({ response }: ChartVisualizationProps) {
 
   if (needsClarification && (!hasResults || isExecutionFailed)) {
     return (
-      <div className="chart-response clarification">
-        <div className="clarification-message">
-          <p>{intent?.clarification_message}</p>
-        </div>
-      </div>
+      <p className="message-plain message-plain--assistant leading-relaxed">
+        {intent?.clarification_message}
+      </p>
     );
   }
 
   if (execution && execution.status === 'FAILED' && execution.message) {
     return (
-      <div className="chart-response error">
-        <div className="error-message">
-          <p>{execution.message}</p>
-        </div>
-      </div>
+      <p className="message-plain message-plain--assistant leading-relaxed text-[color:var(--error)]">
+        {execution.message}
+      </p>
     );
   }
 
