@@ -10,6 +10,7 @@ import { SecuritySection } from '../components/settings/SecuritySection';
 import { NotificationsSection } from '../components/settings/NotificationsSection';
 import { HelpSection } from '../components/settings/HelpSection';
 import { AboutSection } from '../components/settings/AboutSection';
+import { SettingsComplianceFooter } from '../components/settings/SettingsComplianceFooter';
 import { WorkspacesPage } from './WorkspacesPage';
 import { isSettingsNavSectionVisible } from '../components/settings/settingsNav';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
@@ -145,20 +146,12 @@ const SettingsPage: React.FC = () => {
     }
   };
 
-  const complianceFooter = (
-    <footer className="settings-compliance-footer" aria-label="Environment metadata">
-      <span>Tenant Region ID: europe-west2</span>
-      <span>Access Protocol: SSL TLS v1.3</span>
-      <span>Last Catalog Sync Date: 2024-05-21 12:47:58 UTC</span>
-    </footer>
-  );
-
   const renderDesktopContent = () => (
     <div className="settings-content-area">
       <div className="settings-content-scroll">
         <div className="settings-content-inner">
           <div className="settings-content-container">{renderSectionContent()}</div>
-          {complianceFooter}
+          <SettingsComplianceFooter />
         </div>
       </div>
     </div>
@@ -468,7 +461,7 @@ const SettingsPage: React.FC = () => {
             </button>
           </div>
           <div className="settings-content-container">{renderSectionContent()}</div>
-          {complianceFooter}
+          <SettingsComplianceFooter />
         </div>
       </div>
     </div>

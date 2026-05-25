@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "build:release": "node scripts/release-bump-version.mjs && npm run build",
+    "version:bump": "node scripts/release-bump-version.mjs",
     "typecheck": "tsc -b",
     "lint": "eslint .",
     "format": "prettier --write .",

@@ -634,7 +634,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             Connect datasource
           </button>
           <p className="hidden sm:block text-[10px] text-[color:var(--text-muted)] ml-auto">
-            Powered by Beleh Analytical Engine v2.1
+            Powered by Beleh Analytical Engine v0.1.0
             <span className="hidden md:inline"> // compliance guidelines applied</span>
           </p>
           {schemaTableCount != null ? (

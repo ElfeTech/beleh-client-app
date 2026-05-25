@@ -1,12 +1,10 @@
 import { Info } from 'lucide-react';
+import { APP_BUILD_ID, APP_VERSION } from '../../lib/appMeta';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 import './SettingsShared.css';
 import './AboutSection.css';
 
 export function AboutSection() {
-  const appVersion = '0.1.0';
-  const buildNumber = '2026.01.01';
-
   const legalLinks = [
     { title: 'Terms of Service', icon: 'document' },
     { title: 'Privacy Policy', icon: 'shield' },
@@ -79,12 +77,12 @@ export function AboutSection() {
         <div className="version-info">
           <div className="version-item">
             <span className="label">Version</span>
-            <span className="value">{appVersion}</span>
+            <span className="value">{APP_VERSION}</span>
           </div>
           <div className="version-divider" />
           <div className="version-item">
             <span className="label">Build</span>
-            <span className="value">{buildNumber}</span>
+            <span className="value">{APP_BUILD_ID}</span>
           </div>
           <div className="version-divider" />
           <div className="version-item">

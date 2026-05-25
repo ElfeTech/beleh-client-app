@@ -70,7 +70,7 @@ export function ChatWelcome({ onPromptClick, schemaTableCount, disabled }: ChatW
 
       <footer className="chat-welcome-footer">
         <p>
-          Powered by Beleh Analytical Engine v2.1
+          Powered by Beleh Analytical Engine v0.1.0
           <span className="chat-welcome-footer__sep"> · </span>
           compliance guidelines applied.
         </p>

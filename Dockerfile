@@ -44,6 +44,10 @@ ENV VITE_FIREBASE_MESSAGING_SENDER_ID=$VITE_FIREBASE_MESSAGING_SENDER_ID
 ENV VITE_FIREBASE_APP_ID=$VITE_FIREBASE_APP_ID
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
 
+# Optional prod release: bump patch version before build (RELEASE_BUMP=true)
+ARG RELEASE_BUMP=false
+RUN if [ "$RELEASE_BUMP" = "true" ]; then node scripts/release-bump-version.mjs; fi
+
 # Build the application
 RUN npm run build
 

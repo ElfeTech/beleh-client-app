@@ -302,16 +302,6 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
             </NavLink>
           )}
 
-          <NavLink
-            to="/settings/general"
-            className={() =>
-              cn('sidebar-nav-link', settingsAreaActive && 'sidebar-nav-link--active')
-            }
-          >
-            <Settings className="h-4 w-4 shrink-0" strokeWidth={2} />
-            {!collapsed && <span>Settings</span>}
-          </NavLink>
-
           {effectiveWorkspaceId && (
             <>
               {!collapsed ? <div className="unified-sidebar__divider border-t" /> : null}
@@ -444,33 +434,73 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
         </nav>
 
         <footer className={cn('unified-sidebar__footer', collapsed && 'px-2')}>
-          {!collapsed ? <span className="sidebar-section-label">Appearance</span> : null}
           <div
-            className={cn('sidebar-theme-shell', collapsed && 'mb-2 flex-col')}
-            role="group"
-            aria-label="Color theme"
+            className={cn(
+              'sidebar-appearance-panel',
+              collapsed && 'sidebar-appearance-panel--collapsed',
+            )}
           >
-            {THEME_OPTIONS.map(({ value, label, short, icon: Icon }) => {
-              const selected = themePreference === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  title={label}
-                  aria-label={label}
-                  aria-pressed={selected}
-                  onClick={() => setThemePreference(value)}
-                  className={cn(
-                    'sidebar-theme-option',
-                    selected && 'sidebar-theme-option--selected',
-                    collapsed && '!flex-row !py-2',
-                  )}
-                >
-                  <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
-                  {!collapsed && <span>{short}</span>}
-                </button>
-              );
-            })}
+            {!collapsed ? (
+              <div className="sidebar-appearance-panel__head">
+                <span className="sidebar-appearance-panel__title">Appearance</span>
+                <span className="sidebar-appearance-panel__hint">Theme &amp; preferences</span>
+              </div>
+            ) : null}
+
+            <div
+              className={cn('sidebar-theme-shell', collapsed && 'sidebar-theme-shell--collapsed')}
+              role="group"
+              aria-label="Color theme"
+            >
+              {THEME_OPTIONS.map(({ value, label, short, icon: Icon }) => {
+                const selected = themePreference === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    title={label}
+                    aria-label={label}
+                    aria-pressed={selected}
+                    onClick={() => setThemePreference(value)}
+                    className={cn(
+                      'sidebar-theme-option',
+                      selected && 'sidebar-theme-option--selected',
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
+                    {!collapsed && <span>{short}</span>}
+                  </button>
+                );
+              })}
+            </div>
+
+            <NavLink
+              to="/settings/general"
+              title="Settings"
+              className={() =>
+                cn(
+                  'sidebar-settings-link',
+                  settingsAreaActive && 'sidebar-settings-link--active',
+                  collapsed && 'sidebar-settings-link--collapsed',
+                )
+              }
+            >
+              <span className="sidebar-settings-link__icon" aria-hidden>
+                <Settings className="h-4 w-4 shrink-0" strokeWidth={2} />
+              </span>
+              {!collapsed && (
+                <>
+                  <span className="sidebar-settings-link__text">
+                    <span className="sidebar-settings-link__label">Settings</span>
+                    <span className="sidebar-settings-link__sub">Account, billing &amp; more</span>
+                  </span>
+                  <ChevronRight
+                    className="sidebar-settings-link__chevron h-4 w-4 shrink-0"
+                    strokeWidth={2}
+                  />
+                </>
+              )}
+            </NavLink>
           </div>
 
           {user && (

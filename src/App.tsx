@@ -9,7 +9,7 @@ import { DatasourceProvider } from './context/DatasourceContext';
 import { FeedbackProvider } from './context/FeedbackContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import LandingPage from './pages/LandingPage';
+import { RootRoute } from './routes/RootRoute';
 import { SignIn } from './pages/SignIn';
 import { SignUp } from './pages/SignUp';
 import { Workspace } from './pages/Workspace';
@@ -52,7 +52,7 @@ function App() {
                       }}
                     />
                     <Routes>
-                      <Route path="/" element={<LandingPage />} />
+                      <Route path="/" element={<RootRoute />} />
                       <Route path="/signin" element={<SignIn />} />
                       <Route path="/signup" element={<SignUp />} />
                       <Route
