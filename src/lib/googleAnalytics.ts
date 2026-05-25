@@ -1,3 +1,5 @@
+import { isProductionAnalytics } from './analyticsEnvironment';
+
 /** Google Analytics 4 measurement ID */
 export const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID ?? 'G-GP3JJHFPJ1';
 
@@ -13,7 +15,7 @@ function ensureDataLayer(): void {
 
 /** Push arbitrary data for GTM tags/triggers (call from app code or custom events). */
 export function pushDataLayer(data: Record<string, unknown>): void {
-  if (typeof window === 'undefined') return;
+  if (!isProductionAnalytics() || typeof window === 'undefined') return;
   ensureDataLayer();
   window.dataLayer.push(data);
 }
@@ -36,7 +38,13 @@ function loadScript(src: string): Promise<void> {
 
 /** Load gtag.js and configure GA4 (matches Google's recommended snippet). */
 export async function initGoogleAnalytics(): Promise<void> {
-  if (gaInitialized || typeof window === 'undefined' || !GA_MEASUREMENT_ID) return;
+  if (
+    !isProductionAnalytics() ||
+    gaInitialized ||
+    typeof window === 'undefined' ||
+    !GA_MEASUREMENT_ID
+  )
+    return;
 
   ensureDataLayer();
 
@@ -56,7 +64,13 @@ export async function initGoogleAnalytics(): Promise<void> {
 
 /** Load GTM container when VITE_GTM_CONTAINER_ID is set. */
 export function initGoogleTagManager(): void {
-  if (gtmInitialized || typeof window === 'undefined' || !GTM_CONTAINER_ID) return;
+  if (
+    !isProductionAnalytics() ||
+    gtmInitialized ||
+    typeof window === 'undefined' ||
+    !GTM_CONTAINER_ID
+  )
+    return;
 
   ensureDataLayer();
   pushDataLayer({
@@ -84,7 +98,7 @@ export function initGoogleTagManager(): void {
 
 /** SPA page view — use on route changes. */
 export function trackPageView(pagePath: string, pageTitle?: string): void {
-  if (typeof window === 'undefined') return;
+  if (!isProductionAnalytics() || typeof window === 'undefined') return;
 
   const title = pageTitle ?? document.title;
 
@@ -103,6 +117,7 @@ export function trackPageView(pagePath: string, pageTitle?: string): void {
 }
 
 export function trackEvent(eventName: string, params?: Record<string, unknown>): void {
+  if (!isProductionAnalytics()) return;
   pushDataLayer({ event: eventName, ...params });
   if (window.gtag) {
     window.gtag('event', eventName, params);
@@ -110,7 +125,7 @@ export function trackEvent(eventName: string, params?: Record<string, unknown>):
 }
 
 export function setAnalyticsUserId(userId: string | null): void {
-  if (!window.gtag || !GA_MEASUREMENT_ID) return;
+  if (!isProductionAnalytics() || !window.gtag || !GA_MEASUREMENT_ID) return;
   window.gtag('config', GA_MEASUREMENT_ID, {
     user_id: userId ?? undefined,
   });
