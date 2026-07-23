@@ -1,9 +1,9 @@
 /**
- * Demo mode: sample prompts and dummy ChatWorkflowResponse payloads
+ * Demo mode: sample prompts and dummy AssistantTurnResponse payloads
  * for first-time users to see how the platform works without uploading data.
  */
 
-import type { ChatWorkflowResponse } from '../types/api';
+import type { AssistantTurnResponse, ChartArtifactType, UiArtifact } from '../types/api';
 import { DEMO_NEW_USER_KEY, DEMO_STORAGE_KEY } from './clientStorageKeys';
 
 export function isNewUserForDemo(): boolean {
@@ -57,152 +57,166 @@ export const DEMO_PROMPTS: DemoPromptItem[] = [
   },
 ];
 
-function makeResponse(
-  type: 'bar' | 'line' | 'pie',
+function makeTurn(
+  chartType: ChartArtifactType,
   title: string,
-  description: string,
-  xField: string,
-  yField: string,
-  columns: Array<{ name: string; type: string }>,
-  rows: Record<string, any>[],
-  summary: string,
-  keyInsights: string[] = [],
-): ChatWorkflowResponse {
-  return {
-    intent: {
-      intent: 'visualize',
-      confidence: 0.95,
-      entities: {},
-      visualization: type,
-      clarification_needed: false,
+  labels: string[],
+  values: number[],
+  datasetLabel: string,
+  columns: string[],
+  rows: unknown[][],
+  text: string,
+  bullets: string[],
+): AssistantTurnResponse {
+  const chartArtifact: UiArtifact = {
+    id: `demo-chart-${chartType}`,
+    type: chartType,
+    title,
+    version: 1,
+    data: {
+      labels,
+      datasets: [{ label: datasetLabel, data: values }],
+      source_tool_call_id: 'demo',
     },
-    execution: {
-      status: 'SUCCESS',
-      execution_time_ms: 120,
-      row_count: rows.length,
+  };
+
+  const tableArtifact: UiArtifact = {
+    id: `demo-table-${chartType}`,
+    type: 'table',
+    title: 'Results',
+    version: 1,
+    data: {
       columns,
       rows,
-      cache_hit: false,
-      visualization_hint: type,
-      error_type: null,
-      message: null,
+      page_size: 50,
     },
-    visualization: {
-      type,
-      visualization_type: type,
-      title,
-      description,
-      encoding: {
-        x: {
-          field: xField,
-          type: type === 'line' ? 'temporal' : 'categorical',
-          label: xField.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        },
-        y: {
-          field: yField,
-          type: 'quantitative',
-          label: yField.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
-        },
-      },
-    },
-    insight: {
-      summary,
-      key_insights: keyInsights.length ? keyInsights : [summary],
-      supporting_facts: [],
+  };
+
+  const insightArtifact: UiArtifact = {
+    id: `demo-insight-${chartType}`,
+    type: 'insight',
+    title: 'Key insights',
+    version: 1,
+    data: {
+      bullets,
       limitations: 'This is a demo with sample data. Upload your own data for real insights.',
       confidence: 0.9,
-      suggested_next_prompts: [
-        'Show me a breakdown by category',
-        'What is the trend over time?',
-        'Compare the top and bottom performers',
+    },
+  };
+
+  const actionArtifact: UiArtifact = {
+    id: `demo-actions-${chartType}`,
+    type: 'action_group',
+    title: 'Suggested follow-ups',
+    version: 1,
+    data: {
+      actions: [
+        {
+          id: 'a1',
+          label: 'Show me a breakdown by category',
+          style: 'primary',
+          kind: 'ask',
+          payload: { prompt: 'Show me a breakdown by category' },
+        },
+        {
+          id: 'a2',
+          label: 'What is the trend over time?',
+          style: 'secondary',
+          kind: 'ask',
+          payload: { prompt: 'What is the trend over time?' },
+        },
+        {
+          id: 'a3',
+          label: 'Compare the top and bottom performers',
+          style: 'secondary',
+          kind: 'ask',
+          payload: { prompt: 'Compare the top and bottom performers' },
+        },
       ],
+    },
+  };
+
+  return {
+    role: 'assistant',
+    text,
+    artifacts: [chartArtifact, tableArtifact, insightArtifact, actionArtifact],
+    meta: {
+      model: 'demo',
+      tools_used: ['demo'],
+      latency_ms: 120,
+      row_count: rows.length,
+      validation_warnings: [],
     },
   };
 }
 
-/** Bar chart: overview / top metrics */
-const DEMO_OVERVIEW_RESPONSE: ChatWorkflowResponse = makeResponse(
+const DEMO_OVERVIEW_RESPONSE: AssistantTurnResponse = makeTurn(
   'bar',
   'Top Products by Revenue',
-  'Revenue by product category (sample data)',
-  'product',
-  'revenue',
+  ['Electronics', 'Apparel', 'Home & Garden', 'Sports', 'Books'],
+  [124500, 89200, 67100, 54300, 41200],
+  'Revenue',
+  ['product', 'revenue'],
   [
-    { name: 'product', type: 'VARCHAR' },
-    { name: 'revenue', type: 'DOUBLE' },
-  ],
-  [
-    { product: 'Electronics', revenue: 124500 },
-    { product: 'Apparel', revenue: 89200 },
-    { product: 'Home & Garden', revenue: 67100 },
-    { product: 'Sports', revenue: 54300 },
-    { product: 'Books', revenue: 41200 },
+    ['Electronics', 124500],
+    ['Apparel', 89200],
+    ['Home & Garden', 67100],
+    ['Sports', 54300],
+    ['Books', 41200],
   ],
   'Electronics leads with $124.5K in revenue, followed by Apparel ($89.2K) and Home & Garden ($67.1K). Top 5 categories account for the majority of total revenue.',
   ['Electronics is the top revenue driver.', 'Apparel and Home & Garden show strong performance.'],
 );
 
-/** Line chart: trend over time */
-const DEMO_TREND_RESPONSE: ChatWorkflowResponse = makeResponse(
+const DEMO_TREND_RESPONSE: AssistantTurnResponse = makeTurn(
   'line',
   'Revenue Trend (Last 6 Months)',
-  'Monthly revenue over time (sample data)',
-  'month',
-  'revenue',
+  ['Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'],
+  [72000, 78500, 82100, 93400, 108200, 95200],
+  'Revenue',
+  ['month', 'revenue'],
   [
-    { name: 'month', type: 'VARCHAR' },
-    { name: 'revenue', type: 'DOUBLE' },
-  ],
-  [
-    { month: 'Aug', revenue: 72000 },
-    { month: 'Sep', revenue: 78500 },
-    { month: 'Oct', revenue: 82100 },
-    { month: 'Nov', revenue: 93400 },
-    { month: 'Dec', revenue: 108200 },
-    { month: 'Jan', revenue: 95200 },
+    ['Aug', 72000],
+    ['Sep', 78500],
+    ['Oct', 82100],
+    ['Nov', 93400],
+    ['Dec', 108200],
+    ['Jan', 95200],
   ],
   'Revenue grew from $72K in August to a peak of $108.2K in December, with a slight dip in January. Strong upward trend in the second half of the period.',
   ['Peak revenue in December.', 'Consistent growth from Aug to Dec.'],
 );
 
-/** Bar chart: comparison by region */
-const DEMO_COMPARISON_RESPONSE: ChatWorkflowResponse = makeResponse(
+const DEMO_COMPARISON_RESPONSE: AssistantTurnResponse = makeTurn(
   'bar',
   'Sales by Region',
-  'Total sales comparison across regions (sample data)',
-  'region',
-  'sales',
+  ['North America', 'Europe', 'Asia Pacific', 'Latin America', 'Middle East'],
+  [185000, 142000, 128000, 67000, 48000],
+  'Sales',
+  ['region', 'sales'],
   [
-    { name: 'region', type: 'VARCHAR' },
-    { name: 'sales', type: 'DOUBLE' },
-  ],
-  [
-    { region: 'North America', sales: 185000 },
-    { region: 'Europe', sales: 142000 },
-    { region: 'Asia Pacific', sales: 128000 },
-    { region: 'Latin America', sales: 67000 },
-    { region: 'Middle East', sales: 48000 },
+    ['North America', 185000],
+    ['Europe', 142000],
+    ['Asia Pacific', 128000],
+    ['Latin America', 67000],
+    ['Middle East', 48000],
   ],
   'North America leads with $185K in sales, followed by Europe ($142K) and Asia Pacific ($128K). Regional performance aligns with market size and investment.',
   ['North America and Europe are the top two regions.', 'Asia Pacific shows strong potential.'],
 );
 
-/** Pie chart: distribution */
-const DEMO_DISTRIBUTION_RESPONSE: ChatWorkflowResponse = makeResponse(
+const DEMO_DISTRIBUTION_RESPONSE: AssistantTurnResponse = makeTurn(
   'pie',
   'Market Share by Segment',
-  'Distribution of market share across segments (sample data)',
-  'segment',
-  'share',
+  ['Enterprise', 'SMB', 'Consumer', 'Startup'],
+  [38, 28, 22, 12],
+  'Share',
+  ['segment', 'share'],
   [
-    { name: 'segment', type: 'VARCHAR' },
-    { name: 'share', type: 'DOUBLE' },
-  ],
-  [
-    { segment: 'Enterprise', share: 38 },
-    { segment: 'SMB', share: 28 },
-    { segment: 'Consumer', share: 22 },
-    { segment: 'Startup', share: 12 },
+    ['Enterprise', 38],
+    ['SMB', 28],
+    ['Consumer', 22],
+    ['Startup', 12],
   ],
   'Enterprise holds the largest share at 38%, followed by SMB (28%) and Consumer (22%). Startup segment accounts for 12% of the market.',
   [
@@ -211,7 +225,7 @@ const DEMO_DISTRIBUTION_RESPONSE: ChatWorkflowResponse = makeResponse(
   ],
 );
 
-const DEMO_RESPONSE_MAP: Record<string, ChatWorkflowResponse> = {
+const DEMO_RESPONSE_MAP: Record<string, AssistantTurnResponse> = {
   overview: DEMO_OVERVIEW_RESPONSE,
   trend: DEMO_TREND_RESPONSE,
   comparison: DEMO_COMPARISON_RESPONSE,
@@ -219,7 +233,7 @@ const DEMO_RESPONSE_MAP: Record<string, ChatWorkflowResponse> = {
 };
 
 /** Get demo response by prompt id; fallback to overview if no match */
-export function getDemoResponse(promptId: string): ChatWorkflowResponse {
+export function getDemoResponse(promptId: string): AssistantTurnResponse {
   return DEMO_RESPONSE_MAP[promptId] ?? DEMO_OVERVIEW_RESPONSE;
 }
 

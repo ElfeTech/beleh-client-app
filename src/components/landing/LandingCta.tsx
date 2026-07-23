@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { Check, ChevronRight } from 'lucide-react';
 
-const CTA_PERKS = ['FREE TIER AVAILABLE', 'NO CREDIT CARD REQUIRED', 'CANCEL ANYTIME'];
+const CTA_PERKS = ['Free tier available', 'No credit card required', 'Cancel anytime'];
 
 export function LandingCta() {
   const navigate = useNavigate();
@@ -12,12 +12,12 @@ export function LandingCta() {
       <div className="landing-cta__glow landing-cta__glow--b" aria-hidden />
       <div className="landing-cta__card">
         <span className="landing-pill landing-pill--teal landing-pill--center">
-          PLATFORM_BOOTSTRAPER_ACTIVE
+          Start in minutes
         </span>
-        <h2 className="landing-cta__title">Ready to Transform Your Data?</h2>
+        <h2 className="landing-cta__title">Ready to transform your data?</h2>
         <p className="landing-cta__subtitle">
-          Join thousands of teams making smarter, instant decisions with Beleh. Start free. No
-          credit card required.
+          Join teams making smarter, faster decisions with Beleh. Start free — no credit card
+          required.
         </p>
         <div className="landing-cta__buttons">
           <button
@@ -25,7 +25,7 @@ export function LandingCta() {
             className="landing-btn landing-btn--gradient landing-btn--lg"
             onClick={() => navigate('/signup')}
           >
-            INITIALIZE_FREE
+            Create free account
             <ChevronRight size={18} strokeWidth={2.5} />
           </button>
           <button
@@ -33,7 +33,7 @@ export function LandingCta() {
             className="landing-btn landing-btn--glass landing-btn--lg"
             onClick={() => navigate('/signin')}
           >
-            RESOLVE_LOGIN
+            Sign in
           </button>
         </div>
         <ul className="landing-cta__perks">

@@ -1,5 +1,5 @@
 import type {
-  ChatWorkflowResponse,
+  AssistantTurnResponse,
   DataSourceMetadata,
   DataSourceResponse,
   IntentRequest,
@@ -474,13 +474,13 @@ class APIClient {
     authToken: string,
     question: string,
     datasourceId: string,
-  ): Promise<ChatWorkflowResponse> {
+  ): Promise<AssistantTurnResponse> {
     const payload: IntentRequest = {
       prompt: question,
       dataset_id: datasourceId,
     };
 
-    return this.request<ChatWorkflowResponse>('/api/chat/', {
+    return this.request<AssistantTurnResponse>('/api/chat/', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${authToken}`,
@@ -660,7 +660,7 @@ class APIClient {
     sessionId: string,
     prompt: string,
     datasetId: string | null,
-  ): Promise<ChatWorkflowResponse> {
+  ): Promise<AssistantTurnResponse> {
     if (!sessionId || sessionId === 'undefined') {
       throw new Error('Session ID is required to send a message');
     }
@@ -669,7 +669,7 @@ class APIClient {
       dataset_id: datasetId || null,
     };
 
-    return this.request<ChatWorkflowResponse>(`/api/sessions/${sessionId}/messages`, {
+    return this.request<AssistantTurnResponse>(`/api/sessions/${sessionId}/messages`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${authToken}`,

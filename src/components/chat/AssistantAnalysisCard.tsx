@@ -1,28 +1,67 @@
+import { useState } from 'react';
 import { Clock, Database, Sparkles } from 'lucide-react';
-import type { ChatWorkflowResponse } from '../../types/api';
-import { getResponseViewAvailability } from '../../utils/responseViewAvailability';
+import type { AssistantTurnMeta, UiArtifact } from '../../types/api';
+import { findPanelViewArtifacts } from '../../utils/artifactAdapters';
+import { getPanelCount, getResponseViewAvailability } from '../../utils/responseViewAvailability';
 import { ResponseViewTabs } from './ResponseViewTabs';
+import { ArtifactRenderer, DATA_VIEW_ARTIFACT_TYPES } from './artifacts/artifactRegistry';
+import { ArtifactPanelGrid } from './artifacts/ArtifactPanelGrid';
+import { CopyTextButton } from './CopyTextButton';
 import './AssistantAnalysisCard.css';
+import './artifacts/artifacts.css';
+import { MarkdownText } from '../MarkdownText';
 
 interface AssistantAnalysisCardProps {
-  response: ChatWorkflowResponse;
-  summary: string;
+  text: string;
+  artifacts: UiArtifact[];
+  meta?: AssistantTurnMeta;
   timestamp: Date;
-  schemaTarget?: string | null;
+  onAsk?: (prompt: string) => void;
+  disabled?: boolean;
 }
 
 export function AssistantAnalysisCard({
-  response,
-  summary,
+  text,
+  artifacts,
+  meta,
   timestamp,
-  schemaTarget,
-}: AssistantAnalysisCardProps) {
-  const { execution, intent } = response;
-  const availability = getResponseViewAvailability(response);
-  const needsClarification = intent?.clarification_needed && intent.clarification_message;
-  const hasResults = (execution?.row_count ?? 0) > 0;
+  onAsk,
+  disabled,
+}: Readonly<AssistantAnalysisCardProps>) {
+  const availability = getResponseViewAvailability(artifacts);
+  const panelCount = getPanelCount(meta);
+  const isMultiPanel = panelCount > 1 || availability.charts.length > 1;
+  const panelViewArtifacts = isMultiPanel ? findPanelViewArtifacts(artifacts) : [];
+  const hasDataViews = isMultiPanel
+    ? panelViewArtifacts.length > 0
+    : availability.availableViews.length > 0;
+  const [filterValue, setFilterValue] = useState<string | null>(null);
 
   const timeLabel = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  const panelErrorIds = new Set(
+    isMultiPanel ? panelViewArtifacts.filter((a) => a.type === 'error').map((a) => a.id) : [],
+  );
+
+  const peripheral = artifacts.filter((a) => {
+    if (DATA_VIEW_ARTIFACT_TYPES.has(a.type) && hasDataViews) return false;
+    if (a.type === 'action_group') return false; // shown under message via SuggestedPrompts
+    // Panel errors render in ArtifactPanelGrid; avoid duplicating them here.
+    // Full-turn-only failures never reach this card (handled by getWorkflowFailure).
+    if (a.type === 'error' && panelErrorIds.has(a.id)) return false;
+    return true;
+  });
+
+  const kpiAndFilters = peripheral.filter((a) => a.type === 'kpi' || a.type === 'filter_bar');
+  const afterViews = peripheral.filter((a) => a.type !== 'kpi' && a.type !== 'filter_bar');
+
+  const context = {
+    onAsk,
+    disabled,
+    filterValue,
+    onFilterChange: setFilterValue,
+    skipDataViews: hasDataViews,
+  };
 
   return (
     <article className="assistant-analysis-card">
@@ -30,43 +69,63 @@ export function AssistantAnalysisCard({
         <div className="assistant-analysis-card__avatar">
           <Sparkles className="h-4 w-4" strokeWidth={2} />
         </div>
-        <div>
+        <div className="assistant-analysis-card__header-text">
           <p className="assistant-analysis-card__title">Beleh AI Analyst</p>
           <p className="assistant-analysis-card__time">{timeLabel}</p>
         </div>
+        {text.trim() ? (
+          <CopyTextButton text={text} label="response" className="assistant-analysis-card__copy" />
+        ) : null}
       </header>
 
-      {summary ? <p className="assistant-analysis-card__summary">{summary}</p> : null}
-
-      {execution && (execution.execution_time_ms != null || execution.row_count != null) ? (
+      {meta && (meta.latency_ms != null || meta.row_count != null) ? (
         <div className="assistant-analysis-card__metrics">
-          {execution.execution_time_ms != null ? (
+          {meta.latency_ms != null ? (
             <span className="assistant-analysis-card__metric">
               <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-              VPC execution: <strong>{execution.execution_time_ms.toFixed(1)}ms</strong>
+              Execution Time: <strong>{(Number(meta.latency_ms) / 1000).toFixed(1)}s</strong>
             </span>
           ) : null}
-          {execution.row_count != null ? (
+          {meta.row_count != null ? (
             <span className="assistant-analysis-card__metric">
               <Database className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-              Rows scanned: <strong>{execution.row_count.toLocaleString()}</strong>
+              Rows scanned: <strong>{Number(meta.row_count).toLocaleString()}</strong>
             </span>
           ) : null}
         </div>
       ) : null}
 
-      {needsClarification && hasResults ? (
-        <div className="assistant-analysis-card__clarification">
-          <Sparkles
-            className="h-4 w-4 shrink-0 text-[color:var(--accent-teal-500)]"
-            strokeWidth={2}
-          />
-          <p>{intent.clarification_message}</p>
+      {kpiAndFilters.length > 0 ? (
+        <div className="artifact-stack">
+          {kpiAndFilters.map((a) => (
+            <ArtifactRenderer key={a.id} artifact={a} context={context} />
+          ))}
         </div>
       ) : null}
 
-      {availability.availableViews.length > 0 ? (
-        <ResponseViewTabs response={response} schemaTarget={schemaTarget} />
+      {isMultiPanel && panelViewArtifacts.length > 0 ? (
+        <ArtifactPanelGrid
+          artifacts={panelViewArtifacts}
+          multiColumn={panelCount > 1 || availability.charts.length > 1}
+        />
+      ) : null}
+
+      {!isMultiPanel && hasDataViews ? (
+        <ResponseViewTabs artifacts={artifacts} filterValue={filterValue} />
+      ) : null}
+
+      {text ? (
+        <div className="assistant-analysis-card__summary">
+          <MarkdownText>{text}</MarkdownText>
+        </div>
+      ) : null}
+
+      {afterViews.length > 0 ? (
+        <div className="artifact-stack">
+          {afterViews.map((a) => (
+            <ArtifactRenderer key={a.id} artifact={a} context={context} />
+          ))}
+        </div>
       ) : null}
     </article>
   );

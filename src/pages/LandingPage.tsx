@@ -13,7 +13,6 @@ import '../components/landing/ExplorerEngine.css';
 
 export default function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [simulatorRunId, setSimulatorRunId] = useState(0);
   const [explorerTab, setExplorerTab] = useState<ExplorerTabId>('features');
   const explorerRef = useRef<HTMLDivElement>(null);
   const metricsRef = useRef<HTMLDivElement>(null);
@@ -38,14 +37,10 @@ export default function LandingPage() {
     }
   }, []);
 
-  const handleSimulateLobby = () => {
-    setSimulatorRunId((n) => n + 1);
-  };
-
   return (
-    <div className="landing-console">
+    <div className="landing-page">
       <LandingNav isScrolled={isScrolled} onSectionSelect={handleSectionSelect} />
-      <LandingHero simulatorRunId={simulatorRunId} onSimulateLobby={handleSimulateLobby} />
+      <LandingHero />
       <div ref={metricsRef}>
         <LandingStatsBand />
       </div>

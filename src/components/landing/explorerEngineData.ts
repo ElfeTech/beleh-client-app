@@ -6,8 +6,8 @@ import {
   Zap,
   Cpu,
   Users,
-  Skull,
-  Gamepad2,
+  AlertTriangle,
+  ListOrdered,
   BookOpen,
   FlaskConical,
   CloudLightning,
@@ -25,19 +25,19 @@ export const EXPLORER_TABS: {
   icon: LucideIcon;
   diagnosticLabel: string;
 }[] = [
-  { id: 'features', label: 'CORE MAPPINGS', icon: Zap, diagnosticLabel: 'FEATURES' },
-  { id: 'problems', label: 'FATAL BI FRICTION', icon: Skull, diagnosticLabel: 'PROBLEMS' },
-  { id: 'steps', label: 'PIPELINE ROUTING', icon: Gamepad2, diagnosticLabel: 'STEPS' },
-  { id: 'comparison', label: 'SPECS LEDGER', icon: BookOpen, diagnosticLabel: 'COMPARISON' },
+  { id: 'features', label: 'Features', icon: Zap, diagnosticLabel: 'Features' },
+  { id: 'problems', label: 'Why Beleh?', icon: AlertTriangle, diagnosticLabel: 'Challenges' },
+  { id: 'steps', label: 'How it works', icon: ListOrdered, diagnosticLabel: 'Getting started' },
+  { id: 'comparison', label: 'Compare', icon: BookOpen, diagnosticLabel: 'Comparison' },
 ];
 
 export const LANDING_STATS = [
-  { value: '10x', label: 'FASTER INSIGHTS', icon: Sparkles, accent: 'blue' },
-  { value: '0', label: 'SQL REQUIRED', icon: Command, accent: 'cyan' },
-  { value: '99.9%', label: 'UPTIME INTENSITY', icon: ShieldCheck, accent: 'green' },
+  { value: '10x', label: 'Faster insights', icon: Sparkles, accent: 'blue' },
+  { value: '0', label: 'SQL required', icon: Command, accent: 'cyan' },
+  { value: '99.9%', label: 'Uptime target', icon: ShieldCheck, accent: 'green' },
   {
     value: 'α0.1.0',
-    label: 'ALPHA RELEASE',
+    label: 'Alpha release',
     detail: 'Preview build — features ship weekly; production metrics arrive after GA',
     icon: FlaskConical,
     accent: 'purple',
@@ -47,44 +47,43 @@ export const LANDING_STATS = [
 
 export const FEATURE_CARDS = [
   {
-    title: 'AI-POWERED INTELLIGENCE',
+    title: 'AI-powered answers',
     description:
-      'Natural language queries powered by advanced database intelligence that deeply understands your business context.',
+      'Ask in plain language and get answers that understand your business data and context.',
     icon: Sparkles,
     accent: 'blue',
   },
   {
-    title: 'INSTANT VISUALIZATIONS',
+    title: 'Instant charts',
     description:
-      'Beautiful responsive charts, bar graphs, and telemetry files generated automatically. Export with one click.',
+      'Clear charts and summaries generated automatically — export or share with one click.',
     icon: BarChart3,
     accent: 'cyan',
   },
   {
-    title: 'ENTERPRISE SECURITY',
+    title: 'Enterprise security',
     description:
-      'Bank-level credential masking, SSL encryption, SOC 2 compliant protocols, and isolated secure tenant environments.',
+      'Encryption, SOC 2–aligned practices, and isolated workspaces so your data stays protected.',
     icon: ShieldCheck,
     accent: 'green',
   },
   {
-    title: 'LIGHTNING FAST LATENCY',
+    title: 'Built for speed',
     description:
-      'Get answers in milliseconds. Cached database pathways handle massive datasets of any density effortlessly.',
+      'Get answers in seconds, not days. Designed for the pace of modern decision-making.',
     icon: Zap,
     accent: 'purple',
   },
   {
-    title: 'SMART SCHEMA DISCOVERY',
+    title: 'Smart data mapping',
     description:
-      'Automatically maps columns, tables relationships, key constraints, and indices with zero setting manual overrides.',
+      'Automatically understands your tables and relationships so you can start asking questions right away.',
     icon: Cpu,
     accent: 'pink',
   },
   {
-    title: 'TEAM COLLABORATION HUB',
-    description:
-      'Share chat threads, historical logs, or analytical graphs across Slack or email to alignment sync instantly.',
+    title: 'Built for teams',
+    description: 'Share insights, threads, and charts with colleagues so everyone stays aligned.',
     icon: Users,
     accent: 'indigo',
   },
@@ -92,24 +91,24 @@ export const FEATURE_CARDS = [
 
 export const PROBLEM_CARDS = [
   {
-    title: 'WEEKS TO BUILD DASHBOARDS',
-    stat: '6-8 weeks wait',
+    title: 'Weeks to build dashboards',
+    stat: '6–8 weeks wait',
     description:
-      'Traditional BI tools require extensive pipeline updates and analytics engineering bottlenecks before you see any value. Time is money.',
+      'Traditional BI often needs long projects before you see value. Decisions can’t wait that long.',
     icon: CloudLightning,
   },
   {
-    title: 'SQL SKILLS REQUIRED',
-    stat: '78% non-technical',
+    title: 'SQL skills required',
+    stat: 'Most teams aren’t technical',
     description:
-      "Not everyone knows SQL. Your team shouldn't have to draft queries or write script files just to inspect yesterday's growth indexes.",
+      'Your team shouldn’t need to write queries just to understand what happened yesterday.',
     icon: Command,
   },
   {
-    title: 'BOTTLENECKED BY EXPERTS',
-    stat: '3-5 days wait time',
+    title: 'Bottlenecked by experts',
+    stat: '3–5 days wait time',
     description:
-      'Waiting for data analysts to compile ad-hoc reports creates massive business friction. Decisions get postponed. Opportunities get lost.',
+      'Waiting on analysts for ad-hoc reports slows everyone down. Opportunities get missed.',
     icon: Users,
   },
 ] as const;
@@ -117,54 +116,54 @@ export const PROBLEM_CARDS = [
 export const PIPELINE_STEPS = [
   {
     vector: '01',
-    title: 'UPLOAD YOUR DATA',
-    description: 'CSV, Excel, or connect database servers directly in seconds. Drag, drop, done.',
+    title: 'Connect your data',
+    description: 'Upload a file or connect a database in minutes — then you’re ready to ask.',
     icon: Upload,
   },
   {
     vector: '02',
-    title: 'ASK QUESTIONS',
-    description: 'Type naturally in plain English like you are asking an experienced colleague.',
+    title: 'Ask questions',
+    description: 'Type naturally in plain English, like you’re asking a trusted colleague.',
     icon: MessageCircle,
   },
   {
     vector: '03',
-    title: 'GET INSIGHTS',
-    description: 'Instant charts, analytics, and actionable answers generated with zero latency.',
+    title: 'Get insights',
+    description: 'Instant charts and clear answers you can act on right away.',
     icon: LineChart,
   },
 ] as const;
 
 export const COMPARISON_ROWS = [
   {
-    criterion: 'Time to First Insight',
-    beleh: 'MINUTES',
+    criterion: 'Time to first insight',
+    beleh: 'Minutes',
     legacy: 'Weeks',
   },
   {
-    criterion: 'Query Interface',
-    beleh: 'NATURAL LANGUAGE / ENGLISH',
-    legacy: 'SQL / Complex Dashboards',
+    criterion: 'How you ask',
+    beleh: 'Plain English',
+    legacy: 'SQL / complex dashboards',
   },
   {
-    criterion: 'Setup Required',
-    beleh: 'ZERO SETTING OVERRIDES',
-    legacy: 'Extensive BI projects',
+    criterion: 'Setup required',
+    beleh: 'Minimal',
+    legacy: 'Lengthy BI projects',
   },
   {
-    criterion: 'Learning Curve',
-    beleh: 'NONE (TYPE LIKE CHAT)',
-    legacy: 'Weeks of custom training',
+    criterion: 'Learning curve',
+    beleh: 'Chat-simple',
+    legacy: 'Weeks of training',
   },
   {
-    criterion: 'For Non-Technical Users',
-    beleh: 'PERFECT. INSTANT MATCHES.',
-    legacy: 'Extremely difficult',
+    criterion: 'For business users',
+    beleh: 'Built for them',
+    legacy: 'Hard without specialists',
   },
   {
-    criterion: 'Enterprise Cost structures',
-    beleh: 'AFFORDABLE ON DEMAND',
-    legacy: 'Expensive user licenses',
+    criterion: 'Cost model',
+    beleh: 'Affordable & flexible',
+    legacy: 'Expensive seat licenses',
   },
 ] as const;
 
@@ -173,6 +172,6 @@ export type LandingNavSection = 'features' | 'problems' | 'steps' | 'metrics';
 export const NAV_SECTIONS: { id: LandingNavSection; label: string; tab?: ExplorerTabId }[] = [
   { id: 'features', label: 'Features', tab: 'features' },
   { id: 'problems', label: 'Why Beleh?', tab: 'problems' },
-  { id: 'steps', label: 'How It Works', tab: 'steps' },
-  { id: 'metrics', label: 'Metrics' },
+  { id: 'steps', label: 'How it works', tab: 'steps' },
+  { id: 'metrics', label: 'Highlights' },
 ];

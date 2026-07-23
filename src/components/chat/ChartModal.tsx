@@ -1,16 +1,23 @@
 import React, { useState, useEffect, useRef } from 'react';
-import type { ChatWorkflowResponse } from '../../types/api';
-import { ChartRenderer } from './charts/ChartRenderer';
+import type { ChartArtifactType, ChartData } from '../../types/api';
+import { ArtifactChart } from './artifacts/ArtifactChart';
 import './ChartModal.css';
 
 interface ChartModalProps {
   isOpen: boolean;
   onClose: () => void;
-  response: ChatWorkflowResponse;
+  chartType: ChartArtifactType;
+  chartData: ChartData;
   title?: string;
 }
 
-const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, title }) => {
+const ChartModal: React.FC<ChartModalProps> = ({
+  isOpen,
+  onClose,
+  chartType,
+  chartData,
+  title,
+}) => {
   const [scale, setScale] = useState(1);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -18,24 +25,17 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
   const containerRef = useRef<HTMLDivElement>(null);
   const lastTouchDistance = useRef<number>(0);
 
-  const { visualization, execution } = response;
-  const fullData = execution?.rows || [];
-  const columnNames = execution?.columns?.map((col) => col.name) || [];
-
-  // Reset state when modal opens/closes
   const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 
   if (prevIsOpen !== isOpen) {
     setPrevIsOpen(isOpen);
     if (!isOpen) {
-      // Reset on close
       setScale(1);
       setPosition({ x: 0, y: 0 });
     }
   }
 
   useEffect(() => {
-    // Prevent body scroll when modal is open
     if (isOpen) {
       document.body.style.overflow = 'hidden';
     } else {
@@ -49,13 +49,13 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      // Pinch to zoom
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
-      const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
-      lastTouchDistance.current = distance;
+      lastTouchDistance.current = Math.hypot(
+        touch2.clientX - touch1.clientX,
+        touch2.clientY - touch1.clientY,
+      );
     } else if (e.touches.length === 1 && scale > 1) {
-      // Pan when zoomed
       setIsDragging(true);
       setStartPos({
         x: e.touches[0].clientX - position.x,
@@ -66,20 +66,17 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
 
   const handleTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
-      // Pinch to zoom
+      e.preventDefault();
       const touch1 = e.touches[0];
       const touch2 = e.touches[1];
       const distance = Math.hypot(touch2.clientX - touch1.clientX, touch2.clientY - touch1.clientY);
 
       if (lastTouchDistance.current > 0) {
         const delta = distance - lastTouchDistance.current;
-        const scaleChange = delta * 0.01;
-        setScale((prev) => Math.max(1, Math.min(4, prev + scaleChange)));
+        setScale((prev) => Math.min(Math.max(1, prev + delta * 0.01), 4));
       }
-
       lastTouchDistance.current = distance;
-    } else if (e.touches.length === 1 && isDragging && scale > 1) {
-      // Pan when zoomed
+    } else if (e.touches.length === 1 && isDragging) {
       setPosition({
         x: e.touches[0].clientX - startPos.x,
         y: e.touches[0].clientY - startPos.y,
@@ -92,10 +89,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
     lastTouchDistance.current = 0;
   };
 
-  const handleZoomIn = () => {
-    setScale((prev) => Math.min(4, prev + 0.5));
-  };
-
+  const handleZoomIn = () => setScale((prev) => Math.min(4, prev + 0.5));
   const handleZoomOut = () => {
     setScale((prev) => Math.max(1, prev - 0.5));
     if (scale <= 1.5) {
@@ -108,7 +102,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
     setPosition({ x: 0, y: 0 });
   };
 
-  if (!isOpen || !visualization) return null;
+  if (!isOpen || !chartData.labels.length) return null;
 
   return (
     <div className="chart-modal-backdrop">
@@ -175,7 +169,7 @@ const ChartModal: React.FC<ChartModalProps> = ({ isOpen, onClose, response, titl
               cursor: isDragging ? 'grabbing' : scale > 1 ? 'grab' : 'default',
             }}
           >
-            <ChartRenderer data={fullData} visualization={visualization} columns={columnNames} />
+            <ArtifactChart type={chartType} data={chartData} isExpanded />
           </div>
         </div>
 

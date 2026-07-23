@@ -45,11 +45,11 @@ export function ExplorerEngine({ activeTab, onTabChange }: ExplorerEngineProps) 
       <div className="explorer-engine__header">
         <span className="landing-pill landing-pill--teal">
           <span className="landing-pill__dot" />
-          INTELLIGENCE LAB CONSOLE
+          Explore Beleh
         </span>
-        <h2 className="explorer-engine__title">Deep-Dive Explorer Engine</h2>
+        <h2 className="explorer-engine__title">See how it works</h2>
         <p className="explorer-engine__subtitle">
-          CLICK MODULES BELOW TO COMPILE SYSTEM DIAGNOSTICS OF OUR SCHEMA BUILDER.
+          Browse features, common BI challenges, and how Beleh compares to traditional tools.
         </p>
       </div>
 
@@ -74,9 +74,7 @@ export function ExplorerEngine({ activeTab, onTabChange }: ExplorerEngineProps) 
       </div>
 
       <div className="explorer-engine__panel">
-        <p className="explorer-engine__diagnostic">
-          ACTIVE_DIAGNOSTIC_TAB: {activeMeta.diagnosticLabel} // SCANNING_CLUSTER
-        </p>
+        <p className="explorer-engine__diagnostic">Viewing: {activeMeta.diagnosticLabel}</p>
 
         <AnimatePresence mode="wait">
           <motion.div
@@ -125,19 +123,17 @@ function FeaturesPanel() {
 function ProblemsPanel() {
   return (
     <div className="explorer-problems">
-      <h3 className="explorer-problems__headline">
-        TRADITIONAL ANALYTICS LEGACY SYSTEMS ARE BROKEN
-      </h3>
+      <h3 className="explorer-problems__headline">Traditional BI still gets in the way</h3>
       <p className="explorer-problems__sub">
-        Your team spends more time wrestling with query syntaxes and data engineering pipelines than
-        actually finding insights.
+        Teams spend more time waiting on dashboards and data pipelines than finding the insights
+        that move the business forward.
       </p>
       <div className="explorer-problems__grid">
         {PROBLEM_CARDS.map((card) => {
           const Icon = card.icon;
           return (
             <article key={card.title} className="explorer-problem-card">
-              <span className="explorer-problem-card__warn">WARN_STATE</span>
+              <span className="explorer-problem-card__warn">Challenge</span>
               <div className="explorer-problem-card__icon">
                 <Icon size={22} strokeWidth={1.75} />
               </div>
@@ -161,7 +157,7 @@ function StepsPanel() {
           <div key={step.vector} className="explorer-steps__item">
             {i > 0 && <span className="explorer-steps__arrow" aria-hidden />}
             <article className="explorer-step-card">
-              <span className="explorer-step-card__vector">SYSTEM_VECTOR: {step.vector}</span>
+              <span className="explorer-step-card__vector">Step {step.vector}</span>
               <div className="explorer-step-card__icon">
                 <Icon size={22} strokeWidth={1.75} />
               </div>
@@ -179,12 +175,12 @@ function ComparisonPanel() {
   return (
     <div className="explorer-comparison">
       <div className="explorer-comparison__head">
-        <span>CRITERION PARAMETERS MATRIX</span>
+        <span>What matters</span>
         <span className="explorer-comparison__beleh">
           <span className="explorer-comparison__beleh-icon" aria-hidden />
-          BELEH_CORE_GATEWAY
+          Beleh
         </span>
-        <span>TRADITIONAL LEGACY BI</span>
+        <span>Traditional BI</span>
       </div>
       {COMPARISON_ROWS.map((row) => (
         <div key={row.criterion} className="explorer-comparison__row">

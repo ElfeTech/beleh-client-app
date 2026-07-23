@@ -187,13 +187,114 @@ export interface IntentRequest {
   dataset_id: string | null;
 }
 
-export interface ChatWorkflowResponse {
-  intent?: IntentMetadata;
-  execution?: ExecutionMetadata;
-  visualization?: VisualizationRecommendation | null;
-  insight?: InsightResponse | null;
-  session_id?: string;
-  message_id?: string;
+export type ArtifactType =
+  | 'kpi'
+  | 'table'
+  | 'bar'
+  | 'line'
+  | 'doughnut'
+  | 'pie'
+  | 'insight'
+  | 'action_group'
+  | 'filter_bar'
+  | 'empty_state'
+  | 'error';
+
+export type ChartArtifactType = 'bar' | 'line' | 'doughnut' | 'pie';
+
+export type ActionStyle = 'primary' | 'secondary' | 'ghost';
+export type ActionKind = 'ask' | 'run_tool' | 'navigate';
+
+export interface KpiMetric {
+  label: string;
+  value: string;
+  sub?: string | null;
+  delta_pct?: number | null;
+}
+
+export interface KpiData {
+  metrics: KpiMetric[];
+}
+
+export interface TableData {
+  columns: string[];
+  rows: unknown[][];
+  page_size?: number;
+}
+
+export interface ChartDataset {
+  label: string;
+  data: number[];
+}
+
+export interface ChartData {
+  labels: string[];
+  datasets: ChartDataset[];
+  source_tool_call_id?: string | null;
+}
+
+export interface InsightData {
+  bullets: string[];
+  limitations?: string | null;
+  confidence?: number | null;
+}
+
+export interface ActionItem {
+  id: string;
+  label: string;
+  style?: ActionStyle;
+  kind?: ActionKind;
+  payload?: Record<string, unknown>;
+}
+
+export interface ActionGroupData {
+  actions: ActionItem[];
+}
+
+export interface FilterOption {
+  id: string;
+  label: string;
+  value: string;
+}
+
+export interface FilterBarData {
+  filters: FilterOption[];
+}
+
+export interface EmptyStateData {
+  message: string;
+}
+
+export interface ErrorData {
+  message: string;
+  code?: string | null;
+}
+
+export interface UiArtifact {
+  id: string;
+  type: ArtifactType;
+  title: string;
+  version: number;
+  data: Record<string, unknown>;
+}
+
+export interface AssistantTurnMeta {
+  model?: string | null;
+  tools_used?: string[];
+  latency_ms?: number | null;
+  row_count?: number | null;
+  /** SQL panels finalized; missing → treat as 1 for older messages */
+  panel_count?: number | null;
+  validation_warnings?: string[];
+}
+
+export interface AssistantTurnResponse {
+  message_id?: string | null;
+  role: 'assistant';
+  text: string;
+  artifacts: UiArtifact[];
+  meta: AssistantTurnMeta;
+  session_id?: string | null;
 }
 
 export interface QueryResult {
@@ -214,8 +315,8 @@ export interface SortingConfig {
   order: 'ascending' | 'descending';
 }
 
+/** Legacy chart encoding shape used by older chart components */
 export interface VisualizationRecommendation {
-  // New backend format uses 'type', old format uses 'visualization_type'
   type?:
     | 'line'
     | 'multiline'
@@ -226,7 +327,7 @@ export interface VisualizationRecommendation {
     | 'pie'
     | 'table'
     | 'auto';
-  visualization_type?: // Backend format (lowercase with underscores)
+  visualization_type?:
     | 'line'
     | 'multiline'
     | 'bar'
@@ -236,7 +337,6 @@ export interface VisualizationRecommendation {
     | 'pie'
     | 'table'
     | 'auto'
-    // Legacy frontend format (uppercase with underscores) - for backward compatibility
     | 'BAR_CHART'
     | 'LINE_CHART'
     | 'PIE_CHART'
@@ -249,7 +349,6 @@ export interface VisualizationRecommendation {
     | 'NONE';
   title: string;
   description: string;
-  // New backend format uses 'dimensions', old format uses 'encoding'
   dimensions?: {
     x?: string;
     y?: string;
@@ -277,27 +376,6 @@ export interface VisualizationRecommendation {
   confidence?: number;
 }
 
-export interface SupportingFact {
-  [key: string]: any;
-}
-
-export interface InsightUsage {
-  prompt_tokens?: number;
-  completion_tokens?: number;
-  total_tokens?: number;
-  model_id?: string;
-}
-
-export interface InsightResponse {
-  summary: string;
-  key_insights: string[];
-  supporting_facts?: SupportingFact[];
-  limitations: string;
-  confidence: number;
-  suggested_next_prompts?: string[];
-  usage?: InsightUsage;
-}
-
 // Chat Session Types
 export interface ChatSessionCreate {
   title?: string;
@@ -314,37 +392,10 @@ export interface ChatSessionRead {
   is_deleted: boolean;
 }
 
-// Message metadata from API
-export interface IntentMetadata {
-  intent: string;
-  confidence: number;
-  entities: any;
-  visualization: string;
-  clarification_needed: boolean;
-  clarification_message?: string;
-}
-
-export interface ExecutionMetadata {
-  status: string;
-  execution_time_ms: number;
-  row_count: number;
-  columns: Array<{ name: string; type: string }>;
-  rows: Record<string, any>[];
-  cache_hit: boolean;
-  visualization_hint: string | null;
-  error_type: string | null;
-  message: string | null;
-  /** Compiled SQL returned by the analytical engine when available */
-  sql_query?: string | null;
-}
-
+/** Persisted assistant turn metadata (history rehydrate) */
 export interface ChatMessageMetadata {
-  intent?: IntentMetadata;
-  execution?: ExecutionMetadata;
-  visualization?: VisualizationRecommendation;
-  insight?: InsightResponse;
-  session_id?: string;
-  message_id?: string;
+  artifacts?: UiArtifact[];
+  meta?: AssistantTurnMeta;
 }
 
 export interface ChatMessageRead {

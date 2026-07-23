@@ -31,9 +31,9 @@ export function LandingNav({ isScrolled, onSectionSelect }: LandingNavProps) {
           <img src={logo} alt="Beleh" className="landing-nav__logo" />
           <div className="landing-nav__brand-text">
             <span className="landing-nav__name">beleh</span>
-            <span className="landing-nav__tagline">ASK. ANALYZE. DECIDE.</span>
+            <span className="landing-nav__tagline">ASK · ANALYZE · DECIDE</span>
           </div>
-          <span className="landing-nav__workspace-pill">WORKSPACE</span>
+          <span className="landing-nav__workspace-pill">Workspace</span>
         </button>
 
         <div className={`landing-nav__menu ${mobileOpen ? 'landing-nav__menu--open' : ''}`}>
@@ -50,7 +50,7 @@ export function LandingNav({ isScrolled, onSectionSelect }: LandingNavProps) {
           ))}
           <span className="landing-nav__uptime">
             <span className="landing-nav__uptime-dot" />
-            99.9% UPTIME CLUSTERS
+            99.9% uptime
           </span>
         </div>
 
@@ -60,14 +60,14 @@ export function LandingNav({ isScrolled, onSectionSelect }: LandingNavProps) {
             className="landing-nav__sign-in"
             onClick={() => navigate('/signin')}
           >
-            SIGN_IN
+            Sign in
           </button>
           <button
             type="button"
             className="landing-btn landing-btn--gradient"
             onClick={() => navigate('/signup')}
           >
-            LAUNCH CONSOLE
+            Start free
             <ChevronRight size={16} strokeWidth={2.5} />
           </button>
           <button

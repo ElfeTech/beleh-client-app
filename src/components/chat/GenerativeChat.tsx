@@ -11,8 +11,8 @@ import { AssistantAnalysisCard } from './AssistantAnalysisCard';
 import { ChartVisualization } from './ChartVisualization';
 import { SuggestedPrompts } from './SuggestedPrompts';
 import { ChatWelcome } from './ChatWelcome';
-import { workflowHasRichUi } from '../../utils/responseViewAvailability';
-import { getWorkspaceSourceContext, countSchemaTables } from '../../utils/datasourceDisplay';
+import { turnHasRichUi } from '../../utils/responseViewAvailability';
+import { countSchemaTables } from '../../utils/datasourceDisplay';
 import { ChatFailureCard } from './ChatFailureCard';
 import { getWorkflowFailure, formatChatRequestError } from '../../utils/chatWorkflowStatus';
 import type { WorkflowFailureInfo } from '../../utils/chatWorkflowStatus';
@@ -24,7 +24,10 @@ import { useChatSession } from '../../context/ChatSessionContext';
 import { useAuth } from '../../context/useAuth';
 import { useMessages } from '../../hooks/useApiData';
 import { apiClient } from '../../services/apiClient';
-import type { ChatMessageRead, ChatWorkflowResponse } from '../../types/api';
+import type { ChatMessageMetadata, ChatMessageRead } from '../../types/api';
+import { getAskPromptsFromArtifacts } from '../../utils/artifactAdapters';
+import { MarkdownText } from '../MarkdownText';
+import { CopyTextButton } from './CopyTextButton';
 
 interface Message {
   id: string;
@@ -77,11 +80,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     () => countSchemaTables(selectedDatasourceId, datasources, connectors),
     [selectedDatasourceId, datasources, connectors],
   );
-
-  const schemaTargetLabel = useMemo(() => {
-    const ctx = getWorkspaceSourceContext(selectedDatasourceId, datasources, connectors);
-    return ctx.kind !== 'general' ? ctx.displayName : null;
-  }, [selectedDatasourceId, datasources, connectors]);
 
   const userInitial = useMemo(() => {
     const name = user?.displayName?.trim() || user?.email?.split('@')[0] || 'U';
@@ -303,17 +301,16 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         );
 
         const workflowFailure = getWorkflowFailure(response);
+        const turnMeta: ChatMessageMetadata = {
+          artifacts: response.artifacts ?? [],
+          meta: response.meta ?? {},
+        };
         const assistantMessage: Message = workflowFailure
           ? {
               id: response.message_id || (Date.now() + 1).toString(),
               role: 'assistant',
-              content: response.insight?.summary || workflowFailure.detail,
-              metadata: {
-                intent: response.intent,
-                execution: response.execution,
-                visualization: response.visualization,
-                insight: response.insight,
-              },
+              content: response.text || workflowFailure.detail,
+              metadata: turnMeta,
               failure: workflowFailure,
               retryPrompt: trimmed,
               timestamp: new Date(),
@@ -322,13 +319,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
           : {
               id: response.message_id || (Date.now() + 1).toString(),
               role: 'assistant',
-              content: response.insight?.summary || "I've analyzed the data.",
-              metadata: {
-                intent: response.intent,
-                execution: response.execution,
-                visualization: response.visualization,
-                insight: response.insight,
-              },
+              content: response.text || "I've analyzed the data.",
+              metadata: turnMeta,
               timestamp: new Date(),
               status: 'sent',
             };
@@ -419,9 +411,9 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     for (let i = localMessages.length - 1; i >= 0; i--) {
       const m = localMessages[i];
       if (m.role !== 'assistant' || m.id === 'welcome') continue;
-      const prompts = (m.metadata as ChatWorkflowResponse | undefined)?.insight
-        ?.suggested_next_prompts;
-      return prompts?.length ? m.id : null;
+      const meta = m.metadata as ChatMessageMetadata | undefined;
+      const prompts = getAskPromptsFromArtifacts(meta?.artifacts ?? []);
+      return prompts.length ? m.id : null;
     }
     return null;
   }, [localMessages]);
@@ -481,6 +473,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                         </div>
                       </div>
                       <div className="user-request__header">
+                        <CopyTextButton text={msg.content} label="prompt" />
                         <span className="user-request__time">
                           {msg.timestamp.toLocaleTimeString([], {
                             hour: '2-digit',
@@ -521,34 +514,42 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
 
                       {!msg.failure && msg.metadata ? (
                         (() => {
-                          const workflow = msg.metadata as ChatWorkflowResponse;
-                          if (workflowHasRichUi(workflow)) {
+                          const meta = msg.metadata as ChatMessageMetadata;
+                          if (turnHasRichUi(meta)) {
                             return (
                               <AssistantAnalysisCard
                                 key={msg.id}
-                                response={workflow}
-                                summary={msg.content}
+                                text={msg.content}
+                                artifacts={meta.artifacts ?? []}
+                                meta={meta.meta}
                                 timestamp={msg.timestamp}
-                                schemaTarget={schemaTargetLabel}
+                                onAsk={(prompt) => void sendMessage(prompt)}
+                                disabled={isLoading}
                               />
                             );
                           }
                           return (
                             <>
                               {msg.content ? (
-                                <p className="message-plain message-plain--assistant leading-relaxed whitespace-pre-wrap">
-                                  {msg.content}
-                                </p>
+                                <div className="message-plain message-plain--assistant leading-relaxed">
+                                  <div className="message-plain__toolbar">
+                                    <CopyTextButton text={msg.content} label="response" />
+                                  </div>
+                                  <MarkdownText>{msg.content}</MarkdownText>
+                                </div>
                               ) : null}
-                              <ChartVisualization response={workflow} />
+                              <ChartVisualization artifacts={meta.artifacts ?? []} />
                             </>
                           );
                         })()
                       ) : !msg.failure ? (
                         msg.content ? (
-                          <p className="message-plain message-plain--assistant leading-relaxed whitespace-pre-wrap">
-                            {msg.content}
-                          </p>
+                          <div className="message-plain message-plain--assistant leading-relaxed">
+                            <div className="message-plain__toolbar">
+                              <CopyTextButton text={msg.content} label="response" />
+                            </div>
+                            <MarkdownText>{msg.content}</MarkdownText>
+                          </div>
                         ) : null
                       ) : null}
 
@@ -562,9 +563,9 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                         !msg.failure &&
                         msg.id === latestAssistantWithSuggestionsId &&
                         (() => {
-                          const suggested = (msg.metadata as ChatWorkflowResponse | undefined)
-                            ?.insight?.suggested_next_prompts;
-                          if (!suggested?.length) return null;
+                          const meta = msg.metadata as ChatMessageMetadata | undefined;
+                          const suggested = getAskPromptsFromArtifacts(meta?.artifacts ?? []);
+                          if (!suggested.length) return null;
                           return (
                             <SuggestedPrompts
                               prompts={suggested}

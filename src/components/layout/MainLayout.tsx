@@ -7,6 +7,7 @@ import { UsageWarningBanner } from '../usage/UsageWarningBanner';
 import BottomNav from './BottomNav';
 import { cn } from '../../lib/utils';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { SupportHelpBubble } from '../support/SupportHelpBubble';
 
 export function MainLayout() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -142,6 +143,8 @@ export function MainLayout() {
         </main>
         {isMobile && workspaceIdFromPath ? <BottomNav workspaceId={workspaceIdFromPath} /> : null}
       </div>
+
+      <SupportHelpBubble elevateForBottomNav={Boolean(isMobile && workspaceIdFromPath)} />
     </div>
   );
 }

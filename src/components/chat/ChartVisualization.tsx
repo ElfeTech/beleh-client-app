@@ -1,35 +1,36 @@
-import type { ChatWorkflowResponse } from '../../types/api';
+import type { UiArtifact } from '../../types/api';
 import { getResponseViewAvailability } from '../../utils/responseViewAvailability';
+import { asEmptyStateData, asErrorData } from '../../utils/artifactAdapters';
 import './ChartVisualization.css';
 
 interface ChartVisualizationProps {
-  response: ChatWorkflowResponse;
+  artifacts: UiArtifact[];
 }
 
-/** Legacy/error/clarification-only visualization shell */
-export function ChartVisualization({ response }: ChartVisualizationProps) {
-  const { execution, intent } = response;
-  const hasResults = execution && execution.row_count > 0;
-  const needsClarification = intent?.clarification_needed && intent.clarification_message;
-  const isExecutionFailed = execution?.status === 'FAILED' || execution?.status === 'ERROR';
-  const availability = getResponseViewAvailability(response);
+/** Fallback shell when there is no rich analysis card (text-only / empty / error). */
+export function ChartVisualization({ artifacts }: ChartVisualizationProps) {
+  const availability = getResponseViewAvailability(artifacts);
 
   if (availability.availableViews.length > 0) {
     return null;
   }
 
-  if (needsClarification && (!hasResults || isExecutionFailed)) {
+  const errorArt = artifacts.find((a) => a.type === 'error');
+  if (errorArt) {
+    const { message } = asErrorData(errorArt.data);
     return (
-      <p className="message-plain message-plain--assistant leading-relaxed">
-        {intent?.clarification_message}
+      <p className="message-plain message-plain--assistant leading-relaxed text-[color:var(--error)]">
+        {message}
       </p>
     );
   }
 
-  if (execution && execution.status === 'FAILED' && execution.message) {
+  const emptyArt = artifacts.find((a) => a.type === 'empty_state');
+  if (emptyArt) {
+    const { message } = asEmptyStateData(emptyArt.data);
     return (
-      <p className="message-plain message-plain--assistant leading-relaxed text-[color:var(--error)]">
-        {execution.message}
+      <p className="message-plain message-plain--assistant leading-relaxed text-[color:var(--text-muted)]">
+        {message}
       </p>
     );
   }

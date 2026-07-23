@@ -1,4 +1,4 @@
-import type { ChatWorkflowResponse } from '../../types/api';
+import type { AssistantTurnResponse } from '../../types/api';
 import { ChartVisualization } from './ChartVisualization';
 import './ChatMessage.css';
 
@@ -7,7 +7,7 @@ interface ChatMessageProps {
     id: string;
     type: 'user' | 'ai';
     content: string;
-    response?: ChatWorkflowResponse;
+    response?: AssistantTurnResponse;
     timestamp: Date;
     isLoading?: boolean;
     status?: 'sending' | 'sent' | 'error';
@@ -18,6 +18,7 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message, userInitials, processingStatus }: ChatMessageProps) {
   const isUser = message.type === 'user';
+  const hasErrorArtifact = message.response?.artifacts?.some((a) => a.type === 'error');
 
   return (
     <div className={`message ${message.type}`}>
@@ -47,33 +48,33 @@ export function ChatMessage({ message, userInitials, processingStatus }: ChatMes
         )}
       </div>
       <div className={`message-content ${message.isLoading ? 'loading' : ''}`}>
-        {(message.content || message.isLoading) &&
-          message.response?.execution?.status !== 'FAILED' && (
-            <div className="message-bubble">
-              {message.isLoading ? (
-                <div className="loading-status-container">
-                  <div className="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  {processingStatus && (
-                    <span className="loading-status-text">{processingStatus}</span>
-                  )}
+        {(message.content || message.isLoading) && !hasErrorArtifact && (
+          <div className="message-bubble">
+            {message.isLoading ? (
+              <div className="loading-status-container">
+                <div className="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
                 </div>
-              ) : (
-                <>
-                  {message.content}
-                  {isUser && message.status === 'sending' && (
-                    <span className="status-indicator sending">...</span>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+                {processingStatus && (
+                  <span className="loading-status-text">{processingStatus}</span>
+                )}
+              </div>
+            ) : (
+              <>
+                {message.content}
+                {isUser && message.status === 'sending' && (
+                  <span className="status-indicator sending">...</span>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
-        {/* AI Response with Visualization */}
-        {!isUser && message.response && <ChartVisualization response={message.response} />}
+        {!isUser && message.response && (
+          <ChartVisualization artifacts={message.response.artifacts ?? []} />
+        )}
       </div>
     </div>
   );

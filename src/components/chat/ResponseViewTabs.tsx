@@ -1,30 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutGrid, BarChart3, Terminal } from 'lucide-react';
-import type { ChatWorkflowResponse } from '../../types/api';
+import { LayoutGrid, BarChart3 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import {
-  getCompiledSql,
   getResponseViewAvailability,
   type ResponseViewId,
 } from '../../utils/responseViewAvailability';
+import type { UiArtifact } from '../../types/api';
 import { TableSchemaView } from './TableSchemaView';
 import { InteractivePlotView } from './InteractivePlotView';
-import { SqlInspectorPanel } from './SqlInspectorPanel';
 import './ResponseViewTabs.css';
 
 const TAB_CONFIG: Record<ResponseViewId, { label: string; icon: typeof LayoutGrid }> = {
   table: { label: 'Table schema matrix', icon: LayoutGrid },
   plot: { label: 'Interactive plot', icon: BarChart3 },
-  sql: { label: 'Compiled SQL', icon: Terminal },
 };
 
 interface ResponseViewTabsProps {
-  response: ChatWorkflowResponse;
-  schemaTarget?: string | null;
+  artifacts: UiArtifact[];
+  filterValue?: string | null;
 }
 
-export function ResponseViewTabs({ response, schemaTarget }: ResponseViewTabsProps) {
-  const availability = useMemo(() => getResponseViewAvailability(response), [response]);
+export function ResponseViewTabs({ artifacts, filterValue }: ResponseViewTabsProps) {
+  const availability = useMemo(() => getResponseViewAvailability(artifacts), [artifacts]);
   const { availableViews, defaultView } = availability;
 
   const [activeView, setActiveView] = useState<ResponseViewId>(
@@ -33,17 +30,25 @@ export function ResponseViewTabs({ response, schemaTarget }: ResponseViewTabsPro
 
   useEffect(() => {
     if (defaultView) setActiveView(defaultView);
-  }, [defaultView, response.message_id, response.session_id]);
+  }, [defaultView, artifacts]);
 
   const resolvedView = availableViews.includes(activeView)
     ? activeView
     : (defaultView ?? availableViews[0]);
 
-  const execution = response.execution;
-  const rows = (execution?.rows ?? []) as Record<string, unknown>[];
-  const columns =
-    execution?.columns?.map((c) => c.name) ?? (rows.length > 0 ? Object.keys(rows[0]) : []);
-  const sql = getCompiledSql(response);
+  const filteredRows = useMemo(() => {
+    const rows = availability.tableRows;
+    const columns = availability.tableColumns;
+    if (!filterValue) return rows;
+    const q = filterValue.toLowerCase();
+    return rows.filter((row) =>
+      columns.some((col) =>
+        String(row[col] ?? '')
+          .toLowerCase()
+          .includes(q),
+      ),
+    );
+  }, [availability.tableRows, availability.tableColumns, filterValue]);
 
   if (availableViews.length === 0) {
     return null;
@@ -52,19 +57,17 @@ export function ResponseViewTabs({ response, schemaTarget }: ResponseViewTabsPro
   const panel = (() => {
     switch (resolvedView) {
       case 'table':
-        return <TableSchemaView columns={columns} rows={rows} />;
+        return <TableSchemaView columns={availability.tableColumns} rows={filteredRows} />;
       case 'plot':
-        return response.visualization ? (
+        return availability.chartData && availability.chartType ? (
           <InteractivePlotView
-            response={response}
-            columns={columns}
-            rows={rows}
+            chartType={availability.chartType}
+            chartData={availability.chartData}
+            title={availability.chartTitle}
             compatiblePlotTypes={availability.compatiblePlotTypes}
             initialChartType={availability.originalChartType}
           />
         ) : null;
-      case 'sql':
-        return sql ? <SqlInspectorPanel sql={sql} schemaTarget={schemaTarget} /> : null;
       default:
         return null;
     }

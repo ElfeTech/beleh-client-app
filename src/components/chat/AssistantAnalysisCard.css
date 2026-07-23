@@ -15,6 +15,15 @@
   margin-bottom: var(--space-3);
 }
 
+.assistant-analysis-card__header-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.assistant-analysis-card__copy {
+  margin-left: auto;
+}
+
 .assistant-analysis-card__avatar {
   width: 2rem;
   height: 2rem;
@@ -45,6 +54,7 @@
   font-size: var(--text-sm);
   line-height: var(--leading-relaxed);
   color: var(--text-secondary);
+  margin-top: var(--space-4);
   margin-bottom: var(--space-3);
 }
 

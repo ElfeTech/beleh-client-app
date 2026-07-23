@@ -4,9 +4,9 @@ export function LandingStatsBand() {
   return (
     <section className="landing-stats" id="metrics">
       <div className="landing-stats__telemetry">
-        <span>12.8ms EXEC_LATENCY</span>
-        <span>SOC-2 SECURITY_ISOL</span>
-        <span>0 SQL INTERFACE_DRIFT</span>
+        <span>Fast answers</span>
+        <span>Enterprise-ready security</span>
+        <span>No SQL required</span>
       </div>
       <div className="landing-stats__grid">
         {LANDING_STATS.map((stat) => {

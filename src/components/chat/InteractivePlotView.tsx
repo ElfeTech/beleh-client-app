@@ -1,71 +1,50 @@
 import { useMemo, useState } from 'react';
-import type { ChatWorkflowResponse, VisualizationRecommendation } from '../../types/api';
-import { chartTypeToBackendFormat, type ChartType } from '../../utils/chartCompatibility';
-import { adaptVisualizationData } from '../../utils/visualizationAdapter';
-import { ChartRenderer } from './charts/ChartRenderer';
+
+import type { ChartArtifactType, ChartData } from '../../types/api';
+import { chartDataToSeries } from '../../utils/artifactAdapters';
+import type { ChartType } from '../../utils/chartCompatibility';
+import { ArtifactChart } from './artifacts/ArtifactChart';
 import { LabelWidgetCard } from './LabelWidgetCard';
-import { extractScalarCellData } from '../../utils/scalarCellData';
 import { cn } from '../../lib/utils';
 import './InteractivePlotView.css';
 
 interface InteractivePlotViewProps {
-  response: ChatWorkflowResponse;
-  columns: string[];
-  rows: Record<string, unknown>[];
+  chartType: ChartArtifactType;
+  chartData: ChartData;
+  title?: string;
   compatiblePlotTypes: ChartType[];
   initialChartType: ChartType;
 }
 
-function buildVisualizationForType(
-  base: VisualizationRecommendation,
-  chartType: ChartType,
-): VisualizationRecommendation {
-  const newType = chartTypeToBackendFormat(chartType) as VisualizationRecommendation['type'];
-  return {
-    ...base,
-    type: newType,
-    visualization_type: newType,
-  };
+function toArtifactType(t: ChartType): ChartArtifactType {
+  if (t === 'line') return 'line';
+  if (t === 'pie') return 'pie';
+  return 'bar';
 }
 
-function HorizontalBarPlot({
-  visualization,
-  rows,
-}: {
-  visualization: VisualizationRecommendation;
-  rows: Record<string, unknown>[];
-}) {
-  const formatted = useMemo(() => {
-    try {
-      return adaptVisualizationData(visualization, rows as Record<string, any>[]);
-    } catch {
-      return null;
-    }
-  }, [visualization, rows]);
-
-  if (!formatted) {
+function HorizontalBarPlot({ chartData }: { chartData: ChartData }) {
+  const { points } = chartDataToSeries(chartData);
+  if (!points.length) {
     return (
-      <p className="text-sm text-[color:var(--text-muted)]">
-        Unable to render plot for this encoding.
-      </p>
+      <p className="text-sm text-[color:var(--text-muted)]">Unable to render plot for this data.</p>
     );
   }
 
-  const max = Math.max(...formatted.chartData.map((d) => d.value), 1);
-  const items = [...formatted.chartData].sort((a, b) => b.value - a.value).slice(0, 12);
+  const max = Math.max(...points.map((d) => Number(d.value) || 0), 1);
+  const items = [...points].sort((a, b) => Number(b.value) - Number(a.value)).slice(0, 12);
 
   return (
     <div className="interactive-plot__bars">
       {items.map((item) => (
-        <div key={String(item.rawName)} className="interactive-plot__row">
-          <span className="interactive-plot__row-label" title={item.tooltipName}>
+        <div key={String(item.tooltipName)} className="interactive-plot__row">
+          <span className="interactive-plot__row-label" title={String(item.tooltipName)}>
             {item.name}
           </span>
-          <span className="interactive-plot__row-value">{item.displayValue}</span>
+          <span className="interactive-plot__row-value">{item.tooltipValue}</span>
           <div className="interactive-plot__bar-track">
             <div
               className="interactive-plot__bar-fill"
-              style={{ width: `${(item.value / max) * 100}%` }}
+              style={{ width: `${(Number(item.value) / max) * 100}%` }}
             />
           </div>
         </div>
@@ -75,42 +54,50 @@ function HorizontalBarPlot({
 }
 
 export function InteractivePlotView({
-  response,
-  columns,
-  rows,
+  chartType,
+  chartData,
+  title,
   compatiblePlotTypes,
   initialChartType,
 }: InteractivePlotViewProps) {
-  const visualization = response.visualization!;
-  const scalarCell = useMemo(
-    () => extractScalarCellData(rows, columns, visualization),
-    [rows, columns, visualization],
-  );
+  const isScalarKpi =
+    chartData.labels.length === 1 &&
+    chartData.datasets.length === 1 &&
+    chartData.datasets[0].data.length === 1;
 
-  const plotTypes = compatiblePlotTypes.length > 0 ? compatiblePlotTypes : [initialChartType];
-  const [chartType, setChartType] = useState<ChartType>(
+  const plotTypes =
+    compatiblePlotTypes.length > 0
+      ? compatiblePlotTypes.filter((t) => t === 'bar' || t === 'line' || t === 'pie')
+      : [initialChartType];
+
+  const [selectedType, setSelectedType] = useState<ChartType>(
     plotTypes.includes(initialChartType) ? initialChartType : plotTypes[0],
   );
 
-  const modifiedViz = useMemo(
-    () => buildVisualizationForType(visualization, chartType),
-    [visualization, chartType],
-  );
+  const activeArtifactType = useMemo(() => {
+    if (chartType === 'doughnut' && selectedType === 'pie') return 'doughnut' as const;
+    return toArtifactType(selectedType);
+  }, [chartType, selectedType]);
 
-  const xField = visualization.encoding?.x?.field || visualization.dimensions?.x || 'category';
-  const yField = visualization.encoding?.y?.field || visualization.dimensions?.y || 'value';
-  const subtitle = scalarCell ? 'Single metric result' : `Auto-fitted to ${xField} vs ${yField}`;
+  const yLabel = chartData.datasets[0]?.label || 'value';
+  const subtitle = isScalarKpi
+    ? 'Single metric result'
+    : title
+      ? title
+      : `${chartData.labels.length} categories · ${yLabel}`;
 
-  const useHorizontalBars = chartType === 'bar' && !scalarCell;
+  const useHorizontalBars = selectedType === 'bar' && !isScalarKpi;
 
-  if (scalarCell) {
+  if (isScalarKpi) {
+    const label = chartData.labels[0] || yLabel;
+    const value = String(chartData.datasets[0].data[0] ?? '');
     return (
       <div className="interactive-plot">
         <div className="interactive-plot__header">
           <p className="interactive-plot__label">Metric</p>
           <p className="interactive-plot__subtitle">{subtitle}</p>
         </div>
-        <LabelWidgetCard label={scalarCell.label} value={scalarCell.value} />
+        <LabelWidgetCard label={label} value={value} />
       </div>
     );
   }
@@ -130,9 +117,9 @@ export function InteractivePlotView({
               type="button"
               className={cn(
                 'interactive-plot__chip',
-                chartType === t && 'interactive-plot__chip--active',
+                selectedType === t && 'interactive-plot__chip--active',
               )}
-              onClick={() => setChartType(t)}
+              onClick={() => setSelectedType(t)}
             >
               {t.replace('_', ' ')}
             </button>
@@ -141,14 +128,10 @@ export function InteractivePlotView({
       ) : null}
 
       {useHorizontalBars ? (
-        <HorizontalBarPlot visualization={modifiedViz} rows={rows} />
+        <HorizontalBarPlot chartData={chartData} />
       ) : (
         <div className="interactive-plot__chart-wrap">
-          <ChartRenderer
-            data={rows as Record<string, any>[]}
-            visualization={modifiedViz}
-            columns={columns}
-          />
+          <ArtifactChart type={activeArtifactType} data={chartData} />
         </div>
       )}
     </div>

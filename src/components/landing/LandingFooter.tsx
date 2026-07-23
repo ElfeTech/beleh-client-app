@@ -11,8 +11,8 @@ export function LandingFooter() {
           © {new Date().getFullYear()} ElfeTech. All rights reserved.
         </p>
         <div className="landing-footer__badges">
-          <span className="landing-footer__badge">SOC_2_COMPLIANT</span>
-          <span className="landing-footer__badge">GDPR_READY</span>
+          <span className="landing-footer__badge">SOC 2</span>
+          <span className="landing-footer__badge">GDPR ready</span>
         </div>
       </div>
     </footer>

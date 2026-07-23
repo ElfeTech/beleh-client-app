@@ -12,18 +12,18 @@
 .explorer-engine__title {
   font-size: clamp(1.75rem, 4vw, 2.5rem);
   font-weight: 800;
-  color: #f8fafc;
+  color: var(--lp-text, #0f1c2e);
   margin: 1rem 0 0.5rem;
   letter-spacing: -0.02em;
 }
 
 .explorer-engine__subtitle {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.7rem;
-  letter-spacing: 0.06em;
-  color: #64748b;
+  font-size: 0.95rem;
+  line-height: 1.55;
+  color: var(--lp-muted, #5a6b82);
   max-width: 36rem;
   margin: 0 auto;
+  font-weight: 450;
 }
 
 .explorer-engine__tabs {
@@ -31,58 +31,59 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.35rem;
-  padding: 0.35rem;
+  padding: 0.4rem;
   margin-bottom: 1.25rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(15, 23, 42, 0.6);
+  border-radius: 0.85rem;
+  border: 1px solid var(--lp-border, rgba(15, 40, 70, 0.1));
+  background: var(--lp-surface, #fff);
+  box-shadow: 0 4px 14px rgba(15, 40, 70, 0.04);
 }
 
 .explorer-engine__tab {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  padding: 0.55rem 0.85rem;
+  padding: 0.55rem 0.9rem;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: 0.6rem;
   background: transparent;
-  color: #94a3b8;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  color: var(--lp-muted, #5a6b82);
+  font-family: inherit;
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
   cursor: pointer;
   transition:
     color 0.2s,
     border-color 0.2s,
-    box-shadow 0.2s;
+    background 0.2s;
 }
 
 .explorer-engine__tab:hover {
-  color: #e2e8f0;
+  color: var(--lp-text, #0f1c2e);
+  background: rgba(15, 40, 70, 0.04);
 }
 
 .explorer-engine__tab--active {
-  color: #f8fafc;
-  border-color: rgba(255, 255, 255, 0.35);
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.25);
-  background: rgba(30, 41, 59, 0.8);
+  color: #0f766e;
+  border-color: rgba(13, 148, 136, 0.3);
+  background: rgba(13, 148, 136, 0.08);
 }
 
 .explorer-engine__panel {
   border-radius: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 14, 23, 0.85);
+  border: 1px solid var(--lp-border, rgba(15, 40, 70, 0.1));
+  background: var(--lp-surface, #fff);
   padding: 1.25rem 1.5rem 1.5rem;
   min-height: 320px;
+  box-shadow: 0 10px 28px rgba(15, 40, 70, 0.05);
 }
 
 .explorer-engine__diagnostic {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.65rem;
-  color: #2dd4bf;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #0d9488;
   margin: 0 0 1.25rem;
-  letter-spacing: 0.04em;
 }
 
 .explorer-features {
@@ -96,22 +97,22 @@
   gap: 0.75rem;
   padding: 1rem;
   border-radius: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--lp-border, rgba(15, 40, 70, 0.1));
+  background: #f8fbfe;
 }
 
 .explorer-feature-card h3 {
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #f1f5f9;
+  font-size: 0.8rem;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: var(--lp-text, #0f1c2e);
   margin: 0 0 0.35rem;
 }
 
 .explorer-feature-card p {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  color: var(--lp-muted, #5a6b82);
+  line-height: 1.5;
   margin: 0;
 }
 
@@ -119,52 +120,51 @@
   flex-shrink: 0;
   width: 2.5rem;
   height: 2.5rem;
-  border-radius: 0.5rem;
+  border-radius: 0.55rem;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .explorer-feature-card--blue .explorer-feature-card__icon {
-  background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
 }
 .explorer-feature-card--cyan .explorer-feature-card__icon {
-  background: rgba(6, 182, 212, 0.2);
-  color: #22d3ee;
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+  background: rgba(13, 148, 136, 0.1);
+  color: #0d9488;
 }
 .explorer-feature-card--green .explorer-feature-card__icon {
-  background: rgba(16, 185, 129, 0.2);
-  color: #34d399;
+  background: rgba(16, 185, 129, 0.1);
+  color: #059669;
 }
 .explorer-feature-card--purple .explorer-feature-card__icon {
-  background: rgba(139, 92, 246, 0.2);
-  color: #a78bfa;
+  background: rgba(14, 116, 144, 0.1);
+  color: #0e7490;
 }
 .explorer-feature-card--pink .explorer-feature-card__icon {
-  background: rgba(236, 72, 153, 0.2);
-  color: #f472b6;
+  background: rgba(8, 145, 178, 0.1);
+  color: #0891b2;
 }
 .explorer-feature-card--indigo .explorer-feature-card__icon {
-  background: rgba(99, 102, 241, 0.2);
-  color: #818cf8;
+  background: rgba(29, 78, 216, 0.1);
+  color: #1d4ed8;
 }
 
 .explorer-problems__headline {
-  font-size: 1rem;
+  font-size: 1.05rem;
   font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #f87171;
+  letter-spacing: -0.01em;
+  color: #b91c1c;
   margin: 0 0 0.5rem;
 }
 
 .explorer-problems__sub {
-  font-size: 0.85rem;
-  color: #cbd5e1;
+  font-size: 0.9rem;
+  color: var(--lp-muted, #5a6b82);
   margin: 0 0 1.25rem;
   max-width: 40rem;
+  line-height: 1.55;
 }
 
 .explorer-problems__grid {
@@ -177,44 +177,43 @@
   position: relative;
   padding: 1rem;
   border-radius: 0.75rem;
-  border: 1px solid rgba(248, 113, 113, 0.35);
-  background: rgba(30, 15, 20, 0.4);
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  background: #fff7f7;
 }
 
 .explorer-problem-card__warn {
   position: absolute;
   top: 0.65rem;
   right: 0.65rem;
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.55rem;
+  font-size: 0.65rem;
   font-weight: 700;
-  color: #f87171;
+  color: #dc2626;
 }
 
 .explorer-problem-card__icon {
-  color: #f87171;
+  color: #dc2626;
   margin-bottom: 0.5rem;
 }
 
 .explorer-problem-card h4 {
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #f8fafc;
+  font-size: 0.8rem;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: var(--lp-text, #0f1c2e);
   margin: 0 0 0.35rem;
 }
 
 .explorer-problem-card__stat {
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   font-weight: 800;
-  color: #f87171;
+  color: #dc2626;
   margin: 0 0 0.5rem;
 }
 
 .explorer-problem-card__desc {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  color: var(--lp-muted, #5a6b82);
+  line-height: 1.5;
   margin: 0;
 }
 
@@ -237,7 +236,7 @@
 .explorer-steps__arrow {
   width: 1.5rem;
   height: 2px;
-  background: linear-gradient(90deg, transparent, #334155, transparent);
+  background: linear-gradient(90deg, transparent, #94a3b8, transparent);
   margin: 0 0.25rem;
   flex-shrink: 0;
 }
@@ -246,35 +245,35 @@
   flex: 1;
   padding: 1rem;
   border-radius: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--lp-border, rgba(15, 40, 70, 0.1));
+  background: #f8fbfe;
 }
 
 .explorer-step-card__vector {
-  font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.6rem;
-  color: #2dd4bf;
+  font-size: 0.7rem;
+  font-weight: 650;
+  color: #0d9488;
   display: block;
   margin-bottom: 0.5rem;
 }
 
 .explorer-step-card__icon {
-  color: #94a3b8;
+  color: #64748b;
   margin-bottom: 0.5rem;
 }
 
 .explorer-step-card h4 {
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  color: #f8fafc;
+  font-size: 0.85rem;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: var(--lp-text, #0f1c2e);
   margin: 0 0 0.35rem;
 }
 
 .explorer-step-card p {
-  font-size: 0.75rem;
-  color: #94a3b8;
-  line-height: 1.45;
+  font-size: 0.8rem;
+  color: var(--lp-muted, #5a6b82);
+  line-height: 1.5;
   margin: 0;
 }
 
@@ -284,44 +283,45 @@
   grid-template-columns: 1.2fr 1fr 1fr;
   gap: 0.75rem;
   align-items: center;
-  padding: 0.65rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 0.7rem;
+  padding: 0.7rem 0;
+  border-bottom: 1px solid rgba(15, 40, 70, 0.06);
+  font-size: 0.8rem;
 }
 
 .explorer-comparison__head {
-  font-family: var(--font-mono, ui-monospace, monospace);
   font-weight: 700;
-  letter-spacing: 0.04em;
-  color: #64748b;
+  letter-spacing: 0.01em;
+  color: var(--lp-muted, #5a6b82);
   border-bottom-width: 2px;
+  border-bottom-color: rgba(15, 40, 70, 0.1);
 }
 
 .explorer-comparison__beleh {
   display: flex;
   align-items: center;
   gap: 0.35rem;
-  color: #2dd4bf;
+  color: #0d9488;
 }
 
 .explorer-comparison__beleh-icon {
   width: 0.75rem;
   height: 0.75rem;
   border-radius: 2px;
-  background: linear-gradient(135deg, #06b6d4, #3b82f6);
+  background: linear-gradient(135deg, #0d9488, #2563eb);
 }
 
 .explorer-comparison__criterion {
-  color: #e2e8f0;
+  color: var(--lp-text, #0f1c2e);
+  font-weight: 600;
 }
 
 .explorer-comparison__beleh-val {
   display: flex;
   align-items: flex-start;
   gap: 0.35rem;
-  color: #2dd4bf;
+  color: #0f766e;
   font-weight: 600;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
 }
 
 .explorer-comparison__legacy-val {
@@ -329,7 +329,7 @@
   align-items: flex-start;
   gap: 0.35rem;
   color: #64748b;
-  font-size: 0.65rem;
+  font-size: 0.75rem;
 }
 
 .explorer-feedback {
@@ -341,14 +341,14 @@
 .explorer-feedback-card {
   padding: 1rem;
   border-radius: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid var(--lp-border, rgba(15, 40, 70, 0.1));
+  background: #f8fbfe;
 }
 
 .explorer-feedback-card__quote {
-  font-size: 0.8rem;
-  color: #cbd5e1;
-  line-height: 1.5;
+  font-size: 0.85rem;
+  color: var(--lp-muted, #5a6b82);
+  line-height: 1.55;
   margin: 0 0 1rem;
   font-style: italic;
 }
@@ -363,7 +363,7 @@
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 50%;
-  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+  background: linear-gradient(135deg, #2563eb, #0d9488);
   color: #fff;
   font-size: 0.65rem;
   font-weight: 800;
@@ -374,13 +374,13 @@
 
 .explorer-feedback-card__author strong {
   display: block;
-  font-size: 0.8rem;
-  color: #f8fafc;
+  font-size: 0.85rem;
+  color: var(--lp-text, #0f1c2e);
 }
 
 .explorer-feedback-card__author span {
-  font-size: 0.7rem;
-  color: #64748b;
+  font-size: 0.75rem;
+  color: var(--lp-muted, #5a6b82);
 }
 
 @media (max-width: 640px) {

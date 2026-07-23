@@ -1,13 +1,8 @@
 import { useNavigate } from 'react-router-dom';
-import { Play, ChevronRight } from 'lucide-react';
-import { LiveSimulator } from './LiveSimulator';
+import { ChevronRight } from 'lucide-react';
+import { LandingHelpChat } from './LandingHelpChat';
 
-interface LandingHeroProps {
-  simulatorRunId: number;
-  onSimulateLobby: () => void;
-}
-
-export function LandingHero({ simulatorRunId, onSimulateLobby }: LandingHeroProps) {
+export function LandingHero() {
   const navigate = useNavigate();
 
   return (
@@ -20,7 +15,7 @@ export function LandingHero({ simulatorRunId, onSimulateLobby }: LandingHeroProp
         <div className="landing-hero__copy">
           <span className="landing-pill landing-pill--success">
             <span className="landing-pill__dot" />
-            DATABASE COMPILER ACTIVE
+            Ready for your team
           </span>
 
           <h1 className="landing-hero__title">
@@ -29,39 +24,31 @@ export function LandingHero({ simulatorRunId, onSimulateLobby }: LandingHeroProp
           </h1>
 
           <p className="landing-hero__subtitle">
-            Ask questions in plain English. Get instant answers, beautiful charts, and actionable
-            insights — completely without friction. A modern, lightning-fast replacement for heavy
-            legacy BI tools featuring flexible database mappings.
+            Ask questions in plain English. Get instant answers, clear charts, and actionable
+            insights — without waiting on dashboards or writing SQL. Built for business teams who
+            need answers today.
           </p>
 
           <div className="landing-hero__cta">
             <button
               type="button"
-              className="landing-btn landing-btn--outline"
+              className="landing-btn landing-btn--gradient"
               onClick={() => navigate('/signup')}
             >
-              LAUNCH WORKSPACE
+              Get started free
               <ChevronRight size={18} strokeWidth={2.5} />
-            </button>
-            <button
-              type="button"
-              className="landing-btn landing-btn--ghost"
-              onClick={onSimulateLobby}
-            >
-              <Play size={16} fill="currentColor" />
-              SIMULATE_LOBBY
             </button>
           </div>
 
           <div className="landing-hero__telemetry">
-            <span>12.8ms</span>
-            <span>SOC-2</span>
-            <span>0 SQL</span>
+            <span>Answers in seconds</span>
+            <span>SOC 2 ready</span>
+            <span>No SQL required</span>
           </div>
         </div>
 
         <div className="landing-hero__visual">
-          <LiveSimulator runId={simulatorRunId} />
+          <LandingHelpChat />
         </div>
       </div>
     </section>
