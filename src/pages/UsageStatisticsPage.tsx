@@ -13,6 +13,10 @@ import {
 } from 'recharts';
 import { Activity, Database, Zap, TrendingUp, BarChart3, Layers } from 'lucide-react';
 import { useUsage } from '../context/UsageContext';
+import { useWorkspace } from '../context/WorkspaceContext';
+import { PlanValueCard } from '../components/usage/PlanValueCard';
+import { QuotaUsageGrid } from '../components/usage/QuotaUsageGrid';
+import { SettingsSectionHeader } from '../components/settings/SettingsSectionHeader';
 import { format, parseISO } from 'date-fns';
 import { cn } from '../lib/utils';
 import type { HistoricalUsageResponse } from '../types/usage';
@@ -38,11 +42,11 @@ function TimeRangeControls({
   timeRange,
   onChange,
   disabled,
-}: {
+}: Readonly<{
   timeRange: number;
   onChange: (n: number) => void;
   disabled: boolean;
-}) {
+}>) {
   return (
     <div className="time-range-selector__controls">
       {[7, 30, 90].map((range) => (
@@ -89,14 +93,14 @@ function ChartCard({
   iconClassName,
   plotClassName,
   children,
-}: {
+}: Readonly<{
   title: string;
   subtitle: string;
   icon: React.ReactNode;
   iconClassName: string;
   plotClassName: string;
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <div className="analytics-chart-card">
       <div className="chart-header flex items-center gap-2">
@@ -111,9 +115,15 @@ function ChartCard({
   );
 }
 
-const UsageStatisticsPage: React.FC = () => {
+interface UsageStatisticsPageProps {
+  embedded?: boolean;
+}
+
+const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = false }) => {
   const navigate = useNavigate();
-  const { id: workspaceId } = useParams<{ id: string }>();
+  const { id: routeWorkspaceId } = useParams<{ id: string }>();
+  const { currentWorkspace } = useWorkspace();
+  const workspaceId = routeWorkspaceId ?? currentWorkspace?.id;
   const { currentUsage, getHistoricalUsage } = useUsage();
   const [history, setHistory] = useState<HistoricalUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -178,25 +188,56 @@ const UsageStatisticsPage: React.FC = () => {
   const isInitialLoad = loading && !history;
 
   return (
-    <div className="usage-stats-container analytics-page app-page-root--scroll">
+    <div
+      className={cn(
+        'usage-stats-container analytics-page',
+        embedded ? 'usage-stats-container--embedded' : 'app-page-root--scroll',
+      )}
+    >
       <div className="usage-stats-inner">
-        <header className="usage-stats-header">
-          <div>
-            <div className="usage-stats-header__icon">
-              <TrendingUp className="h-5 w-5" strokeWidth={2} />
+        {embedded ? (
+          <>
+            <SettingsSectionHeader
+              breadcrumbLabel="USAGE ANALYTICS"
+              title="Usage Analytics"
+              description="Detailed breakdown of your analytical consumption and API resource usage."
+              icon={<TrendingUp size={20} strokeWidth={1.75} />}
+            />
+            <div className="usage-stats-embedded-controls">
+              {!isInitialLoad && (
+                <p className="usage-stats-period-label font-mono">{periodLabel}</p>
+              )}
+              <div className="time-range-selector">
+                <span className="app-data-label">Reporting window</span>
+                <TimeRangeControls
+                  timeRange={timeRange}
+                  onChange={setTimeRange}
+                  disabled={loading}
+                />
+              </div>
             </div>
-            <h1 className="app-page-title">Usage Analytics</h1>
-            <p className="app-page-subtitle mt-1">
-              Detailed breakdown of your analytical consumption and API resource usage.
-            </p>
-            {!isInitialLoad && <p className="usage-stats-period-label font-mono">{periodLabel}</p>}
-          </div>
+          </>
+        ) : (
+          <header className="usage-stats-header">
+            <div>
+              <div className="usage-stats-header__icon">
+                <TrendingUp className="h-5 w-5" strokeWidth={2} />
+              </div>
+              <h1 className="app-page-title">Usage Analytics</h1>
+              <p className="app-page-subtitle mt-1">
+                Detailed breakdown of your analytical consumption and API resource usage.
+              </p>
+              {!isInitialLoad && (
+                <p className="usage-stats-period-label font-mono">{periodLabel}</p>
+              )}
+            </div>
 
-          <div className="time-range-selector">
-            <span className="app-data-label">Reporting window</span>
-            <TimeRangeControls timeRange={timeRange} onChange={setTimeRange} disabled={loading} />
-          </div>
-        </header>
+            <div className="time-range-selector">
+              <span className="app-data-label">Reporting window</span>
+              <TimeRangeControls timeRange={timeRange} onChange={setTimeRange} disabled={loading} />
+            </div>
+          </header>
+        )}
 
         {isInitialLoad ? (
           <AnalyticsSkeleton />
@@ -219,6 +260,11 @@ const UsageStatisticsPage: React.FC = () => {
                 </div>
               ))}
             </div>
+
+            <section className="analytics-live-usage analytics-fade-in analytics-stagger-5">
+              <PlanValueCard />
+              <QuotaUsageGrid />
+            </section>
 
             {hasChartData ? (
               <div className="charts-layout analytics-fade-in analytics-stagger-5">
@@ -376,7 +422,7 @@ const UsageStatisticsPage: React.FC = () => {
                     <button
                       type="button"
                       className="px-6 py-2.5 rounded-xl bg-[color:var(--accent-teal-600)] text-white font-bold text-xs uppercase tracking-widest shadow-md hover:opacity-90 transition-all active:scale-[0.98]"
-                      onClick={() => navigate('/settings/billing')}
+                      onClick={() => navigate('/settings/billing?upgrade=1')}
                     >
                       Upgrade Capacity
                     </button>

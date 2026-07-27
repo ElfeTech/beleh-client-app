@@ -10,7 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Check, ChevronDown, Search, Database, FileText, Send } from 'lucide-react';
+import { Check, ChevronDown, Search, Database, FileText, Send, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { DataSourceResponse, ConnectorResponse } from '../../types/api';
 
@@ -19,6 +19,9 @@ export interface ChatComposerProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  /** When waiting for a reply, send becomes stop */
+  isWaiting?: boolean;
+  onStop?: () => void;
   disabled?: boolean;
   datasources: DataSourceResponse[];
   connectors?: ConnectorResponse[];
@@ -64,6 +67,8 @@ export function ChatComposer({
   value,
   onChange,
   onSubmit,
+  isWaiting = false,
+  onStop,
   disabled,
   datasources,
   connectors = [],
@@ -203,7 +208,8 @@ export function ChatComposer({
     [onDatasourceChange],
   );
 
-  const canSend = value.trim().length > 0 && !disabled;
+  const canSend = value.trim().length > 0 && !disabled && !isWaiting;
+  const showStop = isWaiting && typeof onStop === 'function';
 
   const dropdownPanel =
     open &&
@@ -413,7 +419,7 @@ export function ChatComposer({
               ? 'Ask Beleh AI Analyst to query schemas, calculate savings, or produce charts...'
               : 'Ask Beleh AI Analyst to query schemas, calculate savings, or produce charts...'
           }
-          disabled={disabled}
+          disabled={disabled || isWaiting}
           rows={1}
           wrap="soft"
           className={cn(
@@ -422,20 +428,35 @@ export function ChatComposer({
           )}
         />
 
-        <button
-          type="button"
-          onClick={() => canSend && onSubmit()}
-          disabled={!canSend}
-          aria-label="Send message"
-          className={cn(
-            'composer-send-btn self-center shrink-0 flex h-9 w-9 items-center justify-center rounded-xl transition-all active:scale-[0.97]',
-            canSend
-              ? 'composer-send-btn--active text-white shadow-md hover:opacity-95'
-              : 'cursor-not-allowed bg-[color:var(--bg-secondary)] text-[color:var(--text-muted)]',
-          )}
-        >
-          <Send className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-        </button>
+        {showStop ? (
+          <button
+            type="button"
+            onClick={() => onStop?.()}
+            aria-label="Stop generating"
+            title="Stop"
+            className={cn(
+              'composer-send-btn self-center shrink-0 flex h-9 w-9 items-center justify-center rounded-xl transition-all active:scale-[0.97]',
+              'composer-send-btn--active text-white shadow-md hover:opacity-95',
+            )}
+          >
+            <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.25} aria-hidden />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => canSend && onSubmit()}
+            disabled={!canSend}
+            aria-label="Send message"
+            className={cn(
+              'composer-send-btn self-center shrink-0 flex h-9 w-9 items-center justify-center rounded-xl transition-all active:scale-[0.97]',
+              canSend
+                ? 'composer-send-btn--active text-white shadow-md hover:opacity-95'
+                : 'cursor-not-allowed bg-[color:var(--bg-secondary)] text-[color:var(--text-muted)]',
+            )}
+          >
+            <Send className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+          </button>
+        )}
       </div>
 
       {dropdownPanel}

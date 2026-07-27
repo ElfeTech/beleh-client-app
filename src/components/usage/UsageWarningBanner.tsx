@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { useUsage } from '../../context/UsageContext';
 import './UsageWarningBanner.css';
 
@@ -51,9 +52,9 @@ export function UsageWarningBanner() {
       </div>
       <div className="warning-actions">
         {hasWarning('critical') && (
-          <a href="/workspace/1/profile/billing" className="upgrade-link">
+          <Link to="/settings/billing?upgrade=1" className="upgrade-link">
             Upgrade Plan
-          </a>
+          </Link>
         )}
         <button
           onClick={() => setIsDismissed(true)}

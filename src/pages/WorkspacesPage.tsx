@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
+import { writeActiveWorkspaceId } from '../lib/uiMemory';
 import { ContextMenu, type ContextMenuItem } from '../components/common/ContextMenu';
 import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
@@ -123,7 +124,7 @@ export function WorkspacesPage() {
 
   const handleWorkspaceClick = (workspace: WorkspaceResponse) => {
     setCurrentWorkspace(workspace);
-    localStorage.setItem('activeWorkspaceId', workspace.id);
+    writeActiveWorkspaceId(workspace.id);
     navigate(`/workspace/${workspace.id}`);
   };
 

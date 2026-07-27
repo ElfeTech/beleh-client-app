@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
+import { writeActiveWorkspaceId } from '../../lib/uiMemory';
 import './WorkspaceRegionDropdown.css';
 
 export function WorkspaceRegionDropdown() {
@@ -58,7 +59,7 @@ export function WorkspaceRegionDropdown() {
     const workspace = workspaces.find((w) => w.id === workspaceId);
     if (!workspace) return;
     setCurrentWorkspace(workspace);
-    localStorage.setItem('activeWorkspaceId', workspaceId);
+    writeActiveWorkspaceId(workspaceId);
     navigate(`/workspace/${workspaceId}`);
     closeMenu();
   };
@@ -74,7 +75,7 @@ export function WorkspaceRegionDropdown() {
       const created = await apiClient.createWorkspace(token, trimmed);
       await refreshWorkspaces();
       setCurrentWorkspace(created);
-      localStorage.setItem('activeWorkspaceId', created.id);
+      writeActiveWorkspaceId(created.id);
       navigate(`/workspace/${created.id}`);
       toast.success(`Workspace "${trimmed}" created`);
       closeMenu();

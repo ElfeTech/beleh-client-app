@@ -6,12 +6,29 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.usage-stats-container--embedded {
+  height: auto;
+  overflow: visible;
+}
+
+.usage-stats-container--embedded .usage-stats-inner {
+  max-width: none;
+  padding: 0;
+}
+
 .usage-stats-inner {
   padding: var(--space-4) var(--space-4) 5rem;
   max-width: 1300px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+  gap: var(--space-4);
+}
+
+.usage-stats-embedded-controls {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
   gap: var(--space-4);
 }
 
@@ -88,6 +105,12 @@
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--space-2);
+}
+
+.analytics-live-usage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .stat-card {
@@ -295,7 +318,8 @@ html[data-theme='dark'] .analytics-chart-card:hover {
 }
 
 @media (max-width: 640px) {
-  .usage-stats-header {
+  .usage-stats-header,
+  .usage-stats-embedded-controls {
     flex-direction: column;
     align-items: flex-start;
   }

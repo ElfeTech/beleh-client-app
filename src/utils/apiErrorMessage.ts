@@ -53,11 +53,79 @@ export function extractApiErrorDetail(data: unknown): string | null {
   return null;
 }
 
+export function extractApiErrorCode(data: unknown): string | null {
+  if (data == null || typeof data !== 'object') return null;
+  const code = (data as Record<string, unknown>).code;
+  return typeof code === 'string' && code.trim() ? code.trim() : null;
+}
+
 export function formatApiErrorMessage(data: unknown, status?: number): string {
   return (
     extractApiErrorDetail(data) ??
     (status != null ? `HTTP error! status: ${status}` : 'Request failed')
   );
+}
+
+/** Friendly toast copy for stable provider error codes. */
+export function formatProviderErrorToast(code: string | null | undefined, detail: string): string {
+  switch (code) {
+    case 'PROVIDER_NOT_CONFIGURED':
+      return 'Supabase OAuth is not configured on the server.';
+    case 'PROVIDER_STATE_INVALID':
+      return 'OAuth session expired. Please try connecting again.';
+    case 'PROVIDER_TOKEN_EXCHANGE_FAILED':
+      return 'Could not complete Supabase authorization.';
+    case 'PROVIDER_CONNECTION_NOT_FOUND':
+      return 'Organization connection lost. Please reconnect.';
+    case 'PROVIDER_ORG_MISMATCH':
+      return 'Organization does not match this connection.';
+    case 'PROVIDER_PROJECT_NOT_FOUND':
+      return 'That project is no longer visible; try refreshing.';
+    case 'PROVIDER_PROJECT_INACTIVE':
+      return 'That project is not active and cannot be connected.';
+    case 'PROVIDER_FORBIDDEN':
+      return 'You do not have permission for this action.';
+    case 'PROVIDER_WORKSPACE_NOT_FOUND':
+      return 'Workspace not found or you are no longer a member.';
+    case 'PROVIDER_RATE_LIMITED':
+      return 'Too many requests. Please wait a moment and try again.';
+    case 'PROVIDER_CREDENTIALS_DISABLED':
+      return 'Provider credentials are disabled for this environment.';
+    case 'PROVIDER_ANON_KEY_UNAVAILABLE':
+      return 'This project has no anon key available.';
+    default:
+      return detail;
+  }
+}
+
+/** Friendly toast copy for stable billing error codes. */
+export function formatBillingErrorToast(code: string | null | undefined, detail: string): string {
+  switch (code) {
+    case 'BILLING_NOT_CONFIGURED':
+      return 'Billing is not configured on the server. Please try again later.';
+    case 'BILLING_INVALID_PRICE':
+      return 'That plan price is no longer available. Refresh and try again.';
+    case 'BILLING_CHECKOUT_FAILED':
+      return 'Could not start checkout. Please try again.';
+    case 'BILLING_PORTAL_FAILED':
+      return 'Could not open the billing portal. Please try again.';
+    default:
+      return detail;
+  }
+}
+
+export class ApiRequestError extends Error {
+  readonly status?: number;
+  readonly code: string | null;
+  readonly detail: string;
+
+  constructor(message: string, options?: { status?: number; code?: string | null }) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = options?.status;
+    this.code = options?.code ?? null;
+    this.detail = message;
+  }
 }
 
 /**

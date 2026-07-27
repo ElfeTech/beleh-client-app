@@ -14,8 +14,56 @@
   bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
 }
 
+/* Panel only (trigger lives in the mobile top nav) */
+.support-help-bubble--from-header {
+  bottom: max(1rem, env(safe-area-inset-bottom));
+  top: auto;
+}
+
+.support-help-bubble--from-header.support-help-bubble--elevated {
+  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+}
+
 .support-help-bubble > * {
   pointer-events: auto;
+}
+
+.support-help-bubble__header-btn {
+  display: flex;
+  height: 2.75rem;
+  width: 2.75rem;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border-primary);
+  background: var(--ds-surface-muted, var(--bg-secondary));
+  color: var(--text-primary);
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.support-help-bubble__header-btn:hover {
+  color: var(--accent-teal-700, #0f766e);
+  border-color: color-mix(in srgb, var(--accent-teal-500, #14b8a6) 40%, var(--border-primary));
+}
+
+.support-help-bubble__header-btn:active {
+  transform: scale(0.98);
+}
+
+.support-help-bubble__header-btn[aria-expanded='true'] {
+  color: var(--accent-teal-700, #0f766e);
+  border-color: color-mix(in srgb, var(--accent-teal-500, #14b8a6) 45%, var(--border-primary));
+  background: color-mix(
+    in srgb,
+    var(--accent-teal-500, #14b8a6) 10%,
+    var(--ds-surface-muted, #fff)
+  );
 }
 
 .support-help-panel-wrap--hidden {
@@ -367,5 +415,17 @@
   .support-help-panel {
     width: min(100vw - 1.5rem, 24rem);
     height: min(70dvh, 32rem);
+  }
+
+  .support-help-bubble--from-header .support-help-panel {
+    max-height: calc(
+      100dvh - 5.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
+  }
+
+  .support-help-bubble--from-header.support-help-bubble--elevated .support-help-panel {
+    max-height: calc(
+      100dvh - 5.5rem - 4.5rem - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)
+    );
   }
 }

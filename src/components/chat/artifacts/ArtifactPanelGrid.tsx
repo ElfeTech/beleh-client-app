@@ -11,7 +11,7 @@ import './artifacts.css';
 
 interface ArtifactPanelGridProps {
   artifacts: UiArtifact[];
-  /** When true, use 2-column layout on md+ screens. */
+  /** When true, allow a 2-column layout on wide screens (only applies with 2+ panels). */
   multiColumn?: boolean;
 }
 
@@ -19,15 +19,20 @@ export function ArtifactPanelGrid({
   artifacts,
   multiColumn = false,
 }: Readonly<ArtifactPanelGridProps>) {
-  if (artifacts.length === 0) return null;
+  const panels = artifacts.filter((a) => a.type === 'error' || isChartArtifactType(a.type));
+  if (panels.length === 0) return null;
+
+  // meta.panel_count can exceed the panels that actually render; never leave a lone
+  // chart in a two-column track or it renders at half width.
+  const useMultiColumn = multiColumn && panels.length > 1;
 
   return (
     <div
       className={
-        multiColumn ? 'artifact-panel-grid artifact-panel-grid--multi' : 'artifact-panel-grid'
+        useMultiColumn ? 'artifact-panel-grid artifact-panel-grid--multi' : 'artifact-panel-grid'
       }
     >
-      {artifacts.map((artifact) => {
+      {panels.map((artifact) => {
         const key = getArtifactReactKey(artifact);
 
         if (artifact.type === 'error') {
@@ -37,8 +42,6 @@ export function ArtifactPanelGrid({
             </div>
           );
         }
-
-        if (!isChartArtifactType(artifact.type)) return null;
 
         const chart = asChartData(artifact.data);
         return (

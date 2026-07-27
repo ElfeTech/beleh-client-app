@@ -6,9 +6,16 @@ interface BillingCycleToggleProps {
   value: BillingCycle;
   onChange: (value: BillingCycle) => void;
   disabled?: boolean;
+  /** Savings from annual billing; hides the badge when null. */
+  yearlySavingsPercent?: number | null;
 }
 
-export function BillingCycleToggle({ value, onChange, disabled }: BillingCycleToggleProps) {
+export function BillingCycleToggle({
+  value,
+  onChange,
+  disabled,
+  yearlySavingsPercent,
+}: BillingCycleToggleProps) {
   return (
     <div className="billing-cycle-segment" role="group" aria-label="Billing cycle">
       <button
@@ -28,7 +35,9 @@ export function BillingCycleToggle({ value, onChange, disabled }: BillingCycleTo
         onClick={() => onChange('yearly')}
       >
         Annually
-        <span className="billing-cycle-segment__save">-20%</span>
+        {yearlySavingsPercent != null && yearlySavingsPercent > 0 && (
+          <span className="billing-cycle-segment__save">-{yearlySavingsPercent}%</span>
+        )}
       </button>
     </div>
   );

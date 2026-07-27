@@ -13,8 +13,12 @@
 
 .artifact-kpi__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11.5rem), 1fr));
   gap: var(--space-3);
+}
+
+.artifact-kpi__item {
+  min-width: 0;
 }
 
 .artifact-kpi__meta {
@@ -86,18 +90,22 @@
 
 .artifact-panel-grid {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   margin-top: var(--space-3);
+  width: 100%;
   min-width: 0;
 }
 
 .artifact-panel-grid__cell {
+  width: 100%;
   min-width: 0;
 }
 
-@media (min-width: 768px) {
+/* Two columns only when each panel still gets a usable width; auto-fit collapses
+   the empty track so a single panel always spans the full row. */
+@media (min-width: 1024px) {
   .artifact-panel-grid--multi {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
   }
 }

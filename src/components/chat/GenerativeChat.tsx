@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Database, Loader2 } from 'lucide-react';
+import { Database } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConnectorWidget } from './ConnectorWidget';
@@ -11,23 +11,25 @@ import { AssistantAnalysisCard } from './AssistantAnalysisCard';
 import { ChartVisualization } from './ChartVisualization';
 import { SuggestedPrompts } from './SuggestedPrompts';
 import { ChatWelcome } from './ChatWelcome';
+import { ThinkingShimmer } from './ThinkingShimmer';
 import { turnHasRichUi } from '../../utils/responseViewAvailability';
 import { countSchemaTables } from '../../utils/datasourceDisplay';
 import { ChatFailureCard } from './ChatFailureCard';
 import { getWorkflowFailure, formatChatRequestError } from '../../utils/chatWorkflowStatus';
 import type { WorkflowFailureInfo } from '../../utils/chatWorkflowStatus';
-import { ConnectorSelectionModal } from '../layout/ConnectorSelectionModal';
-import { PostgresConnectorModal } from '../layout/PostgresConnectorModal';
+import { DatasourceConnectionPanel } from '../layout/DatasourceConnectionPanel';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useDatasource } from '../../context/DatasourceContext';
 import { useChatSession } from '../../context/ChatSessionContext';
 import { useAuth } from '../../context/useAuth';
 import { useMessages } from '../../hooks/useApiData';
+import { useChatRun } from '../../hooks/useChatRun';
 import { apiClient } from '../../services/apiClient';
-import type { ChatMessageMetadata, ChatMessageRead } from '../../types/api';
+import type { AssistantTurnResponse, ChatMessageMetadata, ChatMessageRead } from '../../types/api';
 import { getAskPromptsFromArtifacts } from '../../utils/artifactAdapters';
 import { MarkdownText } from '../MarkdownText';
 import { CopyTextButton } from './CopyTextButton';
+import { readComposerDraft, writeComposerDraft } from '../../lib/uiMemory';
 
 interface Message {
   id: string;
@@ -35,8 +37,8 @@ interface Message {
   content: string;
   type?: 'text' | 'widget' | 'chart';
   widgetType?: 'connector' | 'scheduler';
-  data?: any;
-  metadata?: any;
+  data?: unknown;
+  metadata?: ChatMessageMetadata | Record<string, unknown>;
   timestamp: Date;
   status?: 'sending' | 'sent' | 'error';
   failure?: WorkflowFailureInfo;
@@ -59,12 +61,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     loadWorkspaceContext,
   } = useWorkspace();
   const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
-  const {
-    activeSessionId,
-    setActiveSessionId,
-    addSession,
-    sessions: availableSessions,
-  } = useChatSession();
+  const { activeSessionId, setActiveSessionId, addSession, isNewChatDraft } = useChatSession();
 
   const {
     messages: apiMessages,
@@ -72,8 +69,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     refetch: refetchMessages,
   } = useMessages(activeSessionId);
 
-  const [showConnectorSelectionModal, setShowConnectorSelectionModal] = useState(false);
-  const [showPostgresModal, setShowPostgresModal] = useState(false);
+  const [showConnectionPanel, setShowConnectionPanel] = useState(false);
   const [headerRefreshing, setHeaderRefreshing] = useState(false);
 
   const schemaTableCount = useMemo(
@@ -102,49 +98,12 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     }
   }, [refreshWorkspaces, refreshConnectors, loadWorkspaceContext, currentWorkspace?.id]);
 
-  // Sync datasource from the active session when the user switches sessions in the sidebar.
-  // On initial page load, do not overwrite a persisted workspace datasource with a "general" session (null dataset).
-  const lastSessionDatasourceSyncRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!activeSessionId) {
-      lastSessionDatasourceSyncRef.current = null;
-      return;
-    }
-    if (availableSessions.length === 0) return;
-
-    const currentSession = availableSessions.find((s) => s.id === activeSessionId);
-    if (!currentSession) return;
-
-    if (lastSessionDatasourceSyncRef.current === activeSessionId) {
-      return;
-    }
-
-    const sessionSourceId =
-      currentSession.dataset_id ??
-      (currentSession as { connector_id?: string | null }).connector_id ??
-      null;
-
-    const switchingFromAnotherSession =
-      lastSessionDatasourceSyncRef.current !== null &&
-      lastSessionDatasourceSyncRef.current !== activeSessionId;
-
-    if (switchingFromAnotherSession) {
-      lastSessionDatasourceSyncRef.current = activeSessionId;
-      setSelectedDatasourceId(sessionSourceId ?? null);
-      return;
-    }
-
-    lastSessionDatasourceSyncRef.current = activeSessionId;
-    if (sessionSourceId != null && sessionSourceId !== '') {
-      setSelectedDatasourceId(sessionSourceId);
-    }
-  }, [activeSessionId, availableSessions, setSelectedDatasourceId]);
-
   useEffect(() => {
     if (!currentWorkspace?.id) return;
     // Avoid PATCH /state with localStorage ids before datasource lists have loaded
     if (workspaceLoading && datasources.length === 0 && connectors.length === 0) return;
+    // Do not wipe last_active_session_id during boot before session restore completes
+    if (!activeSessionId && !isNewChatDraft) return;
     saveWorkspaceState(currentWorkspace.id, selectedDatasourceId, activeSessionId);
   }, [
     selectedDatasourceId,
@@ -154,6 +113,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     workspaceLoading,
     datasources.length,
     connectors.length,
+    isNewChatDraft,
   ]);
 
   // If the selected source was deleted or removed from the workspace, fall back to General
@@ -170,9 +130,25 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
 
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Composer draft persistence (per session / new-chat)
+  useEffect(() => {
+    if (!user?.uid) {
+      setInput('');
+      setDraftHydrated(false);
+      return;
+    }
+    setInput(readComposerDraft(user.uid, activeSessionId));
+    setDraftHydrated(true);
+  }, [user?.uid, activeSessionId]);
+
+  useEffect(() => {
+    if (!draftHydrated || !user?.uid) return;
+    writeComposerDraft(user.uid, activeSessionId, input);
+  }, [draftHydrated, user?.uid, activeSessionId, input]);
 
   const scrollToBottom = useCallback(() => {
     const container = scrollRef.current;
@@ -224,15 +200,156 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
 
   useEffect(() => {
     if (!activeSessionId) {
-      setInput('');
       setLocalMessages([]);
     }
   }, [activeSessionId]);
 
+  const ensureSession = useCallback(
+    async (prompt: string, datasourceId: string | null) => {
+      if (!user) throw new Error('Not signed in');
+      const token = await user.getIdToken();
+      const newSession = await apiClient.createWorkspaceSession(
+        token,
+        workspaceId,
+        prompt.slice(0, 30),
+        datasourceId || undefined,
+      );
+      addSession(newSession);
+      setActiveSessionId(newSession.id);
+      return newSession.id;
+    },
+    [user, workspaceId, addSession, setActiveSessionId],
+  );
+
+  const applyAssistantTurn = useCallback((response: AssistantTurnResponse, prompt: string) => {
+    const workflowFailure = getWorkflowFailure(response);
+    const turnMeta: ChatMessageMetadata = {
+      artifacts: response.artifacts ?? [],
+      meta: response.meta ?? {},
+    };
+    const assistantMessage: Message = workflowFailure
+      ? {
+          id: response.message_id || (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response.text || workflowFailure.detail,
+          metadata: turnMeta,
+          failure: workflowFailure,
+          retryPrompt: prompt,
+          timestamp: new Date(),
+          status: 'sent',
+        }
+      : {
+          id: response.message_id || (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: response.text || "I've analyzed the data.",
+          metadata: turnMeta,
+          timestamp: new Date(),
+          status: 'sent',
+        };
+
+    setLocalMessages((prev) => {
+      const withoutFailureTail = workflowFailure
+        ? prev.filter((m, i, arr) => {
+            if (i !== arr.length - 1) return true;
+            return !(m.role === 'assistant' && m.failure);
+          })
+        : prev;
+      const updated = withoutFailureTail.map((m) => {
+        if (m.role === 'user' && m.content === prompt) {
+          return { ...m, status: 'sent' as const };
+        }
+        return m;
+      });
+      return [...updated, assistantMessage];
+    });
+
+    if (workflowFailure) {
+      toast.error(workflowFailure.title);
+    }
+  }, []);
+
+  const applyTurnFailure = useCallback((err: unknown, prompt: string) => {
+    console.error('Failed to send message:', err);
+    const failure = formatChatRequestError(err);
+    const errorMessage: Message = {
+      id: (Date.now() + 1).toString(),
+      role: 'assistant',
+      content: failure.detail,
+      failure,
+      retryPrompt: prompt,
+      timestamp: new Date(),
+    };
+    setLocalMessages((prev) => {
+      const updated = prev.map((m) => {
+        if (m.role === 'user' && m.content === prompt) {
+          return { ...m, status: 'error' as const };
+        }
+        return m;
+      });
+      return [...updated, errorMessage];
+    });
+    toast.error(failure.title);
+  }, []);
+
+  const getToken = useCallback(async () => {
+    if (!user) throw new Error('Not signed in');
+    return user.getIdToken();
+  }, [user]);
+
+  const {
+    isWaiting,
+    pendingPrompt,
+    partialText,
+    shimmerPhrases,
+    send: sendRun,
+    cancel: cancelRun,
+  } = useChatRun({
+    uid: user?.uid,
+    sessionId: activeSessionId,
+    workspaceId,
+    selectedDatasourceId,
+    getToken,
+    ensureSession,
+    restoreSessionId: setActiveSessionId,
+    onComplete: applyAssistantTurn,
+    onFailure: applyTurnFailure,
+    refetchMessages: async () => {
+      await refetchMessages();
+    },
+    historyReady: !loadingHistory,
+  });
+
+  // Restore optimistic user bubble when resuming a pending turn after refresh
+  useEffect(() => {
+    if (!isWaiting || !pendingPrompt) return;
+    setLocalMessages((prev) => {
+      const exists = prev.some(
+        (m) => m.role === 'user' && m.content.trim() === pendingPrompt.trim(),
+      );
+      if (exists) {
+        return prev.map((m) =>
+          m.role === 'user' && m.content.trim() === pendingPrompt.trim()
+            ? { ...m, status: 'sending' as const }
+            : m,
+        );
+      }
+      return [
+        ...prev.filter((m) => m.id !== 'welcome'),
+        {
+          id: `pending-user-${Date.now()}`,
+          role: 'user',
+          content: pendingPrompt,
+          timestamp: new Date(),
+          status: 'sending',
+        },
+      ];
+    });
+  }, [isWaiting, pendingPrompt]);
+
   useLayoutEffect(() => {
     if (loadingHistory) return;
     scrollToBottom();
-  }, [localMessages, isLoading, loadingHistory, activeSessionId, scrollToBottom]);
+  }, [localMessages, isWaiting, loadingHistory, activeSessionId, scrollToBottom, partialText]);
 
   useEffect(() => {
     const container = scrollRef.current;
@@ -252,9 +369,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   }, [loadingHistory, activeSessionId, scrollToBottom]);
 
   const sendMessage = useCallback(
-    async (text: string, options?: { skipUserMessage?: boolean }) => {
+    async (text: string, options?: { skipUserMessage?: boolean; bypassWaitingGuard?: boolean }) => {
       const trimmed = text.trim();
-      if (!trimmed || isLoading || !user) return;
+      if (!trimmed || !user) return;
+      if (isWaiting && !options?.bypassWaitingGuard) return;
 
       const userMessageId = Date.now().toString();
       const userMessage: Message = {
@@ -275,123 +393,22 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         setLocalMessages((prev) => [...prev, userMessage]);
       }
 
-      setIsLoading(true);
-
-      try {
-        const token = await user.getIdToken();
-        let sessionId = activeSessionId;
-
-        if (!sessionId) {
-          const newSession = await apiClient.createWorkspaceSession(
-            token,
-            workspaceId,
-            trimmed.slice(0, 30),
-            selectedDatasourceId || undefined,
-          );
-          addSession(newSession);
-          setActiveSessionId(newSession.id);
-          sessionId = newSession.id;
-        }
-
-        const response = await apiClient.addMessageToSession(
-          token,
-          sessionId!,
-          trimmed,
-          selectedDatasourceId || null,
-        );
-
-        const workflowFailure = getWorkflowFailure(response);
-        const turnMeta: ChatMessageMetadata = {
-          artifacts: response.artifacts ?? [],
-          meta: response.meta ?? {},
-        };
-        const assistantMessage: Message = workflowFailure
-          ? {
-              id: response.message_id || (Date.now() + 1).toString(),
-              role: 'assistant',
-              content: response.text || workflowFailure.detail,
-              metadata: turnMeta,
-              failure: workflowFailure,
-              retryPrompt: trimmed,
-              timestamp: new Date(),
-              status: 'sent',
-            }
-          : {
-              id: response.message_id || (Date.now() + 1).toString(),
-              role: 'assistant',
-              content: response.text || "I've analyzed the data.",
-              metadata: turnMeta,
-              timestamp: new Date(),
-              status: 'sent',
-            };
-
-        setLocalMessages((prev) => {
-          const withoutFailureTail = workflowFailure
-            ? prev.filter((m, i, arr) => {
-                if (i !== arr.length - 1) return true;
-                return !(m.role === 'assistant' && m.failure);
-              })
-            : prev;
-          const updated = withoutFailureTail.map((m) => {
-            if (options?.skipUserMessage && m.role === 'user' && m.content === trimmed) {
-              return { ...m, status: 'sent' as const };
-            }
-            if (!options?.skipUserMessage && m.id === userMessageId) {
-              return { ...m, status: 'sent' as const };
-            }
-            return m;
-          });
-          return [...updated, assistantMessage];
-        });
-
-        if (workflowFailure) {
-          toast.error(workflowFailure.title);
-        }
-      } catch (err: unknown) {
-        console.error('Failed to send message:', err);
-        const failure = formatChatRequestError(err);
-        const errorMessage: Message = {
-          id: (Date.now() + 1).toString(),
-          role: 'assistant',
-          content: failure.detail,
-          failure,
-          retryPrompt: trimmed,
-          timestamp: new Date(),
-        };
-        setLocalMessages((prev) => {
-          const updated = prev.map((m) => {
-            if (options?.skipUserMessage && m.role === 'user' && m.content === trimmed) {
-              return { ...m, status: 'error' as const };
-            }
-            if (!options?.skipUserMessage && m.id === userMessageId) {
-              return { ...m, status: 'error' as const };
-            }
-            return m;
-          });
-          return [...updated, errorMessage];
-        });
-        toast.error(failure.title);
-      } finally {
-        setIsLoading(false);
-        void refetchMessages();
+      if (user.uid) {
+        writeComposerDraft(user.uid, activeSessionId, '');
       }
+      setInput('');
+
+      await sendRun(trimmed, {
+        skipUserMessage: options?.skipUserMessage,
+        bypassWaitingGuard: options?.bypassWaitingGuard,
+      });
     },
-    [
-      isLoading,
-      user,
-      activeSessionId,
-      workspaceId,
-      selectedDatasourceId,
-      addSession,
-      setActiveSessionId,
-      refetchMessages,
-    ],
+    [user, isWaiting, sendRun, activeSessionId],
   );
 
   const handleSend = () => {
     if (!input.trim()) return;
     const text = input.trim();
-    setInput('');
     void sendMessage(text);
   };
 
@@ -404,8 +421,9 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     if (activeSessionId) return false;
     if (loadingHistory) return false;
     if ((apiMessages?.length ?? 0) > 0) return false;
+    if (isWaiting) return false;
     return localMessages.length === 0;
-  }, [activeSessionId, loadingHistory, apiMessages, localMessages]);
+  }, [activeSessionId, loadingHistory, apiMessages, localMessages, isWaiting]);
 
   const latestAssistantWithSuggestionsId = useMemo(() => {
     for (let i = localMessages.length - 1; i >= 0; i--) {
@@ -420,7 +438,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
 
   const handleConnectorSelect = (connectorId: string) => {
     setInput(`I want to connect ${connectorId}`);
-    // Focus or trigger send manually if desired
   };
 
   return (
@@ -445,7 +462,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             <ChatWelcome
               onPromptClick={handleWelcomePrompt}
               schemaTableCount={schemaTableCount ?? undefined}
-              disabled={isLoading}
+              disabled={isWaiting}
             />
           ) : null}
           <AnimatePresence initial={false}>
@@ -491,7 +508,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                           title={msg.failure.title}
                           detail={msg.failure.detail}
                           canRetry={msg.failure.canRetry}
-                          disabled={isLoading}
+                          disabled={isWaiting}
                           onRetry={
                             msg.retryPrompt
                               ? () => {
@@ -524,7 +541,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                                 meta={meta.meta}
                                 timestamp={msg.timestamp}
                                 onAsk={(prompt) => void sendMessage(prompt)}
-                                disabled={isLoading}
+                                disabled={isWaiting}
                               />
                             );
                           }
@@ -570,7 +587,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                             <SuggestedPrompts
                               prompts={suggested}
                               onSelect={(prompt) => void sendMessage(prompt)}
-                              disabled={isLoading}
+                              disabled={isWaiting}
                             />
                           );
                         })()}
@@ -579,17 +596,19 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                 </motion.div>
               ))}
           </AnimatePresence>
-          {isLoading && (
+          {isWaiting && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="flex justify-start"
             >
-              <div className="chat-message-width--assistant message-plain message-plain--assistant flex items-center gap-3">
-                <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                <span className="text-sm font-medium text-[color:var(--text-muted)] animate-pulse">
-                  Processing analysis...
-                </span>
+              <div className="chat-message-width--assistant message-plain message-plain--assistant flex flex-col gap-2">
+                {partialText ? (
+                  <div className="leading-relaxed opacity-80">
+                    <MarkdownText>{partialText}</MarkdownText>
+                  </div>
+                ) : null}
+                <ThinkingShimmer phrases={shimmerPhrases} />
               </div>
             </motion.div>
           )}
@@ -613,7 +632,9 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
               value={input}
               onChange={setInput}
               onSubmit={handleSend}
-              disabled={isLoading}
+              isWaiting={isWaiting}
+              onStop={() => void cancelRun()}
+              disabled={false}
               datasources={datasources}
               connectors={connectors}
               selectedDatasourceId={selectedDatasourceId}
@@ -629,7 +650,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
           <button
             type="button"
             className="flex items-center gap-2 whitespace-nowrap rounded-lg border border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)] px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[color:var(--text-muted)] transition-colors hover:text-primary"
-            onClick={() => setShowConnectorSelectionModal(true)}
+            onClick={() => setShowConnectionPanel(true)}
           >
             <Database className="w-3.5 h-3.5" />
             Connect datasource
@@ -650,25 +671,12 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         </div>
       </div>
 
-      {showConnectorSelectionModal && (
-        <ConnectorSelectionModal
-          hideFileSources
-          onClose={() => setShowConnectorSelectionModal(false)}
-          onSelect={(type) => {
-            setShowConnectorSelectionModal(false);
-            if (type === 'postgres') {
-              setShowPostgresModal(true);
-            }
-          }}
-        />
-      )}
-
-      {showPostgresModal && workspaceId && (
-        <PostgresConnectorModal
+      {showConnectionPanel && workspaceId && (
+        <DatasourceConnectionPanel
           workspaceId={workspaceId}
-          onClose={() => setShowPostgresModal(false)}
+          hideFileSources
+          onClose={() => setShowConnectionPanel(false)}
           onSuccess={async () => {
-            setShowPostgresModal(false);
             const wid = currentWorkspace?.id;
             if (wid) {
               try {
@@ -679,7 +687,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                 await refreshConnectors();
               }
             }
-            toast.success('PostgreSQL connector added successfully.');
+            toast.success('Datasource connected successfully.');
           }}
         />
       )}

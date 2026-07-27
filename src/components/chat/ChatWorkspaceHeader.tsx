@@ -3,9 +3,9 @@ import { ChevronDown, ChevronUp, Database, RefreshCw } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { ConnectorResponse, DataSourceResponse } from '../../types/api';
 import { getWorkspaceSourceContext } from '../../utils/datasourceDisplay';
+import { useAuth } from '../../context/useAuth';
+import { readChatHeaderCollapsed, writeChatHeaderCollapsed } from '../../lib/uiMemory';
 import './ChatWorkspaceHeader.css';
-
-const STORAGE_KEY_PREFIX = 'beleh-chat-header-collapsed:';
 
 interface ChatWorkspaceHeaderProps {
   workspaceId: string;
@@ -24,23 +24,25 @@ export function ChatWorkspaceHeader({
   onRefresh,
   refreshing = false,
 }: ChatWorkspaceHeaderProps) {
-  const storageKey = `${STORAGE_KEY_PREFIX}${workspaceId}`;
+  const { user } = useAuth();
+  const uid = user?.uid ?? '';
+  const storageIdentity = `${uid}:${workspaceId}`;
 
   const [collapsed, setCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(storageKey) === 'true';
-    } catch {
-      return false;
-    }
+    if (!uid) return false;
+    return readChatHeaderCollapsed(uid, workspaceId);
   });
+  const [identity, setIdentity] = useState(storageIdentity);
+
+  if (identity !== storageIdentity) {
+    setIdentity(storageIdentity);
+    setCollapsed(uid ? readChatHeaderCollapsed(uid, workspaceId) : false);
+  }
 
   useEffect(() => {
-    try {
-      localStorage.setItem(storageKey, String(collapsed));
-    } catch {
-      /* ignore */
-    }
-  }, [collapsed, storageKey]);
+    if (!uid) return;
+    writeChatHeaderCollapsed(uid, workspaceId, collapsed);
+  }, [collapsed, uid, workspaceId]);
 
   const source = getWorkspaceSourceContext(selectedDatasourceId, datasources, connectors);
 

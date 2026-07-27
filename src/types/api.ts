@@ -451,6 +451,8 @@ export interface DatasetTableColumn {
 
 export interface DatasetTable {
   table_name: string;
+  /** Present on some connector payloads; otherwise inferred from `schema.table` names. */
+  schema_name?: string | null;
   row_count: number;
   column_count: number;
   columns: DatasetTableColumn[];
@@ -508,4 +510,10 @@ export interface ConnectionTestResponse {
   success: boolean;
   message: string;
   db_info?: Record<string, any>;
+}
+
+export interface ConnectorTablesResponse {
+  connector_id: string;
+  metadata_status: MetadataStatus;
+  tables: DatasetTable[];
 }

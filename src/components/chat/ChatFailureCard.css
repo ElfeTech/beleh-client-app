@@ -28,6 +28,39 @@
   color: var(--text-secondary);
 }
 
+.chat-failure-card__detail.md-text p {
+  margin: 0 0 0.5em;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+}
+
+.chat-failure-card__detail.md-text p:last-child {
+  margin-bottom: 0;
+}
+
+.chat-failure-card__detail.md-text strong {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.chat-failure-card__detail.md-text ul,
+.chat-failure-card__detail.md-text ol {
+  margin: 0.35em 0;
+  padding-left: 1.25em;
+}
+
+.chat-failure-card__detail.md-text li {
+  margin: 0.15em 0;
+}
+
+.chat-failure-card__detail.md-text code {
+  font-size: 0.9em;
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--error) 8%, var(--bg-primary));
+}
+
 .chat-failure-card__retry {
   display: inline-flex;
   align-items: center;

@@ -5,18 +5,25 @@ import { APP_HELP_DB_NAME } from '../../lib/landingHelpDb';
 import { usePlatformHelpChat } from '../../hooks/useLandingHelpChat';
 import { LANDING_HELP_SUGGESTED_PROMPTS } from '../landing/landingHelpPrompts';
 import { MarkdownText } from '../MarkdownText';
+import { ThinkingShimmer } from '../chat/ThinkingShimmer';
 import { cn } from '../../lib/utils';
 import './SupportHelpBubble.css';
 
 interface SupportHelpBubbleProps {
-  /** Lift above mobile bottom nav when present */
+  /** Lift floating FAB above mobile bottom nav when present */
   elevateForBottomNav?: boolean;
+  /** floating = corner FAB; header = compact nav-bar trigger */
+  variant?: 'floating' | 'header';
 }
 
-export function SupportHelpBubble({ elevateForBottomNav = false }: SupportHelpBubbleProps) {
+export function SupportHelpBubble({
+  elevateForBottomNav = false,
+  variant = 'floating',
+}: SupportHelpBubbleProps) {
   const [open, setOpen] = useState(false);
   const [activated, setActivated] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const isHeader = variant === 'header';
 
   useEffect(() => {
     setMounted(true);
@@ -30,35 +37,64 @@ export function SupportHelpBubble({ elevateForBottomNav = false }: SupportHelpBu
     });
   };
 
+  const iconSize = isHeader ? 'h-5 w-5' : 'h-6 w-6';
+  const trigger = (
+    <button
+      type="button"
+      className={isHeader ? 'support-help-bubble__header-btn' : 'support-help-bubble__fab'}
+      aria-label={open ? 'Close help chat' : 'Open help chat'}
+      aria-expanded={open}
+      onClick={toggle}
+    >
+      {open ? (
+        <X className={iconSize} strokeWidth={2.25} />
+      ) : (
+        <HelpCircle className={iconSize} strokeWidth={2.25} />
+      )}
+    </button>
+  );
+
+  const panel =
+    activated && mounted
+      ? createPortal(
+          <div
+            className={cn(
+              'support-help-bubble',
+              isHeader && 'support-help-bubble--from-header',
+              elevateForBottomNav && 'support-help-bubble--elevated',
+              open && 'support-help-bubble--open',
+            )}
+          >
+            <div
+              className={cn('support-help-panel-wrap', !open && 'support-help-panel-wrap--hidden')}
+            >
+              <SupportHelpPanel onClose={() => setOpen(false)} />
+            </div>
+            {!isHeader ? trigger : null}
+          </div>,
+          document.body,
+        )
+      : null;
+
+  if (isHeader) {
+    return (
+      <>
+        {trigger}
+        {panel}
+      </>
+    );
+  }
+
   if (!mounted) return null;
+
+  // Before first open: only the floating FAB. After activate: FAB lives inside the portal with the panel.
+  if (activated) return panel;
 
   return createPortal(
     <div
-      className={cn(
-        'support-help-bubble',
-        elevateForBottomNav && 'support-help-bubble--elevated',
-        open && 'support-help-bubble--open',
-      )}
+      className={cn('support-help-bubble', elevateForBottomNav && 'support-help-bubble--elevated')}
     >
-      {activated ? (
-        <div className={cn('support-help-panel-wrap', !open && 'support-help-panel-wrap--hidden')}>
-          <SupportHelpPanel onClose={() => setOpen(false)} />
-        </div>
-      ) : null}
-
-      <button
-        type="button"
-        className="support-help-bubble__fab"
-        aria-label={open ? 'Close help chat' : 'Open help chat'}
-        aria-expanded={open}
-        onClick={toggle}
-      >
-        {open ? (
-          <X className="h-6 w-6" strokeWidth={2.25} />
-        ) : (
-          <HelpCircle className="h-6 w-6" strokeWidth={2.25} />
-        )}
-      </button>
+      {trigger}
     </div>,
     document.body,
   );
@@ -206,8 +242,18 @@ function SupportHelpPanel({ onClose }: { onClose: () => void }) {
             >
               {msg.role === 'assistant' ? (
                 <>
-                  <MarkdownText>{msg.content}</MarkdownText>
-                  {msg.status === 'streaming' && (
+                  {msg.status === 'streaming' && !msg.content.trim() ? (
+                    <ThinkingShimmer
+                      phrases={[
+                        'Looking that up…',
+                        'Checking the docs…',
+                        'Drafting a clear answer…',
+                      ]}
+                    />
+                  ) : (
+                    <MarkdownText>{msg.content}</MarkdownText>
+                  )}
+                  {msg.status === 'streaming' && Boolean(msg.content.trim()) && (
                     <span className="support-help-panel__caret" aria-hidden />
                   )}
                 </>

@@ -80,14 +80,23 @@ export function UsageProvider({ children }: { children: ReactNode }) {
 
         setCurrentUsage(usageData);
 
-        // Derive remaining quota from usage data
+        // Derive remaining quota from usage data (+ pass through API $ value fields)
+        const value = usageData.value;
         const derivedRemaining: RemainingQuotaResponse = {
           queries_remaining: usageData.metrics.queries_remaining,
           queries_used: usageData.metrics.queries_used,
           queries_limit: usageData.metrics.queries_limit,
-          percentage_used: (usageData.metrics.queries_used / usageData.metrics.queries_limit) * 100,
+          percentage_used:
+            usageData.metrics.queries_limit > 0
+              ? (usageData.metrics.queries_used / usageData.metrics.queries_limit) * 100
+              : 0,
           can_execute_query: usageData.metrics.queries_remaining > 0,
           reset_date: usageData.reset_at,
+          included_value_usd: value?.included_value_usd ?? null,
+          used_value_usd: value?.used_value_usd ?? null,
+          remaining_value_usd: value?.remaining_value_usd ?? null,
+          value_used_pct: value?.value_used_pct ?? null,
+          currency: value?.currency ?? 'usd',
         };
         setRemaining(derivedRemaining);
 
@@ -147,6 +156,11 @@ export function UsageProvider({ children }: { children: ReactNode }) {
           plan_name: usageData.plan.name,
           reset_date: usageData.reset_at,
           warnings,
+          remaining_value_usd: value?.remaining_value_usd ?? null,
+          value_used_pct: value?.value_used_pct ?? null,
+          included_value_usd: value?.included_value_usd ?? null,
+          used_value_usd: value?.used_value_usd ?? null,
+          currency: value?.currency ?? 'usd',
         };
         setSummary(derivedSummary);
 

@@ -1,26 +1,7 @@
 import { workspaceChatPath } from '../hooks/useSessionInUrl';
 import { apiClient } from '../services/apiClient';
 import { authService } from '../services/authService';
-
-function readStoredWorkspaceId(): string | null {
-  try {
-    const id = localStorage.getItem('activeWorkspaceId');
-    if (id && id !== 'undefined') return id;
-  } catch {
-    /* storage disabled */
-  }
-  return null;
-}
-
-function readStoredSessionId(): string | null {
-  try {
-    const id = localStorage.getItem('activeSessionId');
-    if (!id || id === 'undefined' || id === '1') return null;
-    return id;
-  } catch {
-    return null;
-  }
-}
+import { readActiveSessionId, readActiveWorkspaceId } from './uiMemory';
 
 /** Resolve post-auth destination: active workspace + session when available. */
 export async function resolveAuthenticatedHomePath(): Promise<string> {
@@ -28,8 +9,8 @@ export async function resolveAuthenticatedHomePath(): Promise<string> {
     (await authService.getValidIdToken(false)) ?? (await authService.getValidIdToken(true));
   if (!token) return '/signin';
 
-  const storedWorkspaceId = readStoredWorkspaceId();
-  const sessionId = readStoredSessionId();
+  const storedWorkspaceId = readActiveWorkspaceId();
+  const sessionId = readActiveSessionId();
 
   if (storedWorkspaceId) {
     return workspaceChatPath(storedWorkspaceId, sessionId);

@@ -324,9 +324,9 @@
     transition: background-color 0.35s ease;
     /* User column: grows with prompt length, capped at 40vw; assistant: thread % */
     --chat-user-message-max-width: 40vw;
-    --chat-assistant-message-width: 75%;
+    --chat-assistant-message-width: 96%;
     --chat-user-message-max-width-mobile: 40vw;
-    --chat-assistant-message-width-mobile: 92%;
+    --chat-assistant-message-width-mobile: 100%;
     background-color: var(--bg-secondary);
     background-image:
       radial-gradient(
@@ -400,7 +400,7 @@
   /*
    * Chat column widths — tune on .chat-container
    * User: fit-content up to --chat-user-message-max-width (default 40vw)
-   * Assistant: --chat-assistant-message-width (default 75% of thread)
+   * Assistant: --chat-assistant-message-width (default 96% of thread)
    */
   .chat-message-width--user {
     width: fit-content;
@@ -409,8 +409,8 @@
   }
 
   .chat-message-width--assistant {
-    width: var(--chat-assistant-message-width, 75%);
-    max-width: var(--chat-assistant-message-max-width, var(--chat-assistant-message-width, 75%));
+    width: var(--chat-assistant-message-width, 96%);
+    max-width: var(--chat-assistant-message-max-width, var(--chat-assistant-message-width, 96%));
     min-width: 0;
   }
 

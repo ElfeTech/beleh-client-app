@@ -604,3 +604,32 @@ export function formatValueTooltip(value: any, config: FormatConfig, rawValue?: 
       return String(value);
   }
 }
+
+/** Format API plan-value dollars (already major currency units, not cents). */
+export function formatUsd(amount: number, currency = 'usd'): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: (currency || 'usd').toUpperCase(),
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(amount);
+  } catch {
+    return `$${amount.toFixed(2)}`;
+  }
+}
+
+export function formatTokenCount(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toLocaleString();
+}
+
+export function formatUsageValue(value: number, metricKey: string): string {
+  return metricKey === 'tokens' ? formatTokenCount(value) : value.toLocaleString();
+}
+
+export function usagePercentage(used: number, limit: number): number {
+  if (limit <= 0) return 0;
+  return Math.min(100, Math.max(0, (used / limit) * 100));
+}

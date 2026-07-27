@@ -1,4 +1,4 @@
-import { useState, useContext, useMemo } from 'react';
+import { useState, useContext, useMemo, useEffect } from 'react';
 import {
   MessageSquare,
   Database,
@@ -13,7 +13,6 @@ import {
   LogOut,
   RefreshCw,
   LayoutGrid,
-  TrendingUp,
   MoreVertical,
   Pencil,
   Trash2,
@@ -32,6 +31,11 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import { PromptDialog } from '../common/PromptDialog';
 import { workspaceChatPath } from '../../hooks/useSessionInUrl';
 import { WorkspaceRegionDropdown } from './WorkspaceRegionDropdown';
+import {
+  readActiveWorkspaceId,
+  readSidebarCollapsed,
+  writeSidebarCollapsed,
+} from '../../lib/uiMemory';
 import './UnifiedSidebar.css';
 
 const THEME_OPTIONS: { value: ThemePreference; label: string; short: string; icon: typeof Sun }[] =
@@ -67,14 +71,23 @@ interface UnifiedSidebarProps {
 
 export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   const isDrawer = variant === 'drawer';
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { user, signOut } = useAuth();
+  const [isCollapsed, setIsCollapsed] = useState(() =>
+    user?.uid ? readSidebarCollapsed(user.uid) : false,
+  );
+  const sidebarUid = user?.uid ?? '';
+  const [sidebarIdentity, setSidebarIdentity] = useState(sidebarUid);
+  if (sidebarIdentity !== sidebarUid) {
+    setSidebarIdentity(sidebarUid);
+    setIsCollapsed(sidebarUid ? readSidebarCollapsed(sidebarUid) : false);
+  }
+
   const [refreshingChats, setRefreshingChats] = useState(false);
   const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
   const { id: workspaceId } = useParams<{ id: string }>();
   const path = location.pathname;
-  const { user, signOut } = useAuth();
   const { currentWorkspace, workspaces } = useWorkspace();
   const { summary, currentUsage } = useUsage();
   const chatContext = useContext(ChatSessionContext);
@@ -84,6 +97,11 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
     isLoading: sessionsLoading,
   } = useChatSession();
   const { themePreference, setThemePreference } = useTheme();
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    writeSidebarCollapsed(user.uid, isCollapsed);
+  }, [user?.uid, isCollapsed]);
 
   const sessions = chatContext?.sessions ?? [];
   const activeSessionId = chatContext?.activeSessionId ?? null;
@@ -168,7 +186,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   const routeWorkspaceId = workspaceId && workspaceId !== 'undefined' ? workspaceId : null;
   let storedWorkspaceId: string | null = null;
   try {
-    const v = localStorage.getItem('activeWorkspaceId');
+    const v = readActiveWorkspaceId();
     if (v && v !== 'undefined') storedWorkspaceId = v;
   } catch {
     storedWorkspaceId = null;
@@ -289,10 +307,6 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
               <NavLink to={`${workspaceBase}/datasets`} className={navClass}>
                 <Database className="h-4 w-4 shrink-0" strokeWidth={2} />
                 {!collapsed && <span>Data sources</span>}
-              </NavLink>
-              <NavLink to={`${workspaceBase}/statistics`} className={navClass}>
-                <TrendingUp className="h-4 w-4 shrink-0" strokeWidth={2} />
-                {!collapsed && <span>Usage Analytics</span>}
               </NavLink>
             </>
           ) : (

@@ -9,6 +9,7 @@ import type {
 import { apiClient } from '../services/apiClient';
 import { useAuth } from './AuthContext';
 import { FEEDBACK_STATE_STORAGE_KEY } from '../constants/clientStorageKeys';
+import { readActiveSessionId } from '../lib/uiMemory';
 
 interface FeedbackContextValue {
   showFeedback: (trigger: FeedbackTrigger) => void;
@@ -191,8 +192,8 @@ export const FeedbackProvider = ({ children }: { children: ReactNode }) => {
       try {
         const token = await user.getIdToken();
 
-        // Get session_id from localStorage if available
-        const sessionId = localStorage.getItem('activeSessionId') || undefined;
+        // Get session_id from UI memory if available
+        const sessionId = readActiveSessionId() || undefined;
 
         const submission: FeedbackSubmission = {
           feedback_type: currentTrigger.type,

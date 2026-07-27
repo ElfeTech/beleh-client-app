@@ -5,19 +5,20 @@ import {
   Plus,
   Search,
   ChevronLeft,
+  ChevronRight,
   Database,
   FileSpreadsheet,
   FileJson,
   Layers,
   MessageSquare,
+  Table2,
+  FolderOpen,
 } from 'lucide-react';
 import { WorkspaceContext } from '../context/WorkspaceContext';
 import { DatasourceContext } from '../context/DatasourceContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
-import { UploadModal } from '../components/layout/UploadModal';
-import { ConnectorSelectionModal } from '../components/layout/ConnectorSelectionModal';
-import { PostgresConnectorModal } from '../components/layout/PostgresConnectorModal';
+import { DatasourceConnectionPanel } from '../components/layout/DatasourceConnectionPanel';
 import MobileChatHeader from '../components/layout/MobileChatHeader';
 import WorkspaceSwitcher from '../components/layout/WorkspaceSwitcher';
 import { WorkspaceModal } from '../components/layout/WorkspaceModal';
@@ -33,17 +34,32 @@ import type {
 } from '../types/api';
 import { DatasetPreviewGrid } from '../components/datasets/DatasetPreviewGrid';
 import {
+  ConnectorTableDetail,
+  type ConnectorDetailTab,
+} from '../components/datasets/ConnectorTableDetail';
+import {
   catalogSourceKey,
   tablesFromMetadata,
   getSourceDisplayName,
   getSourceHostHint,
   getSourceTableCountLabel,
+  groupTablesBySchema,
+  filterTablesByQuery,
+  filterSchemaGroupsByQuery,
+  parseTableIdentity,
   type CatalogSourceRef,
+  type CatalogBrowseLevel,
 } from '../utils/schemaCatalog';
+import {
+  readDatasetsView,
+  writeActiveWorkspaceId,
+  writeDatasetsView,
+  type DatasetsPageViewState,
+} from '../lib/uiMemory';
 import './DatasetsPage.css';
 
 type SourceFilter = 'all' | 'files' | 'databases';
-type MobileCatalogPane = 'sources' | 'tables' | 'preview';
+type MobileCatalogPane = 'sources' | 'schemas' | 'tables' | 'preview';
 
 type UnifiedRow =
   | { kind: 'connector'; id: string; connector: ConnectorResponse }
@@ -88,9 +104,7 @@ const DatasetsPage: React.FC = () => {
   const { user } = useAuth();
   const workspaceContext = useContext(WorkspaceContext);
   const datasourceContext = useContext(DatasourceContext);
-  const [showUploadModal, setShowUploadModal] = useState(false);
-  const [showConnectorSelectionModal, setShowConnectorSelectionModal] = useState(false);
-  const [showPostgresModal, setShowPostgresModal] = useState(false);
+  const [showConnectionPanel, setShowConnectionPanel] = useState(false);
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -123,11 +137,57 @@ const DatasetsPage: React.FC = () => {
   const [tableSearchQuery, setTableSearchQuery] = useState('');
   const [catalogTables, setCatalogTables] = useState<DatasetTable[]>([]);
   const [tablesLoading, setTablesLoading] = useState(false);
+  const [browseLevel, setBrowseLevel] = useState<CatalogBrowseLevel>('tables');
+  const [selectedSchemaName, setSelectedSchemaName] = useState<string | null>(null);
   const [selectedTableName, setSelectedTableName] = useState<string | null>(null);
+  const [connectorDetailTab, setConnectorDetailTab] = useState<ConnectorDetailTab>('columns');
   const [previewData, setPreviewData] = useState<DatasetTablePreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewPage, setPreviewPage] = useState(1);
   const [previewPageSize, setPreviewPageSize] = useState(10);
+  const [datasetsViewHydrated, setDatasetsViewHydrated] = useState(false);
+
+  // Restore catalog filter / search / selection from UI memory
+  useEffect(() => {
+    if (!user?.uid || !workspaceId) return;
+    const stored = readDatasetsView(user.uid, workspaceId);
+    if (stored) {
+      if (stored.searchQuery != null) setSearchQuery(stored.searchQuery);
+      if (
+        stored.sourceFilter === 'all' ||
+        stored.sourceFilter === 'files' ||
+        stored.sourceFilter === 'databases'
+      ) {
+        setSourceFilter(stored.sourceFilter);
+      }
+      if (
+        stored.selectedCatalog &&
+        (stored.selectedCatalog.kind === 'datasource' ||
+          stored.selectedCatalog.kind === 'connector') &&
+        stored.selectedCatalog.id
+      ) {
+        setSelectedCatalogSource(stored.selectedCatalog as CatalogSourceRef);
+      }
+    }
+    setDatasetsViewHydrated(true);
+  }, [user?.uid, workspaceId]);
+
+  useEffect(() => {
+    if (!datasetsViewHydrated || !user?.uid || !workspaceId) return;
+    const state: DatasetsPageViewState = {
+      searchQuery,
+      sourceFilter,
+      selectedCatalog: selectedCatalogSource,
+    };
+    writeDatasetsView(user.uid, workspaceId, state);
+  }, [
+    datasetsViewHydrated,
+    user?.uid,
+    workspaceId,
+    searchQuery,
+    sourceFilter,
+    selectedCatalogSource,
+  ]);
 
   const datasources = workspaceContext?.datasources || [];
   const connectors = workspaceContext?.connectors || [];
@@ -184,9 +244,11 @@ const DatasetsPage: React.FC = () => {
   }, [filteredSources, selectedCatalogSource]);
 
   useEffect(() => {
-    if (!user || !selectedCatalogSource) {
+    if (!user || !selectedCatalogSource || !workspaceId) {
       setCatalogTables([]);
       setSelectedTableName(null);
+      setSelectedSchemaName(null);
+      setBrowseLevel('tables');
       return;
     }
 
@@ -196,15 +258,61 @@ const DatasetsPage: React.FC = () => {
     if (!row) return;
 
     if (row.kind === 'connector') {
-      setCatalogTables([]);
-      setSelectedTableName(null);
-      setTablesLoading(false);
-      return;
+      const meta = row.connector.metadata_status;
+      if (meta === 'PENDING' || meta === 'PROCESSING') {
+        setCatalogTables([]);
+        setSelectedTableName(null);
+        setSelectedSchemaName(null);
+        setBrowseLevel('schemas');
+        setTablesLoading(false);
+        return;
+      }
+      if (meta === 'FAILED') {
+        setCatalogTables([]);
+        setSelectedTableName(null);
+        setSelectedSchemaName(null);
+        setBrowseLevel('schemas');
+        setTablesLoading(false);
+        return;
+      }
+
+      let cancelled = false;
+      (async () => {
+        setTablesLoading(true);
+        try {
+          const token = await user.getIdToken();
+          const response = await apiClient.listConnectorTables(
+            token,
+            workspaceId,
+            row.connector.id,
+          );
+          if (cancelled) return;
+          setCatalogTables(response.tables);
+          setBrowseLevel('schemas');
+          setSelectedSchemaName(null);
+          setSelectedTableName(null);
+          setConnectorDetailTab('columns');
+        } catch {
+          if (cancelled) return;
+          setCatalogTables([]);
+          setSelectedTableName(null);
+          setSelectedSchemaName(null);
+          setBrowseLevel('schemas');
+        } finally {
+          if (!cancelled) setTablesLoading(false);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
     }
 
     if (row.datasource.status !== 'READY') {
       setCatalogTables([]);
       setSelectedTableName(null);
+      setSelectedSchemaName(null);
+      setBrowseLevel('tables');
       setTablesLoading(false);
       return;
     }
@@ -220,11 +328,15 @@ const DatasetsPage: React.FC = () => {
         const tables =
           response.tables.length > 0 ? response.tables : tablesFromMetadata(row.datasource);
         setCatalogTables(tables);
+        setBrowseLevel('tables');
+        setSelectedSchemaName(null);
         setSelectedTableName(tables[0]?.table_name ?? null);
       } catch {
         if (cancelled) return;
         const fallback = tablesFromMetadata(row.datasource);
         setCatalogTables(fallback);
+        setBrowseLevel('tables');
+        setSelectedSchemaName(null);
         setSelectedTableName(fallback[0]?.table_name ?? null);
       } finally {
         if (!cancelled) setTablesLoading(false);
@@ -234,13 +346,19 @@ const DatasetsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [user, selectedCatalogSource, unifiedSources]);
+  }, [user, selectedCatalogSource, unifiedSources, workspaceId]);
 
-  const filteredTables = useMemo(() => {
-    const q = tableSearchQuery.trim().toLowerCase();
-    if (!q) return catalogTables;
-    return catalogTables.filter((t) => t.table_name.toLowerCase().includes(q));
-  }, [catalogTables, tableSearchQuery]);
+  const schemaGroups = useMemo(() => groupTablesBySchema(catalogTables), [catalogTables]);
+
+  const filteredSchemaGroups = useMemo(
+    () => filterSchemaGroupsByQuery(schemaGroups, tableSearchQuery),
+    [schemaGroups, tableSearchQuery],
+  );
+
+  const tablesInSelectedSchema = useMemo(() => {
+    if (!selectedSchemaName) return [];
+    return schemaGroups.find((g) => g.name === selectedSchemaName)?.tables ?? [];
+  }, [schemaGroups, selectedSchemaName]);
 
   const selectedCatalogRow = useMemo(() => {
     if (!selectedCatalogSource) return null;
@@ -250,6 +368,15 @@ const DatasetsPage: React.FC = () => {
       ) ?? null
     );
   }, [unifiedSources, selectedCatalogSource]);
+
+  const isConnectorSource = selectedCatalogRow?.kind === 'connector';
+
+  const browseTables = useMemo(() => {
+    if (isConnectorSource) {
+      return filterTablesByQuery(tablesInSelectedSchema, tableSearchQuery);
+    }
+    return filterTablesByQuery(catalogTables, tableSearchQuery);
+  }, [isConnectorSource, tablesInSelectedSchema, catalogTables, tableSearchQuery]);
 
   const selectedTable = useMemo(
     () => catalogTables.find((t) => t.table_name === selectedTableName) ?? null,
@@ -326,12 +453,48 @@ const DatasetsPage: React.FC = () => {
   const handleCatalogSourceSelect = (ref: CatalogSourceRef) => {
     setSelectedCatalogSource(ref);
     setTableSearchQuery('');
+    setSelectedSchemaName(null);
+    setSelectedTableName(null);
+    setConnectorDetailTab('columns');
+    if (ref.kind === 'connector') {
+      setBrowseLevel('schemas');
+      if (isMobile) setMobileCatalogPane('schemas');
+    } else {
+      setBrowseLevel('tables');
+      if (isMobile) setMobileCatalogPane('tables');
+    }
+  };
+
+  const handleSelectSchema = (schemaName: string) => {
+    setSelectedSchemaName(schemaName);
+    setSelectedTableName(null);
+    setBrowseLevel('tables');
+    setTableSearchQuery('');
+    setConnectorDetailTab('columns');
     if (isMobile) setMobileCatalogPane('tables');
   };
 
-  const handleMobileSelectTable = (tableName: string) => {
+  const handleBackToSchemas = () => {
+    setBrowseLevel('schemas');
+    setSelectedSchemaName(null);
+    setSelectedTableName(null);
+    setTableSearchQuery('');
+    setConnectorDetailTab('columns');
+    if (isMobile) setMobileCatalogPane('schemas');
+  };
+
+  const handleSelectTable = (tableName: string) => {
     setSelectedTableName(tableName);
+    setConnectorDetailTab('columns');
     if (isMobile) setMobileCatalogPane('preview');
+  };
+
+  const handleBrowseBack = () => {
+    if (isConnectorSource && browseLevel === 'tables') {
+      handleBackToSchemas();
+      return;
+    }
+    setMobileCatalogPane('sources');
   };
   // Mobile menu handlers
   const handleMoreClick = (e: React.MouseEvent, id: string, type: 'datasource' | 'connector') => {
@@ -647,7 +810,7 @@ const DatasetsPage: React.FC = () => {
           <button
             type="button"
             className="btn-gradient-primary sc-connect-cta--desktop"
-            onClick={() => setShowConnectorSelectionModal(true)}
+            onClick={() => setShowConnectionPanel(true)}
           >
             <Plus size={18} strokeWidth={2.5} aria-hidden />
             Connect Enterprise DB
@@ -689,7 +852,7 @@ const DatasetsPage: React.FC = () => {
         <button
           className="upload-dataset-fab"
           type="button"
-          onClick={() => setShowConnectorSelectionModal(true)}
+          onClick={() => setShowConnectionPanel(true)}
           aria-label="Connect data source"
         >
           <Plus size={26} strokeWidth={2.5} />
@@ -720,7 +883,7 @@ const DatasetsPage: React.FC = () => {
             <button
               type="button"
               className="btn-gradient-primary"
-              onClick={() => setShowConnectorSelectionModal(true)}
+              onClick={() => setShowConnectionPanel(true)}
             >
               <Plus size={18} strokeWidth={2.5} aria-hidden />
               Connect Enterprise DB
@@ -830,33 +993,74 @@ const DatasetsPage: React.FC = () => {
             </div>
 
             <section
-              className={`sc-col sc-col--tables ${isMobile && mobileCatalogPane !== 'tables' ? 'sc-col--mobile-hidden' : ''}`}
+              className={`sc-col sc-col--tables ${
+                isMobile && mobileCatalogPane !== 'tables' && mobileCatalogPane !== 'schemas'
+                  ? 'sc-col--mobile-hidden'
+                  : ''
+              }`}
             >
               <div className="sc-panel">
-                {isMobile && (
+                {(isMobile || (isConnectorSource && browseLevel === 'tables')) && (
                   <button
                     type="button"
-                    className="sc-mobile-back"
-                    onClick={() => setMobileCatalogPane('sources')}
+                    className={isMobile ? 'sc-mobile-back' : 'sc-browse-back'}
+                    onClick={handleBrowseBack}
                   >
-                    <ChevronLeft size={18} strokeWidth={2.25} aria-hidden />
-                    Sources
+                    <ChevronLeft size={16} strokeWidth={2.25} aria-hidden />
+                    {isConnectorSource && browseLevel === 'tables' ? 'All schemas' : 'Sources'}
                   </button>
                 )}
+
+                {isConnectorSource && browseLevel === 'tables' && selectedSchemaName ? (
+                  <div className="sc-browse-crumb" aria-label="Catalog path">
+                    <button type="button" onClick={handleBackToSchemas}>
+                      Schemas
+                    </button>
+                    <span aria-hidden>/</span>
+                    <strong>{selectedSchemaName}</strong>
+                  </div>
+                ) : null}
+
                 <div className="sc-panel__head">
-                  Schema tables (
-                  {selectedCatalogRow?.kind === 'connector' ? '—' : catalogTables.length})
+                  {isConnectorSource && browseLevel === 'schemas'
+                    ? `Schemas (${
+                        selectedCatalogRow?.kind === 'connector' &&
+                        (selectedCatalogRow.connector.metadata_status === 'PENDING' ||
+                          selectedCatalogRow.connector.metadata_status === 'PROCESSING')
+                          ? '—'
+                          : schemaGroups.length
+                      })`
+                    : isConnectorSource
+                      ? `Tables in ${selectedSchemaName ?? 'schema'} (${browseTables.length})`
+                      : `Sheets & tables (${
+                          selectedCatalogRow?.kind === 'datasource' &&
+                          selectedCatalogRow.datasource.status !== 'READY'
+                            ? '—'
+                            : catalogTables.length
+                        })`}
                 </div>
                 <div className="sc-tables-search">
                   <div className="sc-search-wrap">
                     <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
                     <input
                       className="sc-search-input"
-                      placeholder="Search database schema…"
+                      placeholder={
+                        isConnectorSource && browseLevel === 'schemas'
+                          ? 'Search schemas…'
+                          : isConnectorSource
+                            ? 'Search tables…'
+                            : 'Search sheets & tables…'
+                      }
                       value={tableSearchQuery}
                       onChange={(e) => setTableSearchQuery(e.target.value)}
-                      aria-label="Search tables in selected source"
-                      disabled={!selectedCatalogSource || selectedCatalogRow?.kind === 'connector'}
+                      aria-label="Search catalog"
+                      disabled={
+                        !selectedCatalogSource ||
+                        (selectedCatalogRow?.kind === 'connector' &&
+                          selectedCatalogRow.connector.metadata_status !== 'COMPLETED') ||
+                        (selectedCatalogRow?.kind === 'datasource' &&
+                          selectedCatalogRow.datasource.status !== 'READY')
+                      }
                     />
                   </div>
                 </div>
@@ -865,13 +1069,25 @@ const DatasetsPage: React.FC = () => {
                     <>
                       <div className="sc-skeleton-row" />
                       <div className="sc-skeleton-row" />
+                      <div className="sc-skeleton-row" />
                     </>
-                  ) : selectedCatalogRow?.kind === 'connector' ? (
+                  ) : selectedCatalogRow?.kind === 'connector' &&
+                    (selectedCatalogRow.connector.metadata_status === 'PENDING' ||
+                      selectedCatalogRow.connector.metadata_status === 'PROCESSING') ? (
                     <div className="sc-empty-panel">
                       <h3>Schema sync pending</h3>
                       <p>
-                        Table discovery for live databases will appear here once connector metadata
-                        sync completes.
+                        Schemas and tables for this database will appear once metadata sync
+                        completes.
+                      </p>
+                    </div>
+                  ) : selectedCatalogRow?.kind === 'connector' &&
+                    selectedCatalogRow.connector.metadata_status === 'FAILED' ? (
+                    <div className="sc-empty-panel">
+                      <h3>Schema sync failed</h3>
+                      <p>
+                        Could not discover schemas for this database. Try reconnecting or syncing
+                        again.
                       </p>
                     </div>
                   ) : selectedCatalogRow?.kind === 'datasource' &&
@@ -880,26 +1096,80 @@ const DatasetsPage: React.FC = () => {
                       <h3>Source processing</h3>
                       <p>Schema tables are available when this dataset reaches Ready status.</p>
                     </div>
-                  ) : filteredTables.length === 0 ? (
+                  ) : isConnectorSource && browseLevel === 'schemas' ? (
+                    filteredSchemaGroups.length === 0 ? (
+                      <div className="sc-empty-panel">
+                        <p>No schemas match your search.</p>
+                      </div>
+                    ) : (
+                      <ul className="sc-schema-list">
+                        {filteredSchemaGroups.map((group) => (
+                          <li key={group.name}>
+                            <button
+                              type="button"
+                              className={`sc-schema-item ${selectedSchemaName === group.name ? 'is-selected' : ''}`}
+                              onClick={() => handleSelectSchema(group.name)}
+                            >
+                              <span className="sc-schema-item__icon" aria-hidden>
+                                <FolderOpen size={18} strokeWidth={2} />
+                              </span>
+                              <span className="sc-schema-item__body">
+                                <span className="sc-schema-item__name">{group.name}</span>
+                                <span className="sc-schema-item__meta">
+                                  {group.tableCount} table{group.tableCount === 1 ? '' : 's'}
+                                  {group.rowCount > 0
+                                    ? ` · ${group.rowCount.toLocaleString()} rows`
+                                    : ''}
+                                </span>
+                              </span>
+                              <ChevronRight
+                                className="sc-schema-item__chevron"
+                                size={16}
+                                strokeWidth={2.25}
+                                aria-hidden
+                              />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  ) : browseTables.length === 0 ? (
                     <div className="sc-empty-panel">
-                      <p>No tables match your search.</p>
+                      <p>
+                        {isConnectorSource
+                          ? 'No tables in this schema match your search.'
+                          : 'No tables match your search.'}
+                      </p>
                     </div>
                   ) : (
                     <ul className="sc-table-list">
-                      {filteredTables.map((table) => (
-                        <li key={table.table_name}>
-                          <button
-                            type="button"
-                            className={`sc-table-item ${selectedTableName === table.table_name ? 'is-selected' : ''}`}
-                            onClick={() => handleMobileSelectTable(table.table_name)}
-                          >
-                            <span>{table.table_name}</span>
-                            <span className="sc-table-item__count">
-                              {table.row_count.toLocaleString()} rows
-                            </span>
-                          </button>
-                        </li>
-                      ))}
+                      {browseTables.map((table) => {
+                        const identity = parseTableIdentity(table);
+                        return (
+                          <li key={table.table_name}>
+                            <button
+                              type="button"
+                              className={`sc-table-item ${selectedTableName === table.table_name ? 'is-selected' : ''}`}
+                              onClick={() => handleSelectTable(table.table_name)}
+                            >
+                              <span className="sc-table-item__leading" aria-hidden>
+                                <Table2 size={16} strokeWidth={2} />
+                              </span>
+                              <span className="sc-table-item__label">
+                                <span className="sc-table-item__name">{identity.name}</span>
+                                {isConnectorSource ? (
+                                  <span className="sc-table-item__sub">
+                                    {table.column_count || table.columns?.length || 0} cols
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="sc-table-item__count">
+                                {table.row_count.toLocaleString()} rows
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
@@ -910,7 +1180,7 @@ const DatasetsPage: React.FC = () => {
               className={`sc-col sc-col--detail ${isMobile && mobileCatalogPane !== 'preview' ? 'sc-col--mobile-hidden' : ''}`}
             >
               <div className="sc-panel sc-panel--preview">
-                {isMobile && selectedTable && (
+                {isMobile && (
                   <button
                     type="button"
                     className="sc-mobile-back"
@@ -920,12 +1190,55 @@ const DatasetsPage: React.FC = () => {
                     Tables
                   </button>
                 )}
-                {selectedCatalogRow?.kind === 'connector' ? (
+                {selectedCatalogRow?.kind === 'connector' &&
+                (selectedCatalogRow.connector.metadata_status === 'PENDING' ||
+                  selectedCatalogRow.connector.metadata_status === 'PROCESSING') ? (
                   <div className="sc-empty-panel">
                     <h3>Schema sync pending</h3>
+                    <p>Table details will appear here once connector metadata sync completes.</p>
+                  </div>
+                ) : selectedCatalogRow?.kind === 'connector' &&
+                  selectedCatalogRow.connector.metadata_status === 'FAILED' ? (
+                  <div className="sc-empty-panel">
+                    <h3>Schema sync failed</h3>
+                    <p>Could not load schema details for this database.</p>
+                  </div>
+                ) : selectedCatalogRow?.kind === 'connector' && selectedTable ? (
+                  <ConnectorTableDetail
+                    table={selectedTable}
+                    activeTab={connectorDetailTab}
+                    onTabChange={setConnectorDetailTab}
+                    onUseInChat={() =>
+                      handleUseInChat({
+                        kind: 'connector',
+                        id: selectedCatalogRow.connector.id,
+                      })
+                    }
+                  />
+                ) : selectedCatalogRow?.kind === 'connector' &&
+                  browseLevel === 'schemas' &&
+                  !selectedTable ? (
+                  <div className="sc-empty-panel sc-empty-panel--guide">
+                    <div className="sc-empty-panel__icon" aria-hidden>
+                      <FolderOpen size={28} strokeWidth={1.75} />
+                    </div>
+                    <h3>Pick a schema</h3>
                     <p>
-                      Row preview for live databases will appear here once connector metadata sync
-                      completes.
+                      PostgreSQL catalogs start with schemas. Open one to browse its tables, then
+                      inspect columns or analyze the data in chat.
+                    </p>
+                  </div>
+                ) : selectedCatalogRow?.kind === 'connector' &&
+                  browseLevel === 'tables' &&
+                  !selectedTable ? (
+                  <div className="sc-empty-panel sc-empty-panel--guide">
+                    <div className="sc-empty-panel__icon" aria-hidden>
+                      <Table2 size={28} strokeWidth={1.75} />
+                    </div>
+                    <h3>Pick a table</h3>
+                    <p>
+                      Select a table in <strong>{selectedSchemaName ?? 'this schema'}</strong> to
+                      view columns or explore its data.
                     </p>
                   </div>
                 ) : selectedCatalogRow?.kind === 'datasource' &&
@@ -952,9 +1265,12 @@ const DatasetsPage: React.FC = () => {
                     onExpand={() => handlePreview(previewDatasetId, selectedTable.table_name)}
                   />
                 ) : (
-                  <div className="sc-empty-panel">
+                  <div className="sc-empty-panel sc-empty-panel--guide">
+                    <div className="sc-empty-panel__icon" aria-hidden>
+                      <Layers size={28} strokeWidth={1.75} />
+                    </div>
                     <h3>Select a table</h3>
-                    <p>Choose a schema table to preview rows in the data grid.</p>
+                    <p>Choose a sheet or table to preview rows in the data grid.</p>
                   </div>
                 )}
               </div>
@@ -963,37 +1279,18 @@ const DatasetsPage: React.FC = () => {
         )}
       </div>
 
-      {showConnectorSelectionModal && (
-        <ConnectorSelectionModal
-          onClose={() => setShowConnectorSelectionModal(false)}
-          onSelect={(type) => {
-            setShowConnectorSelectionModal(false);
-            if (type === 'upload') setShowUploadModal(true);
-            else if (type === 'postgres') setShowPostgresModal(true);
-          }}
-        />
-      )}
-
-      {showPostgresModal && workspaceId && (
-        <PostgresConnectorModal
+      {showConnectionPanel && workspaceId && (
+        <DatasourceConnectionPanel
           workspaceId={workspaceId}
-          onClose={() => setShowPostgresModal(false)}
+          onClose={() => setShowConnectionPanel(false)}
           onSuccess={() => {
             if (workspaceContext?.refreshConnectors) {
-              workspaceContext.refreshConnectors();
+              void workspaceContext.refreshConnectors();
             }
-            toast.success('PostgreSQL connector added successfully!');
-          }}
-        />
-      )}
-
-      {showUploadModal && workspaceId && (
-        <UploadModal
-          workspaceId={workspaceId}
-          onClose={() => setShowUploadModal(false)}
-          onSuccess={() => {
-            setShowUploadModal(false);
-            // Refresh will happen automatically via context
+            if (workspaceContext?.refreshDatasources) {
+              void workspaceContext.refreshDatasources();
+            }
+            toast.success('Datasource connected successfully.');
           }}
         />
       )}
@@ -1020,7 +1317,7 @@ const DatasetsPage: React.FC = () => {
               const newWorkspace = workspaceContext.workspaces.at(-1);
               if (newWorkspace && workspaceContext.setCurrentWorkspace) {
                 workspaceContext.setCurrentWorkspace(newWorkspace);
-                localStorage.setItem('activeWorkspaceId', newWorkspace.id);
+                writeActiveWorkspaceId(newWorkspace.id);
                 navigate(`/workspace/${newWorkspace.id}`);
               }
             }

@@ -8,6 +8,7 @@ import { auth, getGoogleProvider } from '../lib/firebase';
 import { apiClient } from './apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
 import { clearAllSelectedDatasetStorage } from '../lib/selectedDatasourceStorage';
+import { clearUserNamespace } from '../lib/uiMemory';
 import { SESSION_CLEAR_LOCALSTORAGE_KEYS } from '../constants/clientStorageKeys';
 
 const TOKEN_KEY = 'firebase_auth_token';
@@ -84,12 +85,23 @@ function persistBackendUser(user: unknown): void {
 }
 
 export function clearSessionLocal(): void {
+  let uid: string | null = null;
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { uid?: string };
+      uid = parsed?.uid ?? null;
+    }
+  } catch {
+    /* ignore */
+  }
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(BACKEND_USER_KEY);
   localStorage.removeItem(GOOGLE_SIGNUP_FLOW_KEY);
   SESSION_CLEAR_LOCALSTORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
   clearAllSelectedDatasetStorage();
+  clearUserNamespace(uid);
   apiCacheManager.clearAll();
 }
 

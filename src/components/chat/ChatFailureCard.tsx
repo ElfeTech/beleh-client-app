@@ -1,4 +1,5 @@
 import { AlertCircle, RotateCcw } from 'lucide-react';
+import { MarkdownText } from '../MarkdownText';
 import './ChatFailureCard.css';
 
 interface ChatFailureCardProps {
@@ -23,7 +24,7 @@ export function ChatFailureCard({
       </div>
       <div className="chat-failure-card__body">
         <p className="chat-failure-card__title">{title}</p>
-        <p className="chat-failure-card__detail">{detail}</p>
+        <MarkdownText className="chat-failure-card__detail">{detail}</MarkdownText>
         {canRetry && onRetry && (
           <button
             type="button"

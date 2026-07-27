@@ -1,168 +1,228 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { CreditCard, Check, Sparkles } from 'lucide-react';
+import { toast } from 'sonner';
 import { useUsage } from '../../context/UsageContext';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
-import type { Plan } from '../../types/usage';
+import { QuotaUsageGrid } from '../usage/QuotaUsageGrid';
+import type { BillingCatalogPlan, BillingPrice, BillingSubscription } from '../../types/billing';
+import { ApiRequestError, formatBillingErrorToast } from '../../utils/apiErrorMessage';
+import {
+  checkoutPriceForCycle,
+  discountForCycle,
+  displayAmountForCycle,
+  enrichCatalogPlans,
+  priceForCycle,
+  sortPlansByPrice,
+  yearlySavingsPercent,
+} from '../../lib/billingCatalog';
+import { planFeatureList } from '../../lib/planFeatures';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 import { BillingCycleToggle, type BillingCycle } from './BillingCycleToggle';
 import './SettingsShared.css';
 import './UsageSection.css';
 
-function formatTokenCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}K`;
-  return n.toLocaleString();
+function formatMoney(unitAmount: number, currency: string): string {
+  const amount = unitAmount / 100;
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: (currency || 'usd').toUpperCase(),
+      maximumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    }).format(amount);
+  } catch {
+    return `$${(unitAmount / 100).toFixed(unitAmount % 100 === 0 ? 0 : 2)}`;
+  }
 }
 
-function formatUsageValue(n: number, metricKey: string): string {
-  if (metricKey === 'tokens') return formatTokenCount(n);
-  return n.toLocaleString();
-}
-
-function pct(used: number, limit: number): number {
-  if (limit <= 0) return 0;
-  return Math.min(100, (used / limit) * 100);
-}
-
-function planFeatures(plan: Plan): string[] {
-  const { limits } = plan;
-  const unlimited = plan.tier.toLowerCase().includes('enterprise');
-  return [
-    unlimited
-      ? 'Unlimited queries per month'
-      : `${limits.monthly_query_limit.toLocaleString()} Queries per month`,
-    unlimited ? 'Unlimited datasets' : `${limits.max_datasets} Datasets`,
-    unlimited
-      ? 'Unlimited AI tokens'
-      : `${formatTokenCount(limits.monthly_llm_token_limit)} Tokens per month`,
-    unlimited
-      ? 'Unlimited chart renders'
-      : `${limits.monthly_chart_renders_limit.toLocaleString()} Chart renders`,
-    unlimited
-      ? 'Unlimited workspaces'
-      : `${limits.max_workspaces} Workspace${limits.max_workspaces > 1 ? 's' : ''}`,
-    ...(unlimited ? ['Dedicated VPC clusters', 'Scale clusters'] : []),
-  ];
-}
-
-function isProTier(plan: Plan): boolean {
+function isProTier(plan: BillingCatalogPlan): boolean {
   const t = plan.tier.toLowerCase();
   return t.includes('pro') || plan.name.toLowerCase().includes('pro');
 }
 
-function isEnterpriseTier(plan: Plan): boolean {
+function isEnterpriseTier(plan: BillingCatalogPlan): boolean {
   const t = plan.tier.toLowerCase();
   return t.includes('enterprise') || plan.name.toLowerCase().includes('enterprise');
 }
 
-/** Shown when the API returns no plans or the request fails */
-const DEFAULT_BILLING_PLANS: Plan[] = [
-  {
-    id: 'free_starter',
-    name: 'Free Starter',
-    tier: 'free',
-    description: 'Free Developer Sandbox',
-    price_monthly: 0,
-    price_yearly: 0,
-    limits: {
-      monthly_query_limit: 100,
-      monthly_llm_token_limit: 50_000,
-      monthly_rows_scanned_limit: 100_000,
-      monthly_chart_renders_limit: 50,
-      max_datasets: 3,
-      max_workspaces: 1,
-      max_members_per_workspace: 1,
-    },
-    features: {},
-    is_active: true,
-  },
-  {
-    id: 'pro_developer',
-    name: 'Pro Developer',
-    tier: 'pro',
-    description: 'For growing teams and production workloads',
-    price_monthly: 49,
-    price_yearly: 470,
-    limits: {
-      monthly_query_limit: 5_000,
-      monthly_llm_token_limit: 500_000,
-      monthly_rows_scanned_limit: 5_000_000,
-      monthly_chart_renders_limit: 500,
-      max_datasets: 25,
-      max_workspaces: 5,
-      max_members_per_workspace: 10,
-    },
-    features: {},
-    is_active: true,
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    tier: 'enterprise',
-    description: 'Dedicated clusters and compliance controls',
-    price_monthly: 199,
-    price_yearly: 1_910,
-    limits: {
-      monthly_query_limit: 999_999,
-      monthly_llm_token_limit: 10_000_000,
-      monthly_rows_scanned_limit: 999_999_999,
-      monthly_chart_renders_limit: 999_999,
-      max_datasets: 999,
-      max_workspaces: 999,
-      max_members_per_workspace: 999,
-    },
-    features: {},
-    is_active: true,
-  },
-];
-
-function resolveDisplayPlans(apiPlans: Plan[]): Plan[] {
-  const active = apiPlans
-    .filter((p) => p.is_active)
-    .sort((a, b) => a.price_monthly - b.price_monthly);
-  return active.length > 0 ? active : DEFAULT_BILLING_PLANS;
+function isFreeTier(plan: BillingCatalogPlan): boolean {
+  const t = plan.tier.toLowerCase();
+  if (t.includes('free')) return true;
+  const hasPaidAmount = plan.prices.some((p) => (p.unit_amount ?? 0) > 0);
+  const hasCheckout = plan.prices.some((p) => Boolean(p.stripe_price_id));
+  return !hasPaidAmount && !hasCheckout;
 }
 
-function isCurrentPlan(tierPlan: Plan, currentPlanId: string, currentTier?: string): boolean {
-  if (tierPlan.id === currentPlanId) return true;
+function isCurrentCatalogPlan(
+  plan: BillingCatalogPlan,
+  subscription: BillingSubscription | null,
+  usagePlanId?: string,
+  usageTier?: string,
+): boolean {
+  const currentId = subscription?.plan?.plan_id ?? usagePlanId ?? '';
+  const currentTier = subscription?.plan?.tier ?? usageTier;
+  if (currentId && plan.plan_id === currentId) return true;
   if (!currentTier) return false;
-  return tierPlan.tier.toLowerCase() === currentTier.toLowerCase();
+  return plan.tier.toLowerCase() === currentTier.toLowerCase();
+}
+
+function formatPeriodDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function billingErrorMessage(err: unknown, fallback: string): string {
+  if (err instanceof ApiRequestError) {
+    return formatBillingErrorToast(err.code, err.detail || fallback);
+  }
+  if (err instanceof Error && err.message) return err.message;
+  return fallback;
+}
+
+function checkoutUrls() {
+  const origin = window.location.origin;
+  return {
+    success_url: `${origin}/settings/billing/success?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${origin}/settings/billing?checkout=canceled`,
+  };
 }
 
 export function UsageSection() {
   const { user } = useAuth();
-  const { currentUsage, remaining, isLoading, error } = useUsage();
-  const [plans, setPlans] = useState<Plan[]>(DEFAULT_BILLING_PLANS);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { currentUsage, isLoading, error, refreshUsageAfterAction } = useUsage();
+
+  const [catalogPlans, setCatalogPlans] = useState<BillingCatalogPlan[]>([]);
+  const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
   const [plansLoading, setPlansLoading] = useState(true);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
+  const [checkoutPriceId, setCheckoutPriceId] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
+  const [expandedPlans, setExpandedPlans] = useState<Set<string>>(() => new Set());
+  const plansSectionRef = useRef<HTMLElement | null>(null);
+  const queryToastHandled = useRef(false);
 
-  const fetchPlans = useCallback(async () => {
+  const fetchBilling = useCallback(async () => {
     if (!user) {
-      setPlans(DEFAULT_BILLING_PLANS);
+      setCatalogPlans([]);
+      setSubscription(null);
       setPlansLoading(false);
       return;
     }
     try {
       setPlansLoading(true);
       const token = await user.getIdToken();
-      const [available, currentPlanRes] = await Promise.all([
-        apiClient.getAvailablePlans(),
-        apiClient.getCurrentPlan(token),
+      const [catalog, sub, usagePlansRes] = await Promise.all([
+        apiClient.getBillingCatalog(token),
+        apiClient.getBillingSubscription(token).catch(() => null),
+        apiClient.getAvailablePlans().catch(() => ({ plans: [] })),
       ]);
-      setPlans(resolveDisplayPlans(available.plans));
-      setBillingCycle(currentPlanRes.billing_cycle === 'yearly' ? 'yearly' : 'monthly');
+      const plans = sortPlansByPrice(
+        enrichCatalogPlans(catalog.plans ?? [], usagePlansRes.plans ?? []),
+      );
+      setCatalogPlans(plans);
+      setSubscription(sub);
+
+      const hasYearly = plans.some((p) => p.prices.some((pr) => pr.interval === 'year'));
+      const hasMonthly = plans.some((p) => p.prices.some((pr) => pr.interval === 'month'));
+      if (sub?.stripe_price_id) {
+        const matched = plans
+          .flatMap((p) => p.prices)
+          .find((pr) => pr.stripe_price_id === sub.stripe_price_id);
+        if (matched?.interval === 'year') setBillingCycle('yearly');
+        else if (matched?.interval === 'month') setBillingCycle('monthly');
+      } else if (!hasMonthly && hasYearly) {
+        setBillingCycle('yearly');
+      }
     } catch (e) {
-      console.error('Failed to load plans:', e);
-      setPlans(DEFAULT_BILLING_PLANS);
+      console.error('Failed to load billing catalog:', e);
+      toast.error(billingErrorMessage(e, 'Failed to load billing plans'));
+      setCatalogPlans([]);
     } finally {
       setPlansLoading(false);
     }
   }, [user]);
 
   useEffect(() => {
-    void fetchPlans();
-  }, [fetchPlans]);
+    void fetchBilling();
+  }, [fetchBilling]);
+
+  useEffect(() => {
+    if (queryToastHandled.current) return;
+    const checkout = searchParams.get('checkout');
+    const upgraded = searchParams.get('upgraded');
+    const upgrade = searchParams.get('upgrade');
+
+    if (checkout === 'canceled') {
+      queryToastHandled.current = true;
+      toast.message('Checkout canceled. No changes were made.');
+      const next = new URLSearchParams(searchParams);
+      next.delete('checkout');
+      setSearchParams(next, { replace: true });
+    } else if (upgraded === '1') {
+      queryToastHandled.current = true;
+      toast.success('Subscription updated.');
+      void refreshUsageAfterAction();
+      void fetchBilling();
+      const next = new URLSearchParams(searchParams);
+      next.delete('upgraded');
+      setSearchParams(next, { replace: true });
+    } else if (upgrade === '1' && plansSectionRef.current) {
+      queryToastHandled.current = true;
+      plansSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      const next = new URLSearchParams(searchParams);
+      next.delete('upgrade');
+      setSearchParams(next, { replace: true });
+    }
+  }, [searchParams, setSearchParams, refreshUsageAfterAction, fetchBilling]);
+
+  const openPortal = useCallback(async () => {
+    if (!user || portalLoading) return;
+    try {
+      setPortalLoading(true);
+      const token = await user.getIdToken();
+      const { portal_url } = await apiClient.createBillingPortalSession(token, {
+        return_url: `${window.location.origin}/settings/billing`,
+      });
+      window.location.assign(portal_url);
+    } catch (e) {
+      toast.error(billingErrorMessage(e, 'Could not open the billing portal'));
+      setPortalLoading(false);
+    }
+  }, [user, portalLoading]);
+
+  const startCheckout = useCallback(
+    async (price: BillingPrice) => {
+      if (!user || checkoutPriceId || !price.stripe_price_id) return;
+      try {
+        setCheckoutPriceId(price.stripe_price_id);
+        const token = await user.getIdToken();
+        const urls = checkoutUrls();
+        const { checkout_url } = await apiClient.createCheckoutSession(token, {
+          stripe_price_id: price.stripe_price_id,
+          ...urls,
+        });
+        window.location.assign(checkout_url);
+      } catch (e) {
+        toast.error(billingErrorMessage(e, 'Could not start checkout'));
+        setCheckoutPriceId(null);
+      }
+    },
+    [user, checkoutPriceId],
+  );
+
+  const togglePlanFeatures = useCallback((planId: string) => {
+    setExpandedPlans((current) => {
+      const next = new Set(current);
+      if (next.has(planId)) next.delete(planId);
+      else next.add(planId);
+      return next;
+    });
+  }, []);
 
   if (isLoading && !currentUsage) {
     return (
@@ -186,103 +246,104 @@ export function UsageSection() {
     );
   }
 
-  const plan = currentUsage?.plan;
-  const metrics = currentUsage?.metrics;
-  const currentPlanId = plan?.id ?? '';
-
-  const usageMetrics = [
-    {
-      key: 'queries',
-      label: 'Query quota',
-      caption: `${remaining?.queries_limit.toLocaleString() ?? 0} Queries per month`,
-      used: remaining?.queries_used ?? metrics?.queries_used ?? 0,
-      limit: remaining?.queries_limit ?? metrics?.queries_limit ?? 0,
-    },
-    {
-      key: 'datasets',
-      label: 'Table pools',
-      caption: `${metrics?.datasets_limit ?? 0} Datasets`,
-      used: metrics?.datasets_used ?? 0,
-      limit: metrics?.datasets_limit ?? 0,
-    },
-    {
-      key: 'tokens',
-      label: 'Inference',
-      caption: `${formatTokenCount(metrics?.llm_tokens_limit ?? 0)} Tokens per month`,
-      used: metrics?.llm_tokens_used ?? 0,
-      limit: metrics?.llm_tokens_limit ?? 0,
-    },
-    {
-      key: 'charts',
-      label: 'Graphics',
-      caption: `${metrics?.chart_renders_limit ?? 0} Chart renders`,
-      used: metrics?.chart_renders_used ?? 0,
-      limit: metrics?.chart_renders_limit ?? 0,
-    },
-    {
-      key: 'workspaces',
-      label: 'Hierarchy',
-      caption: `${plan?.limits.max_workspaces ?? 1} Workspace${(plan?.limits.max_workspaces ?? 1) > 1 ? 's' : ''}`,
-      used: 1,
-      limit: plan?.limits.max_workspaces ?? 1,
-    },
-  ];
-
-  const getPlanPrice = (p: Plan) => (billingCycle === 'monthly' ? p.price_monthly : p.price_yearly);
+  const usagePlan = currentUsage?.plan;
+  const planName = subscription?.plan?.name ?? usagePlan?.name ?? 'Free';
+  const planDescription = usagePlan?.description ?? subscription?.plan?.name ?? planName;
+  const periodEnd = formatPeriodDate(
+    subscription?.billing_cycle_end ?? currentUsage?.billing_cycle_end,
+  );
+  const status = subscription?.status ?? null;
+  const isPastDue = status === 'past_due' || status === 'unpaid';
+  const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
+  const hasStripeSub = Boolean(subscription?.stripe_subscription_id);
+  const showCycleToggle = catalogPlans.some(
+    (p) =>
+      p.prices.some((pr) => pr.interval === 'month') &&
+      p.prices.some((pr) => pr.interval === 'year'),
+  );
+  const annualSavings = yearlySavingsPercent(catalogPlans);
 
   return (
     <div className="settings-page-section billing-page">
       <SettingsSectionHeader
         breadcrumbLabel="BILLING & PLANS"
         title="Billing & Plans Settings"
-        description="Manage subscription and files. Keep values synchronous for corporate compliance audits."
+        description="Manage your subscription, usage quotas, and payment method."
         icon={<CreditCard size={20} strokeWidth={1.75} />}
       />
 
-      {plan && (
-        <section className="billing-current-plan settings-card">
-          <div className="billing-current-plan__top">
-            <div className="billing-current-plan__badges">
-              <span className="billing-badge billing-badge--current">
-                Current plan: {plan.name}
-              </span>
-              <span className="billing-badge billing-badge--id">ID: {plan.id}</span>
-            </div>
-            <BillingCycleToggle value={billingCycle} onChange={setBillingCycle} />
+      {isPastDue && (
+        <section className="billing-alert billing-alert--past-due settings-card" role="alert">
+          <div>
+            <h3>Payment past due</h3>
+            <p>Update your payment method to keep your {planName} plan and avoid interruption.</p>
           </div>
-          <h2 className="billing-current-plan__name">{plan.description || plan.name}</h2>
-          <p className="billing-current-plan__desc">
-            Ideal for individual developers exploring schema catalogs and AI-assisted analytics in a
-            secure sandbox environment.
-          </p>
+          <button
+            type="button"
+            className="billing-stripe-portal-btn"
+            disabled={portalLoading}
+            onClick={() => void openPortal()}
+          >
+            {portalLoading ? 'Opening…' : 'Update payment method'}
+          </button>
         </section>
       )}
+
+      <section className="billing-current-plan settings-card">
+        <div className="billing-current-plan__top">
+          <div className="billing-current-plan__badges">
+            <span className="billing-badge billing-badge--current">Current plan: {planName}</span>
+            {status && (
+              <span
+                className={`billing-badge billing-badge--status billing-badge--status-${status}`}
+              >
+                {status.replaceAll('_', ' ')}
+              </span>
+            )}
+            {cancelAtPeriodEnd && (
+              <span className="billing-badge billing-badge--cancel">Cancels at period end</span>
+            )}
+          </div>
+          {showCycleToggle && (
+            <BillingCycleToggle
+              value={billingCycle}
+              onChange={setBillingCycle}
+              yearlySavingsPercent={annualSavings}
+            />
+          )}
+        </div>
+        <h2 className="billing-current-plan__name">{planDescription}</h2>
+        <p className="billing-current-plan__desc">
+          {periodEnd
+            ? cancelAtPeriodEnd
+              ? `Access continues until ${periodEnd}.`
+              : `Current billing period ends ${periodEnd}.`
+            : 'Usage resets each billing cycle.'}
+        </p>
+        {hasStripeSub && (
+          <div className="billing-current-plan__actions">
+            <button
+              type="button"
+              className="billing-manage-btn"
+              disabled={portalLoading}
+              onClick={() => void openPortal()}
+            >
+              {portalLoading ? 'Opening…' : 'Manage billing'}
+            </button>
+          </div>
+        )}
+      </section>
 
       <section className="billing-section">
         <h3 className="billing-section__title">
           <Check size={16} strokeWidth={2.5} aria-hidden />
           Plan includes &amp; usage tracker
         </h3>
-        <div className="billing-usage-grid">
-          {usageMetrics.map(({ key, label, caption, used, limit }) => (
-            <div key={key} className="billing-usage-card settings-card">
-              <p className="billing-usage-card__label">{label}</p>
-              <p className="billing-usage-card__caption">{caption}</p>
-              <div className="billing-usage-card__bar">
-                <div
-                  className="billing-usage-card__fill"
-                  style={{ width: `${pct(used, limit)}%` }}
-                />
-              </div>
-              <p className="billing-usage-card__used">
-                Used: {formatUsageValue(used, key)} / Limit: {formatUsageValue(limit, key)}
-              </p>
-            </div>
-          ))}
-        </div>
+
+        <QuotaUsageGrid />
       </section>
 
-      <section className="billing-section">
+      <section className="billing-section" ref={plansSectionRef} id="billing-plans">
         <h3 className="billing-section__title">
           <Sparkles size={16} strokeWidth={2} aria-hidden />
           Available upgrade plans &amp; limits
@@ -293,67 +354,168 @@ export function UsageSection() {
             <div className="billing-spinner" />
             <p>Loading plans…</p>
           </div>
+        ) : catalogPlans.length === 0 ? (
+          <div className="billing-error settings-card">
+            <h3>Plans unavailable</h3>
+            <p>We could not load pricing right now. Please try again later.</p>
+            <button
+              type="button"
+              className="billing-manage-btn"
+              onClick={() => void fetchBilling()}
+            >
+              Retry
+            </button>
+          </div>
         ) : (
           <div className="billing-plans-grid">
-            {plans.map((tierPlan) => {
-              const isCurrent = isCurrentPlan(tierPlan, currentPlanId, plan?.tier);
+            {catalogPlans.map((tierPlan) => {
+              const isCurrent = isCurrentCatalogPlan(
+                tierPlan,
+                subscription,
+                usagePlan?.id,
+                usagePlan?.tier,
+              );
               const recommended = isProTier(tierPlan);
               const enterprise = isEnterpriseTier(tierPlan);
-              const price = getPlanPrice(tierPlan);
+              const free = isFreeTier(tierPlan);
+              const price = priceForCycle(tierPlan, billingCycle);
+              const checkoutPrice = checkoutPriceForCycle(tierPlan, billingCycle);
+              const displayAmount = displayAmountForCycle(tierPlan, billingCycle);
+              const discount = discountForCycle(tierPlan, billingCycle);
+              const currency = price?.currency || 'usd';
+              const busy = checkoutPriceId === checkoutPrice?.stripe_price_id;
+              const allFeatures = planFeatureList(tierPlan);
+              const featuresExpanded = expandedPlans.has(tierPlan.plan_id);
+              const visibleFeatures = featuresExpanded ? allFeatures : allFeatures.slice(0, 8);
+
+              let cta: ReactNode;
+              if (isCurrent) {
+                cta = (
+                  <button
+                    type="button"
+                    className="billing-tier-card__btn billing-tier-card__btn--active"
+                    disabled
+                  >
+                    Currently active plan
+                  </button>
+                );
+              } else if (checkoutPrice) {
+                cta = (
+                  <button
+                    type="button"
+                    className="billing-tier-card__btn billing-tier-card__btn--upgrade"
+                    disabled={Boolean(checkoutPriceId)}
+                    onClick={() => void startCheckout(checkoutPrice)}
+                  >
+                    {busy ? 'Redirecting…' : `Upgrade to ${tierPlan.name}`}
+                  </button>
+                );
+              } else if (enterprise && (free || displayAmount == null)) {
+                cta = (
+                  <button
+                    type="button"
+                    className="billing-tier-card__btn billing-tier-card__btn--outline"
+                    onClick={() => navigate('/settings/help')}
+                  >
+                    Contact sales
+                  </button>
+                );
+              } else if (free || (displayAmount != null && displayAmount === 0 && !checkoutPrice)) {
+                cta = (
+                  <button
+                    type="button"
+                    className="billing-tier-card__btn billing-tier-card__btn--active"
+                    disabled
+                  >
+                    Free
+                  </button>
+                );
+              } else {
+                cta = (
+                  <button
+                    type="button"
+                    className="billing-tier-card__btn billing-tier-card__btn--soon"
+                    disabled
+                  >
+                    Checkout unavailable
+                  </button>
+                );
+              }
 
               return (
                 <article
-                  key={tierPlan.id}
+                  key={tierPlan.plan_id}
                   className={`billing-tier-card settings-card ${recommended ? 'billing-tier-card--recommended' : ''} ${isCurrent ? 'billing-tier-card--current' : ''}`}
                 >
                   {recommended && <span className="billing-tier-card__ribbon">Recommended</span>}
                   <header className="billing-tier-card__header">
                     <h4 className="billing-tier-card__name">{tierPlan.name}</h4>
-                    {recommended && <p className="billing-tier-card__promo">Save 20% on Annual</p>}
-                    {enterprise && (
-                      <p className="billing-tier-card__promo billing-tier-card__promo--link">
-                        Scale clusters
+                    {discount && tierPlan.discount_label && (
+                      <p className="billing-tier-card__promo billing-tier-card__promo--deal">
+                        {tierPlan.discount_label}
                       </p>
+                    )}
+                    {!discount && recommended && price?.interval === 'year' && (
+                      <p className="billing-tier-card__promo">Billed annually</p>
                     )}
                   </header>
                   <div className="billing-tier-card__price">
-                    <span className="billing-tier-card__amount">${price}</span>
-                    <span className="billing-tier-card__period">
-                      / {billingCycle === 'monthly' ? 'month' : 'year'}
-                    </span>
+                    {displayAmount != null ? (
+                      <>
+                        <span className="billing-tier-card__amount">
+                          {formatMoney(displayAmount, currency)}
+                        </span>
+                        {(displayAmount > 0 || !free) && (
+                          <span className="billing-tier-card__period">
+                            / {billingCycle === 'monthly' ? 'month' : 'year'}
+                          </span>
+                        )}
+                        {discount && (
+                          <span className="billing-tier-card__discount">
+                            <s
+                              className="billing-tier-card__compare"
+                              aria-label={`Regular price ${formatMoney(discount.compareAtAmount, currency)}`}
+                            >
+                              {formatMoney(discount.compareAtAmount, currency)}
+                            </s>
+                            <span className="billing-tier-card__save-badge">
+                              Save {discount.discountPercent}%
+                            </span>
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="billing-tier-card__amount">
+                        {enterprise ? 'Custom' : free ? '$0' : '—'}
+                      </span>
+                    )}
                   </div>
                   <ul className="billing-tier-card__features">
-                    {planFeatures(tierPlan).map((feat) => (
-                      <li key={feat}>
+                    {visibleFeatures.map((feature) => (
+                      <li key={feature.key}>
                         <Check
                           size={14}
                           strokeWidth={2.5}
                           className="billing-tier-card__check"
                           aria-hidden
                         />
-                        {feat}
+                        {feature.label}
                       </li>
                     ))}
                   </ul>
-                  <footer className="billing-tier-card__footer">
-                    {isCurrent ? (
-                      <button
-                        type="button"
-                        className="billing-tier-card__btn billing-tier-card__btn--active"
-                        disabled
-                      >
-                        Currently active plan
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="billing-tier-card__btn billing-tier-card__btn--soon"
-                        disabled
-                      >
-                        Coming soon
-                      </button>
-                    )}
-                  </footer>
+                  {allFeatures.length > 8 && (
+                    <button
+                      type="button"
+                      className="billing-tier-card__more"
+                      aria-expanded={featuresExpanded}
+                      onClick={() => togglePlanFeatures(tierPlan.plan_id)}
+                    >
+                      {featuresExpanded
+                        ? 'Show fewer features'
+                        : `Show all ${allFeatures.length} features`}
+                    </button>
+                  )}
+                  <footer className="billing-tier-card__footer">{cta}</footer>
                 </article>
               );
             })}
@@ -365,15 +527,25 @@ export function UsageSection() {
         <div className="billing-stripe-banner__text">
           <span className="billing-stripe-dot" aria-hidden />
           <div>
-            <h3>Secure Stripe gateway enabled</h3>
+            <h3>Secure Stripe billing</h3>
             <p>
-              Payments and subscription changes are processed through the Stripe billing portal.
-              Invoices, tax IDs, and payment methods are managed there.
+              Payments, invoices, tax IDs, and payment methods are managed in the Stripe customer
+              portal. Cancel or change plans there anytime.
             </p>
           </div>
         </div>
-        <button type="button" className="billing-stripe-portal-btn" disabled>
-          Coming soon
+        <button
+          type="button"
+          className="billing-stripe-portal-btn"
+          disabled={portalLoading || !hasStripeSub}
+          title={!hasStripeSub ? 'Available after you subscribe' : undefined}
+          onClick={() => void openPortal()}
+        >
+          {portalLoading
+            ? 'Opening…'
+            : hasStripeSub
+              ? 'Open billing portal'
+              : 'Subscribe to manage'}
         </button>
       </section>
     </div>

@@ -12,20 +12,22 @@ import { HelpSection } from '../components/settings/HelpSection';
 import { AboutSection } from '../components/settings/AboutSection';
 import { SettingsComplianceFooter } from '../components/settings/SettingsComplianceFooter';
 import { WorkspacesPage } from './WorkspacesPage';
+import UsageStatisticsPage from './UsageStatisticsPage';
 import { isSettingsNavSectionVisible } from '../components/settings/settingsNav';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import './SettingsPage.css';
 
-const VALID_SECTIONS: SettingsSection[] = [
+const VALID_SECTIONS = new Set<SettingsSection>([
   'general',
   'security',
   'workspaces',
   'members',
   'notifications',
+  'usage',
   'billing',
   'help',
   'about',
-];
+]);
 
 const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -39,7 +41,7 @@ const SettingsPage: React.FC = () => {
     const pathParts = location.pathname.split('/');
     const sectionIndex = pathParts.indexOf('settings') + 1;
     const section = pathParts[sectionIndex] as SettingsSection;
-    return VALID_SECTIONS.includes(section) ? section : null;
+    return VALID_SECTIONS.has(section) ? section : null;
   };
 
   const [activeSection, setActiveSection] = useState<SettingsSection | null>(
@@ -125,6 +127,8 @@ const SettingsPage: React.FC = () => {
         return <SecuritySection />;
       case 'notifications':
         return <NotificationsSection />;
+      case 'usage':
+        return <UsageStatisticsPage embedded />;
       case 'billing':
         return <UsageSection />;
       case 'workspaces':
@@ -333,6 +337,34 @@ const SettingsPage: React.FC = () => {
         <div className="settings-mobile-section">
           <h3 className="mobile-section-title">Billing</h3>
           <div className="settings-menu">
+            <button
+              type="button"
+              className="settings-menu-item"
+              onClick={() => handleSectionChange('usage')}
+            >
+              <div className="menu-item-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 3v18h18M7 16l4-5 4 3 5-7"
+                  />
+                </svg>
+              </div>
+              <div className="menu-item-content">
+                <span className="menu-item-title">Usage Analytics</span>
+                <span className="menu-item-subtitle">Track consumption and quotas</span>
+              </div>
+              <svg className="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 5l7 7-7 7"
+                />
+              </svg>
+            </button>
             <button
               type="button"
               className="settings-menu-item"

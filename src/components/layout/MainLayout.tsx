@@ -8,6 +8,7 @@ import BottomNav from './BottomNav';
 import { cn } from '../../lib/utils';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { SupportHelpBubble } from '../support/SupportHelpBubble';
+import { readActiveWorkspaceId } from '../../lib/uiMemory';
 
 export function MainLayout() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -25,12 +26,7 @@ export function MainLayout() {
     if (workspaceIdFromPath) return workspaceIdFromPath;
     const ctxId = currentWorkspace?.id;
     if (ctxId && ctxId !== 'undefined') return ctxId;
-    try {
-      const v = localStorage.getItem('activeWorkspaceId');
-      return v && v !== 'undefined' ? v : null;
-    } catch {
-      return null;
-    }
+    return readActiveWorkspaceId();
   }, [workspaceIdFromPath, currentWorkspace?.id]);
 
   const onSettingsRoute = location.pathname.startsWith('/settings');
@@ -83,15 +79,21 @@ export function MainLayout() {
                 {onSettingsRoute ? 'Settings' : workspaceIdFromPath ? 'Workspace' : 'Menu'}
               </p>
             </div>
-            {onSettingsRoute && workspaceIdForReturn ? (
-              <Link
-                to={`/workspace/${workspaceIdForReturn}`}
-                className="flex shrink-0 items-center gap-1.5 rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)] px-3 py-2 text-xs font-bold text-[color:var(--text-primary)] transition-colors active:scale-[0.98]"
-              >
-                <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
-                <span className="max-w-[5.5rem] truncate sm:max-w-none">Chat</span>
-              </Link>
-            ) : null}
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {onSettingsRoute && workspaceIdForReturn ? (
+                <Link
+                  to={`/workspace/${workspaceIdForReturn}`}
+                  className="flex shrink-0 items-center gap-1.5 rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)] px-3 py-2 text-xs font-bold text-[color:var(--text-primary)] transition-colors active:scale-[0.98]"
+                >
+                  <ArrowLeft className="h-4 w-4 shrink-0" strokeWidth={2} />
+                  <span className="max-w-[5.5rem] truncate sm:max-w-none">Chat</span>
+                </Link>
+              ) : null}
+              <SupportHelpBubble
+                variant="header"
+                elevateForBottomNav={Boolean(workspaceIdFromPath)}
+              />
+            </div>
           </header>
 
           {mobileDrawerOpen && (
@@ -144,7 +146,7 @@ export function MainLayout() {
         {isMobile && workspaceIdFromPath ? <BottomNav workspaceId={workspaceIdFromPath} /> : null}
       </div>
 
-      <SupportHelpBubble elevateForBottomNav={Boolean(isMobile && workspaceIdFromPath)} />
+      {!isMobile ? <SupportHelpBubble /> : null}
     </div>
   );
 }

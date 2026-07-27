@@ -139,6 +139,9 @@ export function ArtifactChart({ type, data, isExpanded = false }: ArtifactChartP
 
   const height = isExpanded ? 500 : 350;
   const multi = seriesKeys.length > 1 && !(seriesKeys.length === 1 && seriesKeys[0] === 'value');
+  // A bottom legend lands inside the 60px margin while the angled XAxis claims 80px,
+  // so the two collide. Keep the legend above the plot instead.
+  const legend = multi ? <Legend verticalAlign="top" align="center" height={32} /> : null;
 
   if (type === 'line') {
     return (
@@ -158,7 +161,7 @@ export function ArtifactChart({ type, data, isExpanded = false }: ArtifactChartP
               tickFormatter={(v) => formatAxisValue(v)}
             />
             <Tooltip content={<BarTooltip />} />
-            {multi ? <Legend /> : null}
+            {legend}
             {multi ? (
               seriesKeys.map((key, i) => (
                 <Line
@@ -205,7 +208,7 @@ export function ArtifactChart({ type, data, isExpanded = false }: ArtifactChartP
             tickFormatter={(v) => formatAxisValue(v)}
           />
           <Tooltip content={<BarTooltip />} />
-          {multi ? <Legend /> : null}
+          {legend}
           {multi ? (
             seriesKeys.map((key, i) => (
               <Bar

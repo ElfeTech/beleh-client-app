@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { WorkspaceContext } from '../../context/WorkspaceContext';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
+import { writeActiveWorkspaceId } from '../../lib/uiMemory';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { ActionSheet, type ActionSheetItem } from '../common/ActionSheet';
 import { ConfirmDialog } from '../common/ConfirmDialog';
@@ -67,7 +68,7 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
     if (workspace) {
       setCurrentWorkspace(workspace);
       // Persist selection
-      localStorage.setItem('activeWorkspaceId', workspaceId);
+      writeActiveWorkspaceId(workspaceId);
       // Navigate to workspace
       navigate(`/workspace/${workspaceId}`);
       onClose();

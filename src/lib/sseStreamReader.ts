@@ -1,23 +1,44 @@
-export type SseEventHandler = (event: string, data: string) => void;
+export type SseEventHandler = (event: string, data: string, id?: string) => void;
+
+export interface ReadSseRequestOptions {
+  url: string;
+  method?: 'GET' | 'POST';
+  headers?: Record<string, string>;
+  body?: unknown;
+  signal?: AbortSignal;
+  onEvent: SseEventHandler;
+  /** Called whenever an `id:` field is parsed (monotonic seq as string). */
+  onId?: (id: string) => void;
+}
+
+export interface ReadSseResult {
+  lastEventId: string | null;
+}
 
 /**
- * POST + ReadableStream SSE parser (EventSource cannot POST).
- * Parses `event:` / `data:` lines per the SSE spec.
+ * Generic SSE reader over fetch (EventSource cannot POST or set Authorization).
+ * Parses `event:` / `data:` / `id:` lines per the SSE spec.
  */
-export async function readSsePost(
-  url: string,
-  body: unknown,
-  signal: AbortSignal | undefined,
-  onEvent: SseEventHandler,
-): Promise<void> {
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
-    },
-    body: JSON.stringify(body),
-    signal,
+export async function readSseRequest(options: ReadSseRequestOptions): Promise<ReadSseResult> {
+  const method = options.method ?? (options.body !== undefined ? 'POST' : 'GET');
+  const headers: Record<string, string> = {
+    Accept: 'text/event-stream',
+    ...options.headers,
+  };
+
+  let body: BodyInit | undefined;
+  if (options.body !== undefined) {
+    if (!headers['Content-Type'] && !headers['content-type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+    body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+  }
+
+  const response = await fetch(options.url, {
+    method,
+    headers,
+    body,
+    signal: options.signal,
   });
 
   if (!response.ok) {
@@ -32,7 +53,11 @@ export async function readSsePost(
         /* ignore */
       }
     }
-    throw new Error(detail || `Request failed (${response.status})`);
+    const err = new Error(detail || `Request failed (${response.status})`) as Error & {
+      status?: number;
+    };
+    err.status = response.status;
+    throw err;
   }
 
   const reader = response.body?.getReader();
@@ -44,13 +69,24 @@ export async function readSsePost(
   let buffer = '';
   let eventName = 'message';
   let dataLines: string[] = [];
+  let eventId: string | undefined;
+  let lastEventId: string | null = null;
 
   const flushEvent = () => {
-    if (dataLines.length === 0) return;
+    if (dataLines.length === 0) {
+      eventName = 'message';
+      eventId = undefined;
+      return;
+    }
     const data = dataLines.join('\n');
     dataLines = [];
-    onEvent(eventName, data);
+    if (eventId != null) {
+      lastEventId = eventId;
+      options.onId?.(eventId);
+    }
+    options.onEvent(eventName, data, eventId);
     eventName = 'message';
+    eventId = undefined;
   };
 
   try {
@@ -74,6 +110,8 @@ export async function readSsePost(
           eventName = line.slice(6).trim() || 'message';
         } else if (line.startsWith('data:')) {
           dataLines.push(line.slice(5).trimStart());
+        } else if (line.startsWith('id:')) {
+          eventId = line.slice(3).trim();
         }
       }
     }
@@ -83,10 +121,33 @@ export async function readSsePost(
       const line = buffer.replace(/\r$/, '');
       if (line.startsWith('data:')) {
         dataLines.push(line.slice(5).trimStart());
+      } else if (line.startsWith('id:')) {
+        eventId = line.slice(3).trim();
       }
     }
     flushEvent();
   } finally {
     reader.releaseLock();
   }
+
+  return { lastEventId };
+}
+
+/**
+ * POST + ReadableStream SSE parser (EventSource cannot POST).
+ * Kept for public help chat compatibility.
+ */
+export async function readSsePost(
+  url: string,
+  body: unknown,
+  signal: AbortSignal | undefined,
+  onEvent: SseEventHandler,
+): Promise<void> {
+  await readSseRequest({
+    url,
+    method: 'POST',
+    body,
+    signal,
+    onEvent: (event, data) => onEvent(event, data),
+  });
 }

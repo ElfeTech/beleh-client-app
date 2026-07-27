@@ -16,7 +16,8 @@ import { Workspace } from './pages/Workspace';
 import DatasetsPage from './pages/DatasetsPage';
 import { DatasetPreviewPage } from './pages/DatasetPreviewPage';
 import SettingsPage from './pages/SettingsPage';
-import UsageStatisticsPage from './pages/UsageStatisticsPage';
+import { BillingSuccessPage } from './pages/BillingSuccessPage';
+import { ProviderOAuthCallback } from './pages/ProviderOAuthCallback';
 import { MainLayout } from './components/layout/MainLayout';
 import FeedbackModal from './components/common/FeedbackModal';
 import { ClarityInit } from './components/analytics/ClarityInit';
@@ -55,6 +56,7 @@ function App() {
                       <Route path="/" element={<RootRoute />} />
                       <Route path="/signin" element={<SignIn />} />
                       <Route path="/signup" element={<SignUp />} />
+                      <Route path="/auth/provider/callback" element={<ProviderOAuthCallback />} />
                       <Route
                         element={
                           <ProtectedRoute>
@@ -72,11 +74,16 @@ function App() {
                           path="/workspace/:id/sessions"
                           element={<WorkspaceSessionsRedirect />}
                         />
-                        <Route path="/workspace/:id/statistics" element={<UsageStatisticsPage />} />
+                        <Route
+                          path="/workspace/:id/statistics"
+                          element={<Navigate to="/settings/usage" replace />}
+                        />
                         <Route path="/settings" element={<SettingsPage />} />
                         <Route path="/settings/general" element={<SettingsPage />} />
                         <Route path="/settings/security" element={<SettingsPage />} />
+                        <Route path="/settings/usage" element={<SettingsPage />} />
                         <Route path="/settings/billing" element={<SettingsPage />} />
+                        <Route path="/settings/billing/success" element={<BillingSuccessPage />} />
                         <Route path="/settings/notifications" element={<SettingsPage />} />
                         <Route path="/settings/workspaces" element={<SettingsPage />} />
                         <Route path="/settings/members" element={<SettingsPage />} />

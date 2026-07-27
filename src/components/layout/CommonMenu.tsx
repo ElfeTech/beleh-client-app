@@ -30,10 +30,26 @@ export function CommonMenu() {
     return 'inherit';
   };
 
+  const formatRemainingUsd = (amount: number) => {
+    try {
+      return new Intl.NumberFormat(undefined, {
+        style: 'currency',
+        currency: (remaining?.currency || 'usd').toUpperCase(),
+        maximumFractionDigits: 2,
+      }).format(amount);
+    } catch {
+      return `$${amount.toFixed(2)}`;
+    }
+  };
+
   const getUsageText = () => {
     if (isLoading) return 'Loading usage...';
-    if (remaining) return `${remaining.queries_used} of ${remaining.queries_limit} queries used`;
-    return 'Usage unavailable';
+    if (!remaining) return 'Usage unavailable';
+    const queries = `${remaining.queries_used} of ${remaining.queries_limit} queries used`;
+    if (remaining.remaining_value_usd != null) {
+      return `${queries} · ${formatRemainingUsd(remaining.remaining_value_usd)} left`;
+    }
+    return queries;
   };
 
   return (

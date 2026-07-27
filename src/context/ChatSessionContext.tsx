@@ -12,6 +12,7 @@ import { apiClient } from '../services/apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
 import { useWorkspace } from './WorkspaceContext';
 import { useAuth } from './useAuth';
+import { readActiveSessionId, writeActiveSessionId, migrateLegacyUiMemory } from '../lib/uiMemory';
 
 interface ChatSessionContextType {
   sessions: ChatSessionRead[];
@@ -41,16 +42,13 @@ const ChatSessionContext = createContext<ChatSessionContextType | undefined>(und
 export { ChatSessionContext };
 
 export function ChatSessionProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { currentWorkspace, workspaceContext, saveWorkspaceState } = useWorkspace();
   const [sessions, setSessions] = useState<ChatSessionRead[]>([]);
 
   // Initialize from localStorage if available, but filter out legacy mock IDs
   const [activeSessionId, setActiveSessionIdState] = useState<string | null>(() => {
-    const savedId = localStorage.getItem('activeSessionId');
-    // If it's a legacy mock ID or invalid, ignore it
-    if (savedId === '1' || savedId === 'undefined') return null;
-    return savedId;
+    return readActiveSessionId();
   });
 
   const [isLoading, setIsLoading] = useState(false);
@@ -60,14 +58,18 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   activeSessionIdRef.current = activeSessionId;
   const suppressSessionRestoreRef = useRef(false);
 
+  useEffect(() => {
+    migrateLegacyUiMemory(user?.uid);
+  }, [user?.uid]);
+
   // Wrapper to persist to localStorage
   const setActiveSessionId = useCallback((id: string | null) => {
     if (id && id !== '1' && id !== 'undefined') {
       suppressSessionRestoreRef.current = false;
       setIsNewChatDraft(false);
-      localStorage.setItem('activeSessionId', id);
+      writeActiveSessionId(id);
     } else {
-      localStorage.removeItem('activeSessionId');
+      writeActiveSessionId(null);
     }
     setActiveSessionIdState(id === '1' ? null : id);
   }, []);
@@ -87,8 +89,12 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     }
   }, [setActiveSessionId, currentWorkspace?.id, workspaceContext, saveWorkspaceState]);
 
-  // Clear session list when auth ends or account switches (workspace effect reloads for new user)
+  // Clear session list when auth ends or account switches (workspace effect reloads for new user).
+  // Do NOT clear while Firebase is still initializing — that would wipe activeSessionId from
+  // localStorage on every refresh and break in-flight chat-run resume.
   useEffect(() => {
+    if (authLoading) return;
+
     const uid = user?.uid ?? null;
     if (!uid) {
       setSessions([]);
@@ -103,7 +109,7 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
       setIsNewChatDraft(false);
     }
     previousUserIdRef.current = uid;
-  }, [user?.uid, setActiveSessionId]);
+  }, [user?.uid, authLoading, setActiveSessionId]);
 
   /**
    * Load sessions for a workspace using unified cache manager

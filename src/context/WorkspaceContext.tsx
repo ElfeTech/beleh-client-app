@@ -22,6 +22,7 @@ import {
   resolveDatasetIdForStateEndpoint,
 } from '../lib/workspaceStateValidation';
 import { writeSelectedDatasetId } from '../lib/selectedDatasourceStorage';
+import { readActiveWorkspaceId, writeActiveWorkspaceId } from '../lib/uiMemory';
 
 interface WorkspaceContextType {
   workspaces: WorkspaceResponse[];
@@ -92,7 +93,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   // Persist workspace changes
   useEffect(() => {
     if (currentWorkspace) {
-      localStorage.setItem('activeWorkspaceId', currentWorkspace.id);
+      writeActiveWorkspaceId(currentWorkspace.id);
     }
   }, [currentWorkspace]);
 
@@ -159,7 +160,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       // Only set default workspace on initial load
       if (!isInitialized && fetchedWorkspaces.length > 0) {
-        const savedWorkspaceId = localStorage.getItem('activeWorkspaceId');
+        const savedWorkspaceId = readActiveWorkspaceId();
         let workspaceToSet: WorkspaceResponse | null = null;
 
         if (savedWorkspaceId) {

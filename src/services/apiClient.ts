@@ -24,6 +24,7 @@ import type {
   ConnectorResponse,
   ConnectionTestRequest,
   ConnectionTestResponse,
+  ConnectorTablesResponse,
 } from '../types/api';
 import type {
   CurrentUsageResponse,
@@ -36,8 +37,32 @@ import type {
   PlanListResponse,
   PlanResponse,
 } from '../types/usage';
+import type {
+  BillingCatalogResponse,
+  BillingSubscription,
+  CheckoutRequest,
+  CheckoutResponse,
+  PortalRequest,
+  PortalResponse,
+} from '../types/billing';
 import type { FeedbackSubmission } from '../types/feedback';
-import { formatApiErrorMessage } from '../utils/apiErrorMessage';
+import {
+  ApiRequestError,
+  extractApiErrorCode,
+  formatApiErrorMessage,
+} from '../utils/apiErrorMessage';
+import type {
+  ProviderConnection,
+  ProviderDisconnectResponse,
+  ProviderHealthResponse,
+  ProviderOAuthUrlResponse,
+  ProviderProject,
+  WorkspaceProviderBindRequest,
+  WorkspaceProviderBindResponse,
+  WorkspaceProviderBinding,
+  WorkspaceProviderCredentials,
+  WorkspaceProviderUnbindResponse,
+} from '../types/provider';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -200,7 +225,11 @@ class APIClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[API] Error response:', errorData);
-        throw new Error(formatApiErrorMessage(errorData, response.status));
+        const message = formatApiErrorMessage(errorData, response.status);
+        throw new ApiRequestError(message, {
+          status: response.status,
+          code: extractApiErrorCode(errorData),
+        });
       }
 
       const data = await response.json();
@@ -784,9 +813,16 @@ class APIClient {
   }
 
   async getAvailablePlans(): Promise<PlanListResponse> {
-    return this.request<PlanListResponse>('/api/usage/plans', {
-      method: 'GET',
-    });
+    const data = await this.request<
+      PlanListResponse | PaginatedResponse<PlanListResponse['plans'][number]>
+    >('/api/usage/plans', { method: 'GET' });
+    if (data && typeof data === 'object' && 'items' in data && Array.isArray(data.items)) {
+      return { plans: data.items };
+    }
+    if (data && typeof data === 'object' && 'plans' in data && Array.isArray(data.plans)) {
+      return { plans: data.plans };
+    }
+    return { plans: [] };
   }
 
   async getCurrentPlan(authToken: string): Promise<PlanResponse> {
@@ -795,6 +831,51 @@ class APIClient {
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
+    });
+  }
+
+  // Billing (Stripe Checkout + Customer Portal)
+  async getBillingCatalog(authToken: string): Promise<BillingCatalogResponse> {
+    return this.request<BillingCatalogResponse>('/api/billing/catalog', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async getBillingSubscription(authToken: string): Promise<BillingSubscription> {
+    return this.request<BillingSubscription>('/api/billing/subscription', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async createCheckoutSession(
+    authToken: string,
+    payload: CheckoutRequest,
+  ): Promise<CheckoutResponse> {
+    return this.request<CheckoutResponse>('/api/billing/checkout', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async createBillingPortalSession(
+    authToken: string,
+    payload: PortalRequest = {},
+  ): Promise<PortalResponse> {
+    return this.request<PortalResponse>('/api/billing/portal', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(payload),
     });
   }
 
@@ -910,6 +991,22 @@ class APIClient {
     });
   }
 
+  async listConnectorTables(
+    authToken: string,
+    workspaceId: string,
+    connectorId: string,
+  ): Promise<ConnectorTablesResponse> {
+    return this.request<ConnectorTablesResponse>(
+      `/api/connectors/workspaces/${workspaceId}/${connectorId}/tables`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
   async deleteConnector(
     authToken: string,
     workspaceId: string,
@@ -921,6 +1018,127 @@ class APIClient {
         Authorization: `Bearer ${authToken}`,
       },
     });
+  }
+
+  // Provider (Supabase OAuth) — /api/v1
+  async getProviderOAuthUrl(authToken: string): Promise<ProviderOAuthUrlResponse> {
+    return this.request<ProviderOAuthUrlResponse>('/api/v1/provider/oauth/url', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async listProviderConnections(authToken: string): Promise<ProviderConnection[]> {
+    return this.request<ProviderConnection[]>('/api/v1/provider/connections', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async deleteProviderConnection(
+    authToken: string,
+    connectionId: string,
+  ): Promise<ProviderDisconnectResponse> {
+    return this.request<ProviderDisconnectResponse>(
+      `/api/v1/provider/connections/${connectionId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async listProviderProjects(authToken: string, connectionId: string): Promise<ProviderProject[]> {
+    return this.request<ProviderProject[]>(
+      `/api/v1/provider/connections/${connectionId}/projects`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async getProviderHealth(authToken: string): Promise<ProviderHealthResponse> {
+    return this.request<ProviderHealthResponse>('/api/v1/provider/health', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async bindWorkspaceProvider(
+    authToken: string,
+    workspaceId: string,
+    body: WorkspaceProviderBindRequest,
+  ): Promise<WorkspaceProviderBindResponse> {
+    return this.request<WorkspaceProviderBindResponse>(
+      `/api/v1/workspaces/${workspaceId}/provider/bind`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  async unbindWorkspaceProvider(
+    authToken: string,
+    workspaceId: string,
+  ): Promise<WorkspaceProviderUnbindResponse> {
+    return this.request<WorkspaceProviderUnbindResponse>(
+      `/api/v1/workspaces/${workspaceId}/provider/bind`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async getWorkspaceProviderConnection(
+    authToken: string,
+    workspaceId: string,
+  ): Promise<WorkspaceProviderBinding> {
+    return this.request<WorkspaceProviderBinding>(
+      `/api/v1/workspaces/${workspaceId}/provider/connection`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  /**
+   * Sandbox / agent tooling only. Production returns 403 PROVIDER_CREDENTIALS_DISABLED.
+   * Never call from product UI — BI features use binding status + server-side query execution.
+   */
+  async getWorkspaceProviderCredentials(
+    authToken: string,
+    workspaceId: string,
+  ): Promise<WorkspaceProviderCredentials> {
+    return this.request<WorkspaceProviderCredentials>(
+      `/api/v1/workspaces/${workspaceId}/provider/credentials`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
   }
 }
 
