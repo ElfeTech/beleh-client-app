@@ -1,85 +1,115 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Menu, X } from 'lucide-react';
 import logo from '../../assets/logo.webp';
-import { NAV_SECTIONS, type LandingNavSection } from './explorerEngineData';
 
 interface LandingNavProps {
   isScrolled: boolean;
-  onSectionSelect: (section: LandingNavSection) => void;
+  isLight: boolean;
+  onToggleTheme: () => void;
 }
 
-const NAV_DOTS = ['#3b82f6', '#ec4899', '#14b8a6', '#a855f7'];
+const NAV_LINKS = [
+  { href: '#how', label: 'How it works' },
+  { href: '#savings', label: 'Your savings' },
+  { href: '#proof', label: 'Results' },
+  { href: '#pricing', label: 'Pricing' },
+] as const;
 
-export function LandingNav({ isScrolled, onSectionSelect }: LandingNavProps) {
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12H1M23 12h-2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function LandingNav({ isScrolled, isLight, onToggleTheme }: LandingNavProps) {
   const navigate = useNavigate();
-  const [mobileOpen, setMobileOpen] = useState(false);
-
-  const handleNav = (id: LandingNavSection) => {
-    onSectionSelect(id);
-    setMobileOpen(false);
-  };
 
   return (
-    <nav className={`landing-nav ${isScrolled ? 'landing-nav--scrolled' : ''}`}>
-      <div className="landing-nav__inner">
-        <button
-          type="button"
-          className="landing-nav__brand"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-        >
-          <img src={logo} alt="Beleh" className="landing-nav__logo" />
-          <div className="landing-nav__brand-text">
-            <span className="landing-nav__name">beleh</span>
-            <span className="landing-nav__tagline">ASK · ANALYZE · DECIDE</span>
+    <header className={`landing-header ${isScrolled ? 'scrolled' : ''}`}>
+      <div className="landing-wrap">
+        <nav className="landing-nav" aria-label="Primary">
+          <button
+            type="button"
+            className="landing-brand"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            aria-label="Beleh home"
+          >
+            <img src={logo} alt="Beleh" className="landing-brand__logo" />
+          </button>
+
+          <div className="landing-nav-links">
+            {NAV_LINKS.map((link) => (
+              <a key={link.href} href={link.href}>
+                {link.label}
+              </a>
+            ))}
           </div>
-          <span className="landing-nav__workspace-pill">Workspace</span>
-        </button>
 
-        <div className={`landing-nav__menu ${mobileOpen ? 'landing-nav__menu--open' : ''}`}>
-          {NAV_SECTIONS.map((item, i) => (
-            <button
-              key={item.id}
-              type="button"
-              className="landing-nav__link"
-              onClick={() => handleNav(item.id)}
-            >
-              <span className="landing-nav__dot" style={{ background: NAV_DOTS[i] }} />
-              {item.label}
+          <div className="landing-nav-cta">
+            <button type="button" className="signin" onClick={() => navigate('/signin')}>
+              Sign in
             </button>
-          ))}
-          <span className="landing-nav__uptime">
-            <span className="landing-nav__uptime-dot" />
-            99.9% uptime
-          </span>
-        </div>
-
-        <div className="landing-nav__actions">
-          <button
-            type="button"
-            className="landing-nav__sign-in"
-            onClick={() => navigate('/signin')}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            className="landing-btn landing-btn--gradient"
-            onClick={() => navigate('/signup')}
-          >
-            Start free
-            <ChevronRight size={16} strokeWidth={2.5} />
-          </button>
-          <button
-            type="button"
-            className="landing-nav__mobile-toggle"
-            onClick={() => setMobileOpen(!mobileOpen)}
-            aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
-          >
-            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
-          </button>
-        </div>
+            <button
+              type="button"
+              className="landing-theme-toggle"
+              onClick={onToggleTheme}
+              aria-label="Toggle light and dark mode"
+              title="Toggle light / dark"
+            >
+              {isLight ? <MoonIcon /> : <SunIcon />}
+            </button>
+            <button
+              type="button"
+              className="landing-btn landing-btn-primary"
+              onClick={() => navigate('/signup')}
+            >
+              Start free trial
+            </button>
+          </div>
+        </nav>
       </div>
-    </nav>
+    </header>
   );
+}
+
+/** Session-only theme; no storage. Applies `data-landing-theme` on documentElement. */
+export function useLandingTheme() {
+  const [isLight, setIsLight] = useState(false);
+
+  useEffect(() => {
+    if (isLight) {
+      document.documentElement.dataset.landingTheme = 'light';
+    } else {
+      delete document.documentElement.dataset.landingTheme;
+    }
+    return () => {
+      delete document.documentElement.dataset.landingTheme;
+    };
+  }, [isLight]);
+
+  return {
+    isLight,
+    toggleTheme: () => setIsLight((v) => !v),
+  };
 }

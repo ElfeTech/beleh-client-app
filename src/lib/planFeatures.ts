@@ -54,15 +54,18 @@ function countLabel(value: number, singular: string, plural = `${singular}s`): s
 
 function limitLines(plan: BillingCatalogPlan): PlanFeatureLine[] {
   const limits = plan.limits;
-  return [
-    {
+  const lines: PlanFeatureLine[] = [];
+
+  // Omit query lines when unlimited (-1 / <= 0) , seeded plans no longer gate on queries.
+  if (limits.monthly_query_limit > 0) {
+    lines.push({
       key: 'limit-queries',
-      label:
-        limits.monthly_query_limit <= 0
-          ? 'Unlimited queries per month'
-          : `${limits.monthly_query_limit.toLocaleString()} queries per month`,
+      label: `${limits.monthly_query_limit.toLocaleString()} queries per month`,
       source: 'limit',
-    },
+    });
+  }
+
+  lines.push(
     {
       key: 'limit-datasets',
       label: countLabel(limits.max_datasets, 'Dataset'),
@@ -95,7 +98,9 @@ function limitLines(plan: BillingCatalogPlan): PlanFeatureLine[] {
       ),
       source: 'limit',
     },
-  ];
+  );
+
+  return lines;
 }
 
 function featureValueLabel(key: string, value: boolean | string | number): string | null {

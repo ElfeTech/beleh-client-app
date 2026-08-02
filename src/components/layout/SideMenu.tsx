@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import { CommonMenu } from './CommonMenu';
 import { WorkspaceMenu } from './WorkspaceMenu';
 import { DatasourceModal } from './DatasourceModal';
 import { WorkspaceRegionDropdown } from './WorkspaceRegionDropdown';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { useAuth } from '../../context/useAuth';
+import { useDatasource } from '../../context/DatasourceContext';
+import { ensureDemoRemovedAfterLiveSource, findDemoDatasource } from '../../lib/workspaceDemo';
+import {
+  isDatasourcesAtLimit,
+  PLAN_LIMIT_REACHED_TOOLTIP,
+  workspaceLimitUpgradeMessage,
+} from '../../utils/workspaceAccess';
 
 interface SideMenuProps {
   isCollapsed?: boolean;
@@ -14,20 +23,45 @@ interface SideMenuProps {
 export function SideMenu({ isCollapsed = false, onToggleCollapse }: SideMenuProps) {
   const location = useLocation();
   const workspaceContext = useWorkspace();
+  const { user } = useAuth();
+  const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
   const isWorkspacePage = location.pathname.startsWith('/workspace/');
 
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
 
-  // Use data from WorkspaceContext
   const workspaces = workspaceContext.workspaces;
   const currentWorkspace = workspaceContext.currentWorkspace;
   const dataSources = workspaceContext.datasources;
   const isLoadingWorkspaces = workspaceContext.loading && workspaces.length === 0;
   const isLoadingDataSources = workspaceContext.loading;
+  const datasourcesAtLimit = isDatasourcesAtLimit(workspaceContext.workspaceUsage);
 
   const handleUploadSuccess = async () => {
-    // Refresh datasources from WorkspaceContext
+    const wid = currentWorkspace?.id;
+    const demoId = findDemoDatasource(dataSources)?.id ?? null;
+    const hadDemo = Boolean(demoId) || dataSources.some((d) => Boolean(d.is_demo));
     await workspaceContext.refreshDatasources();
+    if (hadDemo && user && wid) {
+      try {
+        const token = await user.getIdToken();
+        await ensureDemoRemovedAfterLiveSource(token, wid, dataSources);
+        await workspaceContext.refreshDatasources();
+        if (demoId && selectedDatasourceId === demoId) {
+          setSelectedDatasourceId(null);
+        }
+      } catch {
+        /* best-effort leave demo */
+      }
+    }
+    await workspaceContext.refreshWorkspaceUsage();
+  };
+
+  const handleAddClick = () => {
+    if (datasourcesAtLimit) {
+      toast.error(workspaceLimitUpgradeMessage(workspaceContext.currentRole, 'datasources'));
+      return;
+    }
+    setIsUploadModalOpen(true);
   };
 
   if (isLoadingWorkspaces && !currentWorkspace) {
@@ -45,7 +79,6 @@ export function SideMenu({ isCollapsed = false, onToggleCollapse }: SideMenuProp
 
   return (
     <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
-      {/* Collapse Toggle Button */}
       <button
         className="sidebar-collapse-btn"
         onClick={onToggleCollapse}
@@ -74,8 +107,10 @@ export function SideMenu({ isCollapsed = false, onToggleCollapse }: SideMenuProp
           ) : (
             <WorkspaceMenu
               dataSources={dataSources}
-              onAddClick={() => setIsUploadModalOpen(true)}
+              onAddClick={handleAddClick}
               onRefresh={() => workspaceContext.refreshDatasources()}
+              addDisabled={datasourcesAtLimit}
+              addDisabledReason={datasourcesAtLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
             />
           ))}
       </div>

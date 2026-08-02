@@ -1,4 +1,4 @@
-/* Datasource connection sliding panel — 50% from right (desktop), full-bleed mobile */
+/* Datasource connection sliding panel , 50% from right (desktop), full-bleed mobile */
 
 .ds-conn-panel-backdrop {
   position: fixed;
@@ -167,7 +167,7 @@
   background: var(--bg-modal, var(--ds-surface, #fff));
 }
 
-/* —— Catalog —— */
+/* ,, Catalog ,, */
 .ds-conn-catalog {
   padding: 0.75rem 1.1rem 1.25rem;
 }
@@ -301,7 +301,7 @@
   font-size: 0.9rem;
 }
 
-/* —— Org / project lists —— */
+/* ,, Org / project lists ,, */
 .ds-conn-list {
   padding: 0.75rem 1.1rem 1.5rem;
   display: flex;

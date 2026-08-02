@@ -3,10 +3,16 @@ import { Upload, FileSpreadsheet } from 'lucide-react';
 import { useAuth } from '../../../context/useAuth';
 import { useFeedback } from '../../../context/FeedbackContext';
 import { useUsage } from '../../../context/UsageContext';
+import { useWorkspace } from '../../../context/WorkspaceContext';
 import { apiClient } from '../../../services/apiClient';
 import { authService } from '../../../services/authService';
 import type { DataSourceResponse } from '../../../types/api';
 import { extractApiErrorDetail, formatDatasourceError } from '../../../utils/apiErrorMessage';
+import {
+  isDatasourcesAtLimit,
+  PLAN_LIMIT_REACHED_TOOLTIP,
+  workspaceLimitUpgradeMessage,
+} from '../../../utils/workspaceAccess';
 import '../UploadModal.css';
 
 interface UploadConnectorViewProps {
@@ -32,6 +38,8 @@ export function UploadConnectorView({
   const { user } = useAuth();
   const { trackDatasetUpload } = useFeedback();
   const { refreshUsageAfterAction } = useUsage();
+  const { workspaceUsage, currentRole, refreshWorkspaceUsage } = useWorkspace();
+  const datasourcesAtLimit = isDatasourcesAtLimit(workspaceUsage);
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState('');
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('IDLE');
@@ -106,6 +114,10 @@ export function UploadConnectorView({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!file || !user) return;
+    if (datasourcesAtLimit) {
+      setError(workspaceLimitUpgradeMessage(currentRole, 'datasources'));
+      return;
+    }
 
     try {
       setUploadStatus('UPLOADING');
@@ -114,6 +126,7 @@ export function UploadConnectorView({
 
       const token = await user.getIdToken();
       const dataset = await apiClient.createDatasource(token, workspaceId, file, name);
+      await refreshWorkspaceUsage();
 
       if (dataset.status === 'FAILED') {
         setUploadStatus('FAILED');
@@ -191,19 +204,26 @@ export function UploadConnectorView({
   const isProcessing = ['UPLOADING', 'PENDING', 'PROCESSING', 'NEEDS_INPUT'].includes(uploadStatus);
   const isComplete = uploadStatus === 'READY';
   const hasFailed = uploadStatus === 'FAILED';
+  const controlsLocked = isProcessing || datasourcesAtLimit;
 
   return (
     <div className="ds-conn-embed ds-conn-panel__body">
       <form onSubmit={handleSubmit} className="upload-modal-form">
+        {datasourcesAtLimit && (
+          <div className="form-error upload-modal-error">
+            {workspaceLimitUpgradeMessage(currentRole, 'datasources')}
+          </div>
+        )}
         <div className="form-group upload-modal-field">
           <label className="upload-modal-label" htmlFor="upload-file-input-panel">
             File
           </label>
           <button
             type="button"
-            className={`upload-dropzone ${file ? 'has-file' : ''} ${isProcessing ? 'is-locked' : ''}`}
-            onClick={() => !isProcessing && fileInputRef.current?.click()}
-            disabled={isProcessing}
+            className={`upload-dropzone ${file ? 'has-file' : ''} ${controlsLocked ? 'is-locked' : ''}`}
+            onClick={() => !controlsLocked && fileInputRef.current?.click()}
+            disabled={controlsLocked}
+            title={datasourcesAtLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
             aria-describedby="upload-file-hint-panel"
           >
             <input
@@ -213,7 +233,7 @@ export function UploadConnectorView({
               onChange={handleFileChange}
               accept=".csv,.xlsx,.xls"
               className="upload-dropzone-input"
-              disabled={isProcessing}
+              disabled={controlsLocked}
             />
             {file ? (
               <div className="upload-dropzone-file">
@@ -226,7 +246,7 @@ export function UploadConnectorView({
                     {(file.size / 1024).toFixed(1)} KB
                   </span>
                 </div>
-                {!isProcessing && <span className="upload-dropzone-replace">Replace file</span>}
+                {!controlsLocked && <span className="upload-dropzone-replace">Replace file</span>}
               </div>
             ) : (
               <div className="upload-dropzone-empty">
@@ -259,7 +279,7 @@ export function UploadConnectorView({
             onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Q4 Sales pipeline"
             required
-            disabled={isProcessing}
+            disabled={controlsLocked}
           />
         </div>
 
@@ -319,7 +339,8 @@ export function UploadConnectorView({
           <button
             type="submit"
             className="btn-gradient-primary"
-            disabled={!file || isProcessing || isComplete}
+            disabled={!file || isProcessing || isComplete || datasourcesAtLimit}
+            title={datasourcesAtLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
           >
             {isProcessing ? 'Processing…' : isComplete ? 'Done' : 'Upload dataset'}
           </button>

@@ -49,10 +49,10 @@ export function getWorkspaceSourceContext(
     return {
       kind: 'general',
       id: null,
-      displayName: 'GENERAL',
+      displayName: 'All sources',
       typeLabel: 'MODE',
-      connectionPath: 'No datasource selected — general analytical mode',
-      statusLabel: 'STANDBY // GENERAL',
+      connectionPath: 'No datasource selected , analyzing all workspace sources',
+      statusLabel: 'STANDBY // ALL SOURCES',
       statusTone: 'neutral',
     };
   }
@@ -65,7 +65,7 @@ export function getWorkspaceSourceContext(
     return {
       kind: 'datasource',
       id: ds.id,
-      displayName: ds.name.toUpperCase(),
+      displayName: ds.name,
       typeLabel: formatSourceType(ds),
       connectionPath: path,
       statusLabel: label,
@@ -79,7 +79,7 @@ export function getWorkspaceSourceContext(
     return {
       kind: 'connector',
       id: connector.id,
-      displayName: connector.name.toUpperCase(),
+      displayName: connector.name,
       typeLabel: connector.type.toUpperCase(),
       connectionPath: `${connector.type}-connector.beleh.inter`,
       statusLabel: label,

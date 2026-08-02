@@ -3,15 +3,21 @@ import type {
   ChartArtifactType,
   ChartData,
   ChatMessageMetadata,
+  ScatterData,
   UiArtifact,
 } from '../types/api';
 import {
   asChartData,
+  asScatterData,
   asTableData,
   findChartArtifacts,
   findTableArtifact,
   getArtifactReactKey,
+  isCategoryChartType,
   isChartArtifactType,
+  isScatterArtifactType,
+  isValidCategoryChartData,
+  isValidScatterData,
   tableRowsToRecords,
 } from './artifactAdapters';
 import type { ChartType } from './chartCompatibility';
@@ -22,7 +28,10 @@ export interface ResponseViewChart {
   id: string;
   key: string;
   type: ChartArtifactType;
-  data: ChartData;
+  /** Category charts only; null for scatter. */
+  data: ChartData | null;
+  /** Scatter only; null for category charts. */
+  scatterData: ScatterData | null;
   title: string;
 }
 
@@ -37,21 +46,48 @@ export interface ResponseViewAvailability {
   tableRows: Record<string, unknown>[];
   /** All valid charts in array order (multi-panel). */
   charts: ResponseViewChart[];
-  /** First chart — used by single-panel tabs. */
+  /** First chart , used by single-panel tabs. */
   chartType: ChartArtifactType | null;
   chartData: ChartData | null;
+  scatterData: ScatterData | null;
   chartTitle: string;
 }
 
-const PLOT_SWITCH_TYPES: ChartType[] = ['bar', 'line', 'pie'];
+/** Category chart types that can be swapped in the interactive plot chips. */
+const PLOT_SWITCH_TYPES: ChartType[] = ['column', 'bar', 'line', 'area', 'pie'];
 
 function artifactChartToPlotType(type: ChartArtifactType): ChartType {
   if (type === 'doughnut') return 'pie';
   return type;
 }
 
-function isValidChartData(data: ChartData): boolean {
-  return data.labels.length > 0 && data.datasets.length > 0;
+function toResponseViewChart(
+  a: UiArtifact & { type: ChartArtifactType },
+): ResponseViewChart | null {
+  if (isScatterArtifactType(a.type)) {
+    const scatterData = asScatterData(a.data);
+    if (!isValidScatterData(scatterData)) return null;
+    return {
+      id: a.id,
+      key: getArtifactReactKey(a),
+      type: a.type,
+      data: null,
+      scatterData,
+      title: a.title || '',
+    };
+  }
+
+  if (!isCategoryChartType(a.type)) return null;
+  const data = asChartData(a.data);
+  if (!isValidCategoryChartData(data)) return null;
+  return {
+    id: a.id,
+    key: getArtifactReactKey(a),
+    type: a.type,
+    data,
+    scatterData: null,
+    title: a.title || '',
+  };
 }
 
 /** SQL panels finalized; missing → 1 for older stored messages. */
@@ -77,26 +113,19 @@ export function getResponseViewAvailability(artifacts: UiArtifact[]): ResponseVi
 
   const charts: ResponseViewChart[] = findChartArtifacts(artifacts)
     .filter((a): a is UiArtifact & { type: ChartArtifactType } => isChartArtifactType(a.type))
-    .map((a) => {
-      const data = asChartData(a.data);
-      return {
-        id: a.id,
-        key: getArtifactReactKey(a),
-        type: a.type,
-        data,
-        title: a.title || '',
-      };
-    })
-    .filter((c) => isValidChartData(c.data));
+    .map(toResponseViewChart)
+    .filter((c): c is ResponseViewChart => c != null);
 
   const first = charts[0];
   const plot = charts.length > 0;
   const chartType = first?.type ?? null;
   const chartData = first?.data ?? null;
+  const scatterData = first?.scatterData ?? null;
   const chartTitle = first?.title ?? '';
-  const originalChartType: ChartType = first ? artifactChartToPlotType(first.type) : 'bar';
+  const originalChartType: ChartType = first ? artifactChartToPlotType(first.type) : 'column';
   const compatiblePlotTypes: ChartType[] = (() => {
     if (!plot) return [];
+    if (originalChartType === 'scatter') return ['scatter'];
     if (PLOT_SWITCH_TYPES.includes(originalChartType)) return [...PLOT_SWITCH_TYPES];
     return [originalChartType];
   })();
@@ -124,6 +153,7 @@ export function getResponseViewAvailability(artifacts: UiArtifact[]): ResponseVi
     charts,
     chartType,
     chartData,
+    scatterData,
     chartTitle,
   };
 }

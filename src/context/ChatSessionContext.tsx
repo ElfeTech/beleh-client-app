@@ -13,14 +13,17 @@ import { apiCacheManager } from '../utils/apiCacheManager';
 import { useWorkspace } from './WorkspaceContext';
 import { useAuth } from './useAuth';
 import { readActiveSessionId, writeActiveSessionId, migrateLegacyUiMemory } from '../lib/uiMemory';
+import { INITIAL_PAGE, LIST_PAGE_SIZE } from '../constants/pagination';
 
 interface ChatSessionContextType {
   sessions: ChatSessionRead[];
   setSessions: (sessions: ChatSessionRead[]) => void;
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
-  /** True while user clicked New chat — no session in URL/context until first message or picking a thread. */
+  /** True while user clicked New chat , no session in URL/context until first message or picking a thread. */
   isNewChatDraft: boolean;
+  /** True after sessions have been fetched for the current workspace (including empty list). */
+  sessionsReady: boolean;
   /** Clear active session and suppress auto-restore from workspace state (sidebar New chat). */
   startNewChat: () => void;
   addSession: (session: ChatSessionRead) => ChatSessionRead;
@@ -28,6 +31,10 @@ interface ChatSessionContextType {
   deleteSession: (sessionId: string) => Promise<boolean>;
   renameSession: (sessionId: string, newTitle: string) => Promise<ChatSessionRead | null>;
   loadWorkspaceSessions: (workspaceId: string, force?: boolean) => Promise<ChatSessionRead[]>;
+  /** Load the next page of recent chats when available. */
+  loadMoreSessions: () => Promise<ChatSessionRead[]>;
+  sessionsHasMore: boolean;
+  isLoadingMoreSessions: boolean;
   refreshSessions: (workspaceId?: string) => Promise<ChatSessionRead[]>;
   invalidateWorkspaceSessions: (workspaceId: string) => void;
   isLoading: boolean;
@@ -52,11 +59,23 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
+  const [sessionsHasMore, setSessionsHasMore] = useState(false);
+  const [sessionsPage, setSessionsPage] = useState(INITIAL_PAGE);
+  const sessionsWorkspaceIdRef = useRef<string | null>(null);
   const [isNewChatDraft, setIsNewChatDraft] = useState(false);
+  /** Workspace id for which `sessions` reflects a completed fetch (may be empty). */
+  const [sessionsReadyForId, setSessionsReadyForId] = useState<string | null>(null);
   const previousUserIdRef = useRef<string | null>(null);
   const activeSessionIdRef = useRef<string | null>(activeSessionId);
   activeSessionIdRef.current = activeSessionId;
   const suppressSessionRestoreRef = useRef(false);
+  const workspaceContextRef = useRef(workspaceContext);
+  workspaceContextRef.current = workspaceContext;
+  const saveWorkspaceStateRef = useRef(saveWorkspaceState);
+  saveWorkspaceStateRef.current = saveWorkspaceState;
+
+  const sessionsReady = Boolean(currentWorkspace?.id && sessionsReadyForId === currentWorkspace.id);
 
   useEffect(() => {
     migrateLegacyUiMemory(user?.uid);
@@ -90,7 +109,7 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   }, [setActiveSessionId, currentWorkspace?.id, workspaceContext, saveWorkspaceState]);
 
   // Clear session list when auth ends or account switches (workspace effect reloads for new user).
-  // Do NOT clear while Firebase is still initializing — that would wipe activeSessionId from
+  // Do NOT clear while Firebase is still initializing , that would wipe activeSessionId from
   // localStorage on every refresh and break in-flight chat-run resume.
   useEffect(() => {
     if (authLoading) return;
@@ -112,53 +131,106 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   }, [user?.uid, authLoading, setActiveSessionId]);
 
   /**
-   * Load sessions for a workspace using unified cache manager
+   * Load sessions for a workspace using unified cache manager (first page).
    */
   const loadWorkspaceSessions = useCallback(
     async (workspaceId: string, force = false) => {
       if (!user || !workspaceId || workspaceId === 'undefined') return [];
 
       setIsLoading(true);
+      setSessionsReadyForId(null);
+      setSessionsHasMore(false);
+      setSessionsPage(INITIAL_PAGE);
+      sessionsWorkspaceIdRef.current = workspaceId;
 
       try {
         const token = await user.getIdToken();
         const data = await apiCacheManager.fetch(
           'workspace-sessions',
           async (authToken: string, wId: string) => {
-            const response = await apiClient.listWorkspaceSessions(authToken, wId);
-            return response.items;
+            const response = await apiClient.listWorkspaceSessionsPaginated(authToken, wId, {
+              page: INITIAL_PAGE,
+              page_size: LIST_PAGE_SIZE,
+            });
+            return {
+              items: response.items,
+              has_next: Boolean(response.has_next),
+            };
           },
           [token, workspaceId],
           force ? { ttl: 0 } : undefined,
         );
 
-        setSessions(data);
+        // Tolerate older cache entries that stored a bare session array.
+        const items = Array.isArray(data) ? data : (data.items ?? []);
+        const hasNext = Array.isArray(data) ? false : Boolean(data.has_next);
 
-        // Validation: Ensure persisted activeSessionId actually exists in this workspace
-        // Also check for legacy ID '1' (read from ref so this callback does not depend on activeSessionId)
+        setSessions(items);
+        setSessionsHasMore(hasNext);
+        setSessionsPage(INITIAL_PAGE);
+
+        // Clear persisted / active id when missing from this user's session list
+        // (includes empty list , another user's deep link or deleted session).
         const persisted = activeSessionIdRef.current;
         if (persisted && persisted !== '1') {
-          const sessionExists = data.some((s) => s.id === persisted);
-          if (!sessionExists && data.length > 0) {
+          const sessionExists = items.some((s) => s.id === persisted);
+          if (!sessionExists) {
             console.warn(
               '[ChatSessionContext] Persisted session not found in workspace, clearing.',
             );
             setActiveSessionId(null);
+            const ctx = workspaceContextRef.current;
+            const datasetId =
+              ctx?.workspace.id === workspaceId ? ctx.state.last_active_dataset_id : null;
+            void saveWorkspaceStateRef.current(workspaceId, datasetId, null);
           }
         } else if (persisted === '1') {
           setActiveSessionId(null);
         }
 
-        return data;
+        return items;
       } catch (err) {
         console.error('[ChatSessionContext] Failed to load workspace sessions:', err);
+        setSessions([]);
+        setSessionsHasMore(false);
         return [];
       } finally {
+        setSessionsReadyForId(workspaceId);
         setIsLoading(false);
       }
     },
     [user, setActiveSessionId],
   );
+
+  const loadMoreSessions = useCallback(async () => {
+    const workspaceId = sessionsWorkspaceIdRef.current ?? currentWorkspace?.id;
+    if (!user || !workspaceId || !sessionsHasMore || isLoadingMoreSessions) {
+      return sessions;
+    }
+
+    const nextPage = sessionsPage + 1;
+    setIsLoadingMoreSessions(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await apiClient.listWorkspaceSessionsPaginated(token, workspaceId, {
+        page: nextPage,
+        page_size: LIST_PAGE_SIZE,
+      });
+      const merged = [...sessions];
+      for (const item of response.items) {
+        if (!merged.some((s) => s.id === item.id)) merged.push(item);
+      }
+      setSessions(merged);
+      setSessionsHasMore(Boolean(response.has_next));
+      setSessionsPage(nextPage);
+      return merged;
+    } catch (err) {
+      console.error('[ChatSessionContext] Failed to load more sessions:', err);
+      return sessions;
+    } finally {
+      setIsLoadingMoreSessions(false);
+    }
+  }, [user, currentWorkspace?.id, sessions, sessionsHasMore, sessionsPage, isLoadingMoreSessions]);
 
   /**
    * Refresh current workspace sessions
@@ -175,9 +247,13 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   // Automatically load sessions when workspace changes
   useEffect(() => {
     if (currentWorkspace) {
+      setSessionsReadyForId(null);
       loadWorkspaceSessions(currentWorkspace.id);
     } else {
       setSessions([]);
+      setSessionsHasMore(false);
+      setSessionsPage(INITIAL_PAGE);
+      setSessionsReadyForId(null);
       // Do not clear persisted session while workspace is still bootstrapping (user is signed in)
       if (!user) {
         setActiveSessionId(null);
@@ -189,13 +265,19 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!currentWorkspace?.id) return;
     if (!workspaceContext || workspaceContext.workspace.id !== currentWorkspace.id) return;
-    if (sessions.length === 0) return;
+    if (!sessionsReady) return;
     if (suppressSessionRestoreRef.current) return;
     if (isNewChatDraft) return;
 
     const sid = workspaceContext.state.last_active_session_id;
     if (!sid || sid === '1' || sid === 'undefined') return;
-    if (!sessions.some((s) => s.id === sid)) return;
+
+    // Stale server pointer (another user's session, deleted, or cleared) , null it out.
+    if (!sessions.some((s) => s.id === sid)) {
+      const datasetId = workspaceContext.state.last_active_dataset_id;
+      void saveWorkspaceState(currentWorkspace.id, datasetId, null);
+      return;
+    }
 
     const currentValid = Boolean(activeSessionId && sessions.some((s) => s.id === activeSessionId));
     if (!currentValid) {
@@ -205,9 +287,11 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     currentWorkspace?.id,
     workspaceContext,
     sessions,
+    sessionsReady,
     activeSessionId,
     setActiveSessionId,
     isNewChatDraft,
+    saveWorkspaceState,
   ]);
 
   /**
@@ -346,12 +430,16 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
         activeSessionId,
         setActiveSessionId,
         isNewChatDraft,
+        sessionsReady,
         startNewChat,
         addSession,
         removeSession,
         deleteSession,
         renameSession,
         loadWorkspaceSessions,
+        loadMoreSessions,
+        sessionsHasMore,
+        isLoadingMoreSessions,
         refreshSessions,
         invalidateWorkspaceSessions,
         loadSessions,

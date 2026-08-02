@@ -1,4 +1,4 @@
-/* Schema Catalog — Datasets page */
+/* Schema Catalog , Datasets page */
 .schema-catalog-page.app-page-root {
   background: var(--canvas-bg);
   overflow-x: hidden;
@@ -205,7 +205,8 @@
   border-color: #334155;
 }
 
-.sc-source-item:disabled {
+.sc-source-item:disabled,
+.sc-source-item.is-disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -245,6 +246,27 @@
   margin: 0;
   text-transform: uppercase;
   overflow-wrap: anywhere;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sc-source-item__sample-badge {
+  flex-shrink: 0;
+  border-radius: 4px;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-teal-600, #0d9488);
+  background: color-mix(in srgb, var(--accent-teal-500, #14b8a6) 16%, transparent);
+}
+
+.sc-source-item.is-selected .sc-source-item__sample-badge {
+  color: #99f6e4;
+  background: rgba(45, 212, 191, 0.18);
 }
 
 .sc-source-item__host {

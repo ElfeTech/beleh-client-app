@@ -7,6 +7,12 @@ import { writeActiveWorkspaceId } from '../../lib/uiMemory';
 import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { ActionSheet, type ActionSheetItem } from '../common/ActionSheet';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import {
+  createWorkspaceOwnershipHelper,
+  isWorkspacesAtLimit,
+  PLAN_LIMIT_REACHED_TOOLTIP,
+  workspaceOwnershipLabel,
+} from '../../utils/workspaceAccess';
 import './WorkspaceSwitcher.css';
 
 interface WorkspaceSwitcherProps {
@@ -62,6 +68,9 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
   }
 
   const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces } = context;
+  const ownership = createWorkspaceOwnershipHelper(workspaces, user?.uid, user?.email);
+  const hasMixedOwnership =
+    workspaces.some((w) => ownership.isShared(w)) && workspaces.some((w) => !ownership.isShared(w));
 
   const handleWorkspaceSelect = (workspaceId: string) => {
     const workspace = workspaces.find((w) => w.id === workspaceId);
@@ -76,6 +85,9 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
   };
 
   const handleCreateWorkspace = () => {
+    if (isWorkspacesAtLimit(context?.workspaceUsage ?? null)) {
+      return;
+    }
     // Close the workspace switcher first to clear the UI
     onClose();
     // Trigger the create workspace callback
@@ -211,6 +223,12 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
             <button
               className="workspace-list-item create-workspace-btn"
               onClick={handleCreateWorkspace}
+              disabled={isWorkspacesAtLimit(context?.workspaceUsage ?? null)}
+              title={
+                isWorkspacesAtLimit(context?.workspaceUsage ?? null)
+                  ? PLAN_LIMIT_REACHED_TOOLTIP
+                  : 'Create a new workspace'
+              }
             >
               <div className="workspace-icon create-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -231,58 +249,68 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
             <div className="workspace-list-divider" />
 
             {/* Existing Workspaces */}
-            {workspaces.map((workspace) => (
-              <div key={workspace.id} className="workspace-list-item-wrapper">
-                <button
-                  className={`workspace-list-item ${currentWorkspace?.id === workspace.id ? 'active' : ''}`}
-                  onClick={() => handleWorkspaceSelect(workspace.id)}
-                >
-                  <div className="workspace-icon">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                      />
-                    </svg>
-                  </div>
-                  <div className="workspace-info">
-                    <span className="workspace-name">{workspace.name}</span>
-                    {workspace.is_default && <span className="default-badge">Default</span>}
-                  </div>
-                  {currentWorkspace?.id === workspace.id && (
-                    <svg
-                      className="check-icon"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                  )}
-                </button>
-                {!workspace.is_default && (
+            {workspaces.map((workspace) => {
+              const ownershipKind = ownership.kind(workspace);
+              const showOwnershipBadge = ownershipKind === 'shared' || hasMixedOwnership;
+
+              return (
+                <div key={workspace.id} className="workspace-list-item-wrapper">
                   <button
-                    ref={(el) => (menuButtonRefs.current[workspace.id] = el)}
-                    className="workspace-more-btn"
-                    onClick={(e) => handleMoreClick(e, workspace.id)}
-                    aria-label="More options"
+                    className={`workspace-list-item ${currentWorkspace?.id === workspace.id ? 'active' : ''}`}
+                    onClick={() => handleWorkspaceSelect(workspace.id)}
                   >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="1" />
-                      <circle cx="12" cy="5" r="1" />
-                      <circle cx="12" cy="19" r="1" />
-                    </svg>
+                    <div className="workspace-icon">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </div>
+                    <div className="workspace-info">
+                      <span className="workspace-name">{workspace.name}</span>
+                      {showOwnershipBadge && (
+                        <span className={`ownership-badge ownership-badge--${ownershipKind}`}>
+                          {workspaceOwnershipLabel(ownershipKind)}
+                        </span>
+                      )}
+                      {workspace.is_default && <span className="default-badge">Default</span>}
+                    </div>
+                    {currentWorkspace?.id === workspace.id && (
+                      <svg
+                        className="check-icon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M5 13l4 4L19 7"
+                        />
+                      </svg>
+                    )}
                   </button>
-                )}
-              </div>
-            ))}
+                  {!workspace.is_default && (
+                    <button
+                      ref={(el) => (menuButtonRefs.current[workspace.id] = el)}
+                      className="workspace-more-btn"
+                      onClick={(e) => handleMoreClick(e, workspace.id)}
+                      aria-label="More options"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="1" />
+                        <circle cx="12" cy="5" r="1" />
+                        <circle cx="12" cy="19" r="1" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       </div>

@@ -1,15 +1,25 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
-import { useUsage } from '../../context/UsageContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
+import {
+  canAccessBillingSettings,
+  isUnlimitedLimit,
+  isUsageHardLimit,
+  isUsageSoftWarn,
+  trialDaysLeft,
+  usagePct,
+} from '../../utils/workspaceAccess';
+import { formatQuotaResetDate } from '../../utils/formatters';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 
 export function CommonMenu() {
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const { remaining, isLoading, hasWarning } = useUsage();
+  const { workspaceUsage, currentRole } = useWorkspace();
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const showBilling = canAccessBillingSettings(currentRole);
 
   const handleSignOutConfirm = async () => {
     setIsSigningOut(true);
@@ -24,32 +34,52 @@ export function CommonMenu() {
     }
   };
 
+  const tokensUsed = workspaceUsage?.llm_tokens_used;
+  const tokensLimit = workspaceUsage?.llm_tokens_limit;
+  const dailyUsed = workspaceUsage?.daily_llm_tokens_used;
+  const dailyLimit = workspaceUsage?.daily_llm_tokens_limit;
+  const resetLabel = formatQuotaResetDate(workspaceUsage?.reset_at);
+  const daysLeft = workspaceUsage?.is_trial ? trialDaysLeft(workspaceUsage.trial_end) : null;
+
   const getUsageColor = () => {
-    if (hasWarning('critical')) return 'var(--color-error)';
-    if (hasWarning('warning')) return 'var(--color-warning)';
+    if (
+      (tokensUsed != null && isUsageHardLimit(tokensUsed, tokensLimit)) ||
+      (dailyUsed != null && isUsageHardLimit(dailyUsed, dailyLimit))
+    ) {
+      return 'var(--color-error)';
+    }
+    if (
+      (tokensUsed != null && isUsageSoftWarn(tokensUsed, tokensLimit)) ||
+      (dailyUsed != null && isUsageSoftWarn(dailyUsed, dailyLimit))
+    ) {
+      return 'var(--color-warning)';
+    }
     return 'inherit';
   };
 
-  const formatRemainingUsd = (amount: number) => {
-    try {
-      return new Intl.NumberFormat(undefined, {
-        style: 'currency',
-        currency: (remaining?.currency || 'usd').toUpperCase(),
-        maximumFractionDigits: 2,
-      }).format(amount);
-    } catch {
-      return `$${amount.toFixed(2)}`;
-    }
-  };
-
   const getUsageText = () => {
-    if (isLoading) return 'Loading usage...';
-    if (!remaining) return 'Usage unavailable';
-    const queries = `${remaining.queries_used} of ${remaining.queries_limit} queries used`;
-    if (remaining.remaining_value_usd != null) {
-      return `${queries} · ${formatRemainingUsd(remaining.remaining_value_usd)} left`;
+    if (!workspaceUsage) return 'Usage unavailable';
+    const parts: string[] = [];
+    if (tokensUsed != null && tokensLimit != null && !isUnlimitedLimit(tokensLimit)) {
+      const pct = Math.round(usagePct(tokensUsed, tokensLimit));
+      parts.push(`${pct}% AI tokens`);
     }
-    return queries;
+    if (dailyUsed != null && dailyLimit != null && !isUnlimitedLimit(dailyLimit)) {
+      const pct = Math.round(usagePct(dailyUsed, dailyLimit));
+      parts.push(`${pct}% daily`);
+    }
+    if (daysLeft != null) {
+      parts.push(daysLeft === 0 ? 'trial ends today' : `${daysLeft}d trial left`);
+    }
+    if (parts.length === 0) {
+      const ds = workspaceUsage.datasources_used;
+      const dsLimit = workspaceUsage.datasources_limit;
+      if (!isUnlimitedLimit(dsLimit)) {
+        parts.push(`${ds} of ${dsLimit} sources`);
+      }
+    }
+    if (resetLabel) parts.push(`resets ${resetLabel}`);
+    return parts.join(' · ') || 'Usage available';
   };
 
   return (
@@ -79,17 +109,19 @@ export function CommonMenu() {
             </svg>
             Help
           </button>
-          <button
-            className="footer-action-btn"
-            title="Billing"
-            onClick={() => navigate('/settings/billing')}
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-              <line x1="1" y1="10" x2="23" y2="10" />
-            </svg>
-            Billing
-          </button>
+          {showBilling && (
+            <button
+              className="footer-action-btn"
+              title="Billing"
+              onClick={() => navigate('/settings/billing')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                <line x1="1" y1="10" x2="23" y2="10" />
+              </svg>
+              Billing
+            </button>
+          )}
           <button
             className="footer-action-btn"
             title="Sign out"
@@ -119,7 +151,7 @@ export function CommonMenu() {
         message="You will need to sign in again to access your workspaces and chats."
         confirmText="Sign out"
         cancelText="Cancel"
-        variant="warning"
+        variant="brand"
         isLoading={isSigningOut}
         onConfirm={handleSignOutConfirm}
         onCancel={() => setShowSignOutConfirm(false)}

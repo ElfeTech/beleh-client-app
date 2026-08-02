@@ -114,6 +114,14 @@ export function AssistantAnalysisCard({
         <ResponseViewTabs artifacts={artifacts} filterValue={filterValue} />
       ) : null}
 
+      {meta?.viz_notes && meta.viz_notes.length > 0 ? (
+        <ul className="assistant-analysis-card__viz-notes" aria-label="Visualization notes">
+          {meta.viz_notes.map((note, i) => (
+            <li key={`${i}-${note.slice(0, 24)}`}>{note}</li>
+          ))}
+        </ul>
+      ) : null}
+
       {text ? (
         <div className="assistant-analysis-card__summary">
           <MarkdownText>{text}</MarkdownText>

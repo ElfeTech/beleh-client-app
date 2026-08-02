@@ -44,7 +44,7 @@
     --space-5: 20px;
     --space-6: 24px;
 
-    /* Canvas & panels (contrast integrity — light) */
+    /* Canvas & panels (contrast integrity , light) */
     --canvas-bg: #f8fafc;
     --panel-bg: #ffffff;
     --glow-accent: rgba(20, 184, 166, 0.12);
@@ -187,7 +187,7 @@
     --chart-fill: var(--accent-emerald-500);
   }
 
-  /* Analytics page — flat canvas, no radial gradients */
+  /* Analytics page , flat canvas, no radial gradients */
   .analytics-page {
     background-color: var(--canvas-bg);
     background-image: none;
@@ -313,7 +313,7 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Immersive Chat Layout — same shell + tokens as data workspace (dropdown portals to body; overflow avoids page bleed) */
+  /* Immersive Chat Layout , same shell + tokens as data workspace (dropdown portals to body; overflow avoids page bleed) */
   .chat-container {
     @apply flex flex-col relative font-sans overflow-x-hidden overflow-y-hidden min-h-0;
     flex: 1;
@@ -347,12 +347,94 @@
   }
 
   .chat-container--enterprise {
-    background-color: var(--canvas-bg);
+    --chat-surface-bg: #ffffff;
+    --chat-surface-text: rgb(15, 17, 21);
+    /* Chat response body typography */
+    --chat-response-font-size: 15px;
+    --chat-response-line-height: 26px;
+    background-color: var(--chat-surface-bg);
     background-image: none;
+    color: var(--chat-surface-text);
+  }
+
+  @media (min-width: 640px) {
+    .chat-container--enterprise {
+      --chat-response-font-size: 16px;
+      --chat-response-line-height: 28px;
+    }
+  }
+
+  .chat-container--enterprise .message-plain,
+  .chat-container--enterprise .message-plain--assistant,
+  .chat-container--enterprise .message-plain .md-text,
+  .chat-container--enterprise .message-plain .md-text p,
+  .chat-container--enterprise .message-plain .md-text li {
+    font-size: var(--chat-response-font-size);
+    line-height: var(--chat-response-line-height);
+  }
+
+  .chat-container--enterprise .assistant-analysis-card__summary,
+  .chat-container--enterprise .assistant-analysis-card__summary .md-text,
+  .chat-container--enterprise .assistant-analysis-card__summary .md-text p,
+  .chat-container--enterprise .assistant-analysis-card__summary .md-text li,
+  .chat-container--enterprise .assistant-analysis-card__clarification {
+    font-size: var(--chat-response-font-size);
+    line-height: var(--chat-response-line-height);
+  }
+
+  .chat-container--enterprise .analytics-page {
+    background-color: var(--chat-surface-bg);
+    background-image: none;
+    color: var(--chat-surface-text);
+  }
+
+  .chat-container--enterprise .message-plain,
+  .chat-container--enterprise .message-plain--assistant,
+  .chat-container--enterprise .user-request__label {
+    color: var(--chat-surface-text);
+  }
+
+  .chat-container--enterprise .chat-composer-dock {
+    background: transparent;
+  }
+
+  .chat-container--enterprise .chat-composer-dock--float {
+    background: transparent;
+  }
+
+  .chat-container--enterprise .composer-textarea,
+  .chat-container--enterprise .chat-composer-dock {
+    color: var(--chat-surface-text);
+  }
+
+  .chat-container--enterprise .composer-textarea {
+    font-size: var(--chat-response-font-size);
+    line-height: var(--chat-response-line-height);
   }
 
   html[data-theme='dark'] .chat-container--enterprise {
+    --chat-surface-bg: var(--canvas-bg);
+    --chat-surface-text: var(--text-primary);
+    background-color: var(--chat-surface-bg);
     background-image: none;
+    color: var(--chat-surface-text);
+  }
+
+  html[data-theme='dark'] .chat-container--enterprise .analytics-page {
+    background-color: var(--chat-surface-bg);
+    background-image: none;
+  }
+
+  html[data-theme='dark'] .chat-container--enterprise .chat-composer-dock,
+  html[data-theme='dark'] .chat-container--enterprise .chat-composer-dock--float {
+    background-color: transparent;
+    background-image: none;
+  }
+
+  html[data-theme='dark'] .chat-container--enterprise .message-plain,
+  html[data-theme='dark'] .chat-container--enterprise .message-plain--assistant,
+  html[data-theme='dark'] .chat-container--enterprise .user-request__label {
+    color: var(--chat-surface-text);
   }
 
   @media (min-width: 768px) {
@@ -374,9 +456,34 @@
     box-shadow: 0 -4px 20px -5px color-mix(in srgb, var(--text-primary) 6%, transparent);
   }
 
+  .chat-composer-dock--float {
+    background: transparent;
+    border-top: none;
+    box-shadow: none;
+  }
+
   html[data-theme='dark'] .chat-composer-dock {
     background: var(--bg-card);
     box-shadow: 0 -12px 36px -10px rgba(0, 0, 0, 0.55);
+  }
+
+  html[data-theme='dark'] .chat-composer-dock--float {
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .chat-container--enterprise .chat-composer-dock--float {
+    background: transparent;
+  }
+
+  .chat-composer-float__card {
+    background: var(--panel-bg);
+    color: var(--text-primary);
+  }
+
+  html[data-theme='dark'] .chat-composer-float__card {
+    background: var(--bg-card);
+    box-shadow: 0 8px 30px -12px rgba(0, 0, 0, 0.55);
   }
 
   .composer-textarea {
@@ -386,6 +493,8 @@
     overflow-wrap: anywhere;
     word-break: break-word;
     scrollbar-gutter: stable;
+    font-size: var(--chat-response-font-size, 15px);
+    line-height: var(--chat-response-line-height, 26px);
   }
 
   .composer-textarea::-webkit-scrollbar {
@@ -398,7 +507,7 @@
   }
 
   /*
-   * Chat column widths — tune on .chat-container
+   * Chat column widths , tune on .chat-container
    * User: fit-content up to --chat-user-message-max-width (default 40vw)
    * Assistant: --chat-assistant-message-width (default 96% of thread)
    */
@@ -429,25 +538,26 @@
     }
   }
 
-  /* Plain text messages (user + assistant) — no bubble background */
+  /* Plain text messages (user + assistant) , no bubble background */
   .message-plain {
     width: 100%;
     padding: 0;
     background: transparent;
     border: none;
     box-shadow: none;
-    font-size: var(--text-base);
-    line-height: var(--leading-relaxed);
+    font-size: var(--chat-response-font-size, var(--text-base));
+    line-height: var(--chat-response-line-height, var(--leading-relaxed));
     color: var(--text-primary);
   }
 
   @media (min-width: 640px) {
     .message-plain {
-      font-size: var(--text-md);
+      font-size: var(--chat-response-font-size, var(--text-md));
+      line-height: var(--chat-response-line-height, var(--leading-relaxed));
     }
   }
 
-  /* User request — mock: header + dark pill bubble + avatar (width via .chat-message-width--user) */
+  /* User request , mock: header + dark pill bubble + avatar (width via .chat-message-width--user) */
   .user-request {
     display: flex;
     flex-direction: column;
@@ -497,15 +607,17 @@
     min-width: 0;
     padding: 0.875rem 1.375rem;
     border-radius: 1.5rem;
-    background: #0f172a;
-    color: #f8fafc;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    box-shadow: none;
+    border: 1px solid var(--border-primary);
   }
 
   html[data-theme='dark'] .user-request__bubble {
-    background: #0f172a;
-    color: #f8fafc;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    box-shadow: none;
+    border: 1px solid var(--border-primary);
   }
 
   .user-request__text {
@@ -531,11 +643,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: #0f172a;
-    color: #94a3b8;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-primary);
     font-size: 0.6875rem;
     font-weight: 700;
     letter-spacing: 0.02em;
+  }
+
+  html[data-theme='dark'] .user-request__avatar {
+    background: var(--bg-card);
+    color: var(--text-primary);
+    border-color: var(--border-primary);
   }
 
   .message-plain--assistant {
@@ -563,7 +682,7 @@
     text-align: right;
   }
 
-  /* Card surfaces for rich UI (charts, tables, SQL tabs) — applied on analysis card, not plain text */
+  /* Card surfaces for rich UI (charts, tables, SQL tabs) , applied on analysis card, not plain text */
   .message-bubble {
     width: fit-content;
     max-width: 100%;

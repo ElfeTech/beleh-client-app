@@ -187,6 +187,6 @@ export function getSourceTableCountLabel(
   if (kind === 'connector' && metadataStatus !== 'COMPLETED') {
     return 'Schema pending';
   }
-  if (tableCount === null) return '— tables';
+  if (tableCount === null) return ', tables';
   return `${tableCount} table${tableCount === 1 ? '' : 's'}`;
 }

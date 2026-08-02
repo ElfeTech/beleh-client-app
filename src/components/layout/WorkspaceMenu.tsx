@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { DataSourceResponse, ChatSessionRead } from '../../types/api';
@@ -9,11 +9,16 @@ import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { ActionSheet, type ActionSheetItem } from '../common/ActionSheet';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { DatasourceModal } from './DatasourceModal';
+import { useWorkspace } from '../../context/WorkspaceContext';
+import { canEditOrDeleteResource } from '../../utils/workspaceAccess';
+import { SEARCH_VISIBILITY_THRESHOLD } from '../../constants/pagination';
 
 interface WorkspaceMenuProps {
   dataSources: DataSourceResponse[];
   onAddClick: () => void;
   onRefresh?: () => void;
+  addDisabled?: boolean;
+  addDisabledReason?: string;
 }
 
 // Session cache to avoid refetching
@@ -22,8 +27,15 @@ const _CACHE_DURATION = 30000; // 30 seconds
 void _sessionCache; // Mark as intentionally unused
 void _CACHE_DURATION; // Mark as intentionally unused
 
-export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceMenuProps) {
+export function WorkspaceMenu({
+  dataSources,
+  onAddClick,
+  onRefresh,
+  addDisabled = false,
+  addDisabledReason,
+}: WorkspaceMenuProps) {
   const { user } = useAuth();
+  const { currentRole } = useWorkspace();
   const navigate = useNavigate();
   const { id: workspaceId } = useParams<{ id: string }>();
   const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
@@ -35,6 +47,7 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [searchQuery, setSearchQuery] = useState('');
   const menuButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
 
   const getIconInfo = (type: string) => {
@@ -73,12 +86,17 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
     }
   };
 
-  // Sort datasets by most recent activity (updated_at)
-  const sortedDataSources = [...dataSources].sort((a, b) => {
-    const dateA = new Date(a.updated_at || a.created_at).getTime();
-    const dateB = new Date(b.updated_at || b.created_at).getTime();
-    return dateB - dateA; // Most recent first
-  });
+  const showSearch = dataSources.length > SEARCH_VISIBILITY_THRESHOLD;
+  const visibleDataSources = useMemo(() => {
+    const sorted = [...dataSources].sort((a, b) => {
+      const dateA = new Date(a.updated_at || a.created_at).getTime();
+      const dateB = new Date(b.updated_at || b.created_at).getTime();
+      return dateB - dateA;
+    });
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return sorted;
+    return sorted.filter((source) => source.name.toLowerCase().includes(q));
+  }, [dataSources, searchQuery]);
 
   // Handle mobile detection
   useEffect(() => {
@@ -170,59 +188,71 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
     setSelectedDatasetForMenu(null);
   };
 
-  const getMenuItems = (): ContextMenuItem[] | ActionSheetItem[] => [
-    {
-      id: 'preview',
-      label: 'Preview Data',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      ),
-      variant: 'default' as const,
-      onClick: () => {
-        if (selectedDatasetForMenu) handlePreview(selectedDatasetForMenu);
+  const getMenuItems = (): ContextMenuItem[] | ActionSheetItem[] => {
+    const selected = dataSources.find((d) => d.id === selectedDatasetForMenu);
+    const canMutate = canEditOrDeleteResource(currentRole, selected?.user_id, user?.uid);
+
+    const items: (ContextMenuItem | ActionSheetItem)[] = [
+      {
+        id: 'preview',
+        label: 'Preview Data',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        ),
+        variant: 'default' as const,
+        onClick: () => {
+          if (selectedDatasetForMenu) handlePreview(selectedDatasetForMenu);
+        },
       },
-    },
-    {
-      id: 'rename',
-      label: 'Rename',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-      ),
-      variant: 'default' as const,
-      onClick: handleRename,
-    },
-    {
-      id: 'edit',
-      label: 'Update Dataset',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-      ),
-      variant: 'default' as const,
-      onClick: handleEdit,
-    },
-    {
-      id: 'delete',
-      label: 'Delete Dataset',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        </svg>
-      ),
-      variant: 'danger' as const,
-      onClick: handleDelete,
-    },
-  ];
+    ];
+
+    if (canMutate) {
+      items.push(
+        {
+          id: 'rename',
+          label: 'Rename',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          ),
+          variant: 'default' as const,
+          onClick: handleRename,
+        },
+        {
+          id: 'edit',
+          label: 'Update Dataset',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          ),
+          variant: 'default' as const,
+          onClick: handleEdit,
+        },
+        {
+          id: 'delete',
+          label: 'Delete Dataset',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          ),
+          variant: 'danger' as const,
+          onClick: handleDelete,
+        },
+      );
+    }
+
+    return items;
+  };
 
   return (
     <div className="sidebar-section">
@@ -232,8 +262,20 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
         </svg>
         Datasets
       </div>
+      {showSearch && (
+        <div className="dataset-search">
+          <input
+            type="search"
+            className="dataset-search-input"
+            placeholder="Search datasets…"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            aria-label="Search datasets"
+          />
+        </div>
+      )}
       <div className="dataset-list">
-        {sortedDataSources.map((source) => {
+        {visibleDataSources.map((source) => {
           const iconInfo = getIconInfo(source.type);
           const isActive = selectedDatasourceId === source.id;
 
@@ -250,7 +292,10 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
                 >
                   <span className={`dataset-icon ${iconInfo.class}`}>{iconInfo.label}</span>
                   <div className="dataset-item-title" title={source.name}>
-                    {source.name}
+                    <span className="dataset-item-title__name">{source.name}</span>
+                    {source.is_demo ? (
+                      <span className="dataset-item-sample-badge">Sample data</span>
+                    ) : null}
                   </div>
 
                   {/* Info button with hover tooltip */}
@@ -311,7 +356,12 @@ export function WorkspaceMenu({ dataSources, onAddClick, onRefresh }: WorkspaceM
           );
         })}
       </div>
-      <button className="add-dataset-btn" onClick={onAddClick}>
+      <button
+        className="add-dataset-btn"
+        onClick={onAddClick}
+        disabled={addDisabled}
+        title={addDisabledReason}
+      >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
           <line x1="12" y1="5" x2="12" y2="19" />
           <line x1="5" y1="12" x2="19" y2="12" />

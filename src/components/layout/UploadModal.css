@@ -37,7 +37,7 @@
   min-height: 0;
 }
 
-/* —— Add dataset (file upload) modal —— */
+/* ,, Add dataset (file upload) modal ,, */
 .modal-container.upload-modal-container {
   max-width: min(94vw, 36rem);
   width: 100%;
@@ -555,7 +555,7 @@ html[data-theme='dark'] .upload-modal-input {
   color: var(--text-primary, #f8fafc);
 }
 
-/* —— Multi-step dataset wizard (DatasourceModal) —— */
+/* ,, Multi-step dataset wizard (DatasourceModal) ,, */
 .modal-container.dataset-wizard-modal {
   width: min(1000px, 94vw);
   max-width: min(1000px, 94vw);

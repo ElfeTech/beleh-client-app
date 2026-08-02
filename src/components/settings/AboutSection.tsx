@@ -223,7 +223,6 @@ export function AboutSection() {
       {/* Footer */}
       <div className="about-footer">
         <p>© 2026 Beleh (ብልህ). All rights reserved.</p>
-        <p>Made with ❤️ in Addis Ababa, Ethiopia</p>
       </div>
     </div>
   );

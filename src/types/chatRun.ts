@@ -62,6 +62,12 @@ export interface ChatRunEventError {
   detail?: string;
   message?: string;
   retryable?: boolean;
+  limit_type?: string;
+  current_usage?: number;
+  limit?: number;
+  remaining?: number;
+  reset_at?: string | null;
+  upgrade_url?: string | null;
 }
 
 export type ChatRunStreamHandlers = {

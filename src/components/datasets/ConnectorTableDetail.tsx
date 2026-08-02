@@ -1,7 +1,8 @@
-import { Columns3, Database, MessageSquare, Table2 } from 'lucide-react';
-import type { DatasetTable } from '../../types/api';
+import { Columns3, Database, Table2 } from 'lucide-react';
+import type { DatasetTable, DatasetTablePreviewResponse } from '../../types/api';
 import { isPrimaryKeyColumn, parseTableIdentity } from '../../utils/schemaCatalog';
 import { cn } from '../../lib/utils';
+import { DatasetPreviewGrid } from './DatasetPreviewGrid';
 
 export type ConnectorDetailTab = 'columns' | 'data';
 
@@ -9,14 +10,26 @@ interface ConnectorTableDetailProps {
   table: DatasetTable;
   activeTab: ConnectorDetailTab;
   onTabChange: (tab: ConnectorDetailTab) => void;
-  onUseInChat?: () => void;
+  preview: DatasetTablePreviewResponse | null;
+  previewLoading: boolean;
+  previewError?: string | null;
+  page: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (size: number) => void;
 }
 
 export function ConnectorTableDetail({
   table,
   activeTab,
   onTabChange,
-  onUseInChat,
+  preview,
+  previewLoading,
+  previewError,
+  page,
+  pageSize,
+  onPageChange,
+  onPageSizeChange,
 }: Readonly<ConnectorTableDetailProps>) {
   const identity = parseTableIdentity(table);
   const columns = table.columns ?? [];
@@ -88,28 +101,24 @@ export function ConnectorTableDetail({
             <p>Column details were not returned for this table.</p>
           </div>
         )
-      ) : (
-        <div className="sc-connector-data">
-          <div className="sc-connector-data__card">
-            <div className="sc-connector-data__icon" aria-hidden>
-              <Database className="h-6 w-6" strokeWidth={1.75} />
-            </div>
-            <h3>Live row preview</h3>
-            <p>
-              Row samples for connected databases open in chat analysis. Ask Beleh about{' '}
-              <code>
-                {identity.schema}.{identity.name}
-              </code>{' '}
-              to explore the data.
-            </p>
-            {onUseInChat ? (
-              <button type="button" className="sc-connector-data__cta" onClick={onUseInChat}>
-                <MessageSquare className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-                Analyze in chat
-              </button>
-            ) : null}
-          </div>
+      ) : previewError && !previewLoading ? (
+        <div className="sc-empty-panel">
+          <h3>Could not load preview</h3>
+          <p>{previewError}</p>
         </div>
+      ) : (
+        <DatasetPreviewGrid
+          embedded
+          tableName={identity.name}
+          estimatedRows={table.row_count}
+          schemaColumnCount={table.column_count || columns.length}
+          preview={preview}
+          loading={previewLoading}
+          page={page}
+          pageSize={pageSize}
+          onPageChange={onPageChange}
+          onPageSizeChange={onPageSizeChange}
+        />
       )}
     </div>
   );

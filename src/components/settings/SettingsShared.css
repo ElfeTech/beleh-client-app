@@ -1,4 +1,4 @@
-/* Shared settings page layout — used by all settings sections */
+/* Shared settings page layout , used by all settings sections */
 
 .settings-page-section {
   display: flex;
@@ -283,7 +283,7 @@
   );
 }
 
-/* Toggle switch — teal accent */
+/* Toggle switch , teal accent */
 .settings-toggle {
   position: relative;
   display: inline-block;

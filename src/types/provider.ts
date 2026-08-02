@@ -1,4 +1,4 @@
-/** Provider (Supabase OAuth) API types — /api/v1/provider/* */
+/** Provider (Supabase OAuth) API types , /api/v1/provider/* */
 
 export type ProviderErrorCode =
   | 'PROVIDER_NOT_CONFIGURED'
@@ -79,7 +79,7 @@ export interface WorkspaceProviderUnbindResponse {
   success: boolean;
 }
 
-/** Sandbox / agent tooling only — disabled by default (PROVIDER_CREDENTIALS_DISABLED). */
+/** Sandbox / agent tooling only , disabled by default (PROVIDER_CREDENTIALS_DISABLED). */
 export interface WorkspaceProviderCredentials {
   connected: boolean;
   project_url: string;
@@ -102,7 +102,7 @@ export interface ProviderOAuthErrorMessage {
 
 export type ProviderOAuthMessage = ProviderOAuthSuccessMessage | ProviderOAuthErrorMessage;
 
-/** Cache keys (semantic — used with apiCacheManager) */
+/** Cache keys (semantic , used with apiCacheManager) */
 export const PROVIDER_CACHE_KEYS = {
   connections: 'provider:connections',
   health: 'provider:health',

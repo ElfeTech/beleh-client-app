@@ -3,7 +3,16 @@
  * Determines which chart types are compatible with given data characteristics
  */
 
-export type ChartType = 'bar' | 'line' | 'pie' | 'stacked_bar' | 'scatter' | 'heatmap' | 'table';
+export type ChartType =
+  | 'column'
+  | 'bar'
+  | 'line'
+  | 'area'
+  | 'pie'
+  | 'stacked_bar'
+  | 'scatter'
+  | 'heatmap'
+  | 'table';
 
 export interface ChartTypeOption {
   type: ChartType;
@@ -247,8 +256,10 @@ export function getCompatibleChartTypes(
  */
 export function getChartTypeIcon(type: ChartType): string {
   const icons: Record<ChartType, string> = {
-    bar: 'M18 20V10M12 20V4M6 20v-6',
+    column: 'M18 20V10M12 20V4M6 20v-6',
+    bar: 'M4 6h10M4 12h16M4 18h7',
     line: 'M3 12l4-4 4 4 4-4 4 4M3 20h18',
+    area: 'M3 20V10l5 4 4-6 5 3 4-5v14H3z',
     pie: 'M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9M12 3v9l6.36 3.64',
     stacked_bar: 'M18 20V10M12 20V4M6 20v-6M18 10V4M12 4v4M6 14V8',
     scatter: 'M6 6h.01M6 18h.01M12 12h.01M18 6h.01M18 18h.01M9 9h.01M15 15h.01',
@@ -263,8 +274,10 @@ export function getChartTypeIcon(type: ChartType): string {
  */
 export function chartTypeToBackendFormat(type: ChartType): string {
   const mapping: Record<ChartType, string> = {
+    column: 'column',
     bar: 'bar',
     line: 'line',
+    area: 'area',
     pie: 'pie',
     stacked_bar: 'stacked_bar',
     scatter: 'scatter',
@@ -279,14 +292,19 @@ export function chartTypeToBackendFormat(type: ChartType): string {
  */
 export function backendToChartType(backendType: string): ChartType {
   const mapping: Record<string, ChartType> = {
+    column: 'column',
+    COLUMN_CHART: 'column',
     bar: 'bar',
     BAR_CHART: 'bar',
     line: 'line',
     LINE_CHART: 'line',
+    area: 'area',
+    AREA_CHART: 'area',
     multiline: 'line',
     MULTI_LINE_CHART: 'line',
     pie: 'pie',
     PIE_CHART: 'pie',
+    doughnut: 'pie',
     stacked_bar: 'stacked_bar',
     STACKED_BAR_CHART: 'stacked_bar',
     scatter: 'scatter',

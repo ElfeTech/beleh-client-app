@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { Check, ChevronDown, Search, Database, FileText, Send, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { DataSourceResponse, ConnectorResponse } from '../../types/api';
+import { BI_CHAT_MAX_CHARS } from '../../constants/chatLimits';
 
 export interface ChatComposerProps {
   workspaceId: string;
@@ -23,11 +24,23 @@ export interface ChatComposerProps {
   isWaiting?: boolean;
   onStop?: () => void;
   disabled?: boolean;
+  /** Tooltip when send is disabled due to plan limits. */
+  disabledReason?: string | null;
   datasources: DataSourceResponse[];
   connectors?: ConnectorResponse[];
   selectedDatasourceId: string | null;
   onDatasourceChange: (id: string | null) => void;
+  /** Imperatively open the source picker (e.g. clarify-which-source). */
+  sourcePickerOpenRequest?: number;
+  /** Open add-datasource / connect-DB flow from the composer toolbar. */
+  onConnectDatasource?: () => void;
+  /** Remove Free-trial sample datasource (DELETE /demo). */
+  onRemoveDemo?: () => void;
 }
+
+export type ChatComposerHandle = {
+  openSourcePicker: () => void;
+};
 
 function formatSourceType(ds: DataSourceResponse): string {
   const raw = (ds.type || ds.mime_type || 'DATA').toUpperCase();
@@ -44,22 +57,24 @@ function tagLabel(
   selectedDatasourceId: string | null,
   datasources: DataSourceResponse[],
   connectors: ConnectorResponse[] = [],
-): string {
-  if (selectedDatasourceId === null || selectedDatasourceId === '') return 'GENERAL';
+): { label: string; isDemo: boolean } {
+  if (selectedDatasourceId === null || selectedDatasourceId === '') {
+    return { label: 'All sources', isDemo: false };
+  }
 
   const ds = datasources.find((d) => d.id === selectedDatasourceId);
   if (ds) {
-    const upper = ds.name.toUpperCase();
-    return upper.length > 16 ? `${upper.slice(0, 16)}…` : upper;
+    const name = ds.name.length > 20 ? `${ds.name.slice(0, 20)}…` : ds.name;
+    return { label: `Analyzing: ${name}`, isDemo: Boolean(ds.is_demo) };
   }
 
   const connector = connectors.find((c) => c.id === selectedDatasourceId);
   if (connector) {
-    const upper = connector.name.toUpperCase();
-    return upper.length > 16 ? `${upper.slice(0, 16)}…` : upper;
+    const name = connector.name.length > 20 ? `${connector.name.slice(0, 20)}…` : connector.name;
+    return { label: `Analyzing: ${name}`, isDemo: false };
   }
 
-  return 'GENERAL';
+  return { label: 'All sources', isDemo: false };
 }
 
 export function ChatComposer({
@@ -70,10 +85,14 @@ export function ChatComposer({
   isWaiting = false,
   onStop,
   disabled,
+  disabledReason,
   datasources,
   connectors = [],
   selectedDatasourceId,
   onDatasourceChange,
+  sourcePickerOpenRequest = 0,
+  onConnectDatasource,
+  onRemoveDemo,
 }: ChatComposerProps) {
   const listId = useId();
   const [open, setOpen] = useState(false);
@@ -83,25 +102,27 @@ export function ChatComposer({
   const searchRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
+  const sourceTag = useMemo(
+    () => tagLabel(selectedDatasourceId, datasources, connectors),
+    [selectedDatasourceId, datasources, connectors],
+  );
+
+  useEffect(() => {
+    if (sourcePickerOpenRequest > 0) {
+      setOpen(true);
+    }
+  }, [sourcePickerOpenRequest]);
 
   const syncTextareaHeight = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
 
-    ta.style.height = 'auto';
     const styles = getComputedStyle(ta);
-    const lineHeight = Number.parseFloat(styles.lineHeight) || 20;
+    const lineHeight = Number.parseFloat(styles.lineHeight) || 22;
     const paddingY = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
-    const maxHeight = lineHeight * COMPOSER_MAX_ROWS + paddingY;
-    const contentHeight = ta.scrollHeight;
-
-    if (contentHeight > maxHeight) {
-      ta.style.height = `${maxHeight}px`;
-      ta.style.overflowY = 'auto';
-    } else {
-      ta.style.height = `${contentHeight}px`;
-      ta.style.overflowY = 'hidden';
-    }
+    const fixedHeight = lineHeight * COMPOSER_MAX_ROWS + paddingY;
+    ta.style.height = `${fixedHeight}px`;
+    ta.style.overflowY = 'auto';
   }, []);
 
   useLayoutEffect(() => {
@@ -261,7 +282,7 @@ export function ChatComposer({
               <span className="w-4 shrink-0" />
             )}
             <div className="flex flex-col">
-              <span>General Intelligence</span>
+              <span>All sources</span>
               <span
                 className={cn(
                   'text-[10px] font-bold uppercase tracking-wider opacity-80',
@@ -285,7 +306,7 @@ export function ChatComposer({
                 className="text-xs font-bold text-primary hover:underline uppercase tracking-wider"
                 onClick={() => setOpen(false)}
               >
-                Add a source
+                Add datasource
               </Link>
             </div>
           ) : filtered.length === 0 ? (
@@ -352,6 +373,18 @@ export function ChatComposer({
                   <div className="min-w-0 flex-1 pt-0.5">
                     <div className="flex items-center gap-2">
                       <span className="block truncate font-semibold">{s.name}</span>
+                      {isDatasource && (s as DataSourceResponse).is_demo ? (
+                        <span
+                          className={cn(
+                            'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider',
+                            selected
+                              ? 'bg-white/20 text-primary-foreground'
+                              : 'bg-[color-mix(in_srgb,var(--accent-teal-500)_14%,transparent)] text-[color:var(--accent-teal-600)]',
+                          )}
+                        >
+                          Sample data
+                        </span>
+                      ) : null}
                       {selected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                     </div>
                     <span
@@ -373,41 +406,18 @@ export function ChatComposer({
     );
 
   return (
-    <div ref={rootRef} className="relative z-40 w-full">
+    <div ref={rootRef} className="chat-composer-float relative z-40 w-full">
       <div
         className={cn(
-          'flex w-full min-h-[48px] items-end gap-1.5 md:gap-2 rounded-2xl border px-2 py-1.5 md:px-3 md:py-2 shadow-sm transition-[box-shadow,border-color]',
-          'border-[color:var(--border-primary)] bg-[color:var(--bg-primary)]',
+          'chat-composer-float__card flex w-full flex-col rounded-2xl border shadow-[0_8px_30px_-12px_rgba(15,17,21,0.18)] transition-[box-shadow,border-color]',
+          'border-[color:var(--border-primary)] bg-[color:var(--panel-bg)]',
           'focus-within:border-primary/45 focus-within:ring-2 focus-within:ring-primary/20',
-          'dark:border-border/80 dark:bg-[color:var(--bg-card)] dark:shadow-[0_8px_30px_-12px_rgba(0,0,0,0.65)]',
         )}
       >
-        <button
-          type="button"
-          className={cn(
-            'inline-flex shrink-0 max-w-[40%] items-center gap-1 rounded-xl bg-primary/10 px-2.5 py-1.5 text-[11px] font-extrabold tracking-wide text-primary sm:max-w-none',
-            'hover:bg-primary/15 active:scale-[0.98] transition-all',
-          )}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          aria-controls={listId}
-          onClick={() => setOpen((o) => !o)}
-        >
-          <span className="truncate">
-            {tagLabel(selectedDatasourceId, datasources, connectors)}
-          </span>
-          <ChevronDown
-            className={cn(
-              'h-3.5 w-3.5 shrink-0 opacity-80 transition-transform',
-              open && 'rotate-180',
-            )}
-          />
-        </button>
-
         <textarea
           ref={textareaRef}
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => onChange(e.target.value.slice(0, BI_CHAT_MAX_CHARS))}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -420,43 +430,104 @@ export function ChatComposer({
               : 'Ask Beleh AI Analyst to query schemas, calculate savings, or produce charts...'
           }
           disabled={disabled || isWaiting}
-          rows={1}
+          rows={COMPOSER_MAX_ROWS}
           wrap="soft"
+          maxLength={BI_CHAT_MAX_CHARS}
           className={cn(
-            'composer-textarea min-h-[2.25rem] flex-1 resize-none bg-transparent py-2 text-sm leading-snug text-[color:var(--text-primary)] outline-none placeholder:text-[color:var(--text-muted)]',
+            'composer-textarea w-full resize-none bg-transparent px-3.5 pt-3.5 pb-2 outline-none',
+            'text-[color:var(--chat-surface-text,var(--text-primary))] placeholder:text-[color:var(--text-muted)]',
             'disabled:cursor-not-allowed disabled:opacity-60',
           )}
         />
 
-        {showStop ? (
+        <div className="chat-composer-float__toolbar flex items-center gap-1.5 border-t border-[color:var(--border-primary)] px-2 py-1.5 md:px-2.5">
           <button
             type="button"
-            onClick={() => onStop?.()}
-            aria-label="Stop generating"
-            title="Stop"
             className={cn(
-              'composer-send-btn self-center shrink-0 flex h-9 w-9 items-center justify-center rounded-xl transition-all active:scale-[0.97]',
-              'composer-send-btn--active text-white shadow-md hover:opacity-95',
+              'inline-flex shrink-0 max-w-[42%] items-center gap-1 rounded-lg bg-[color:var(--bg-tertiary)] px-2.5 py-1.5 text-[11px] font-semibold tracking-wide text-[color:var(--text-primary)] sm:max-w-none',
+              'hover:bg-[color:var(--bg-card-hover)] active:scale-[0.98] transition-all',
             )}
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-controls={listId}
+            onClick={() => setOpen((o) => !o)}
+            title="Select data source"
           >
-            <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.25} aria-hidden />
+            <Database className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2.25} />
+            <span className="truncate">{sourceTag.label}</span>
+            {sourceTag.isDemo ? (
+              <span className="hidden sm:inline shrink-0 rounded bg-[color-mix(in_srgb,var(--accent-teal-500)_18%,transparent)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[color:var(--accent-teal-600)]">
+                Sample
+              </span>
+            ) : null}
+            <ChevronDown
+              className={cn(
+                'h-3.5 w-3.5 shrink-0 opacity-80 transition-transform',
+                open && 'rotate-180',
+              )}
+            />
           </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => canSend && onSubmit()}
-            disabled={!canSend}
-            aria-label="Send message"
-            className={cn(
-              'composer-send-btn self-center shrink-0 flex h-9 w-9 items-center justify-center rounded-xl transition-all active:scale-[0.97]',
-              canSend
-                ? 'composer-send-btn--active text-white shadow-md hover:opacity-95'
-                : 'cursor-not-allowed bg-[color:var(--bg-secondary)] text-[color:var(--text-muted)]',
+
+          {onRemoveDemo && datasources.some((d) => d.is_demo && d.id === selectedDatasourceId) ? (
+            <button
+              type="button"
+              className="hidden sm:inline-flex shrink-0 items-center rounded-lg px-2 py-1.5 text-[10px] font-semibold text-[color:var(--text-muted)] hover:bg-[color:var(--bg-tertiary)] hover:text-[color:var(--text-primary)]"
+              onClick={onRemoveDemo}
+              title="Remove sample data"
+            >
+              Remove sample
+            </button>
+          ) : null}
+
+          {onConnectDatasource ? (
+            <button
+              type="button"
+              className={cn(
+                'inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-dashed border-[color:var(--border-primary)] bg-transparent px-2.5 py-1.5',
+                'text-[10px] font-bold uppercase tracking-wider text-[color:var(--text-muted)]',
+                'transition-colors hover:border-primary/40 hover:text-primary',
+              )}
+              onClick={onConnectDatasource}
+              title="Connect a database"
+            >
+              <Database className="h-3.5 w-3.5" strokeWidth={2.25} />
+              Connect DB
+            </button>
+          ) : null}
+
+          <div className="ml-auto flex items-center gap-1.5">
+            {showStop ? (
+              <button
+                type="button"
+                onClick={() => onStop?.()}
+                aria-label="Stop generating"
+                title="Stop"
+                className={cn(
+                  'composer-send-btn flex h-9 w-9 items-center justify-center rounded-xl transition-all active:scale-[0.97]',
+                  'composer-send-btn--active text-white shadow-md hover:opacity-95',
+                )}
+              >
+                <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.25} aria-hidden />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => canSend && onSubmit()}
+                disabled={!canSend}
+                aria-label="Send message"
+                title={disabled && disabledReason ? disabledReason : undefined}
+                className={cn(
+                  'composer-send-btn flex h-9 w-9 items-center justify-center rounded-xl transition-all active:scale-[0.97]',
+                  canSend
+                    ? 'composer-send-btn--active text-white shadow-md hover:opacity-95'
+                    : 'cursor-not-allowed bg-[color:var(--bg-tertiary)] text-[color:var(--text-muted)]',
+                )}
+              >
+                <Send className="h-4 w-4" strokeWidth={2.25} aria-hidden />
+              </button>
             )}
-          >
-            <Send className="h-4 w-4" strokeWidth={2.25} aria-hidden />
-          </button>
-        )}
+          </div>
+        </div>
       </div>
 
       {dropdownPanel}

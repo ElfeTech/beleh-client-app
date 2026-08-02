@@ -10,6 +10,11 @@ import { SheetSelection } from '../upload/SheetSelection';
 import { HeaderSelection } from '../upload/HeaderSelection';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { formatDatasourceError } from '../../utils/apiErrorMessage';
+import {
+  isDatasourcesAtLimit,
+  PLAN_LIMIT_REACHED_TOOLTIP,
+  workspaceLimitUpgradeMessage,
+} from '../../utils/workspaceAccess';
 import './UploadModal.css';
 
 interface DatasourceModalProps {
@@ -59,7 +64,14 @@ export function DatasourceModal({
   onSuccess,
 }: DatasourceModalProps) {
   const { user } = useAuth();
-  const { refreshDatasources, saveWorkspaceState, currentWorkspace } = useWorkspace();
+  const {
+    refreshDatasources,
+    refreshWorkspaceUsage,
+    saveWorkspaceState,
+    currentWorkspace,
+    workspaceUsage,
+    currentRole,
+  } = useWorkspace();
   const [file, setFile] = useState<File | null>(null);
   const [name, setName] = useState(initialName);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('IDLE');
@@ -68,6 +80,8 @@ export function DatasourceModal({
   const [currentStep, setCurrentStep] = useState(1);
   const [datasource, setDatasource] = useState<DataSourceResponse | null>(null);
   const [sheets, setSheets] = useState<ExcelSheet[]>([]);
+
+  const datasourcesAtLimit = mode === 'add' && isDatasourcesAtLimit(workspaceUsage);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollIntervalRef = useRef<number | null>(null);
@@ -183,6 +197,10 @@ export function DatasourceModal({
     e.preventDefault();
     if (!user || !name.trim()) return;
     if (mode === 'add' && !file) return;
+    if (datasourcesAtLimit) {
+      setError(workspaceLimitUpgradeMessage(currentRole, 'datasources'));
+      return;
+    }
 
     try {
       setUploadStatus('UPLOADING');
@@ -194,6 +212,7 @@ export function DatasourceModal({
 
       if (mode === 'add') {
         result = await apiClient.createDatasource(token, workspaceId!, file!, name);
+        await refreshWorkspaceUsage();
       } else if (mode === 'rename') {
         result = await apiClient.renameDatasource(token, datasourceId!, name.trim());
         setUploadStatus('READY');
@@ -538,6 +557,11 @@ export function DatasourceModal({
           )}
         </div>
 
+        {datasourcesAtLimit && (
+          <div className="form-error upload-modal-error dataset-wizard-error">
+            {workspaceLimitUpgradeMessage(currentRole, 'datasources')}
+          </div>
+        )}
         {error && <div className="form-error upload-modal-error dataset-wizard-error">{error}</div>}
 
         <div className="dataset-wizard-body">
@@ -564,7 +588,13 @@ export function DatasourceModal({
                     type="button"
                     className="btn-gradient-primary"
                     onClick={handleSubmit}
-                    disabled={(mode === 'add' && !file) || !name.trim() || uploadStatus !== 'IDLE'}
+                    disabled={
+                      datasourcesAtLimit ||
+                      (mode === 'add' && !file) ||
+                      !name.trim() ||
+                      uploadStatus !== 'IDLE'
+                    }
+                    title={datasourcesAtLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
                   >
                     {mode === 'rename'
                       ? uploadStatus === 'UPLOADING'

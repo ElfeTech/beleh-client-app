@@ -11,6 +11,7 @@ import { useAuth } from './useAuth';
 import { useWorkspace } from './WorkspaceContext';
 import { readSelectedDatasetId, writeSelectedDatasetId } from '../lib/selectedDatasourceStorage';
 import { isSourceInWorkspace } from '../lib/workspaceStateValidation';
+import { findDemoDatasource } from '../lib/workspaceDemo';
 
 interface DatasourceContextType {
   selectedDatasourceId: string | null;
@@ -71,15 +72,17 @@ export function DatasourceProvider({ children }: { children: ReactNode }) {
       // Mirror server choice into local memory so refresh stays consistent
       writeSelectedDatasetId(uid, wid, chosen);
     } else {
-      // Lists may still be empty (no sources yet) — keep any stored id until lists arrive,
+      // Lists may still be empty (no sources yet) , keep any stored id until lists arrive,
       // then clear only once we know the id is stale.
       const listsReady = datasources.length > 0 || connectors.length > 0;
       if (listsReady) {
         if (stored) writeSelectedDatasetId(uid, wid, null);
-        chosen = null;
+        // Free-trial sample: auto-bind READY demo when nothing else is selected.
+        chosen = findDemoDatasource(datasources)?.id ?? null;
+        if (chosen) writeSelectedDatasetId(uid, wid, chosen);
       } else if (stored) {
         // No sources in workspace yet; still surface the stored id so the composer
-        // does not flash GENERAL — validation effect will clear if it never appears.
+        // does not flash GENERAL , validation effect will clear if it never appears.
         chosen = stored;
       } else {
         chosen = null;

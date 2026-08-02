@@ -59,10 +59,11 @@ export function ResponseViewTabs({ artifacts, filterValue }: ResponseViewTabsPro
       case 'table':
         return <TableSchemaView columns={availability.tableColumns} rows={filteredRows} />;
       case 'plot':
-        return availability.chartData && availability.chartType ? (
+        return availability.chartType ? (
           <InteractivePlotView
             chartType={availability.chartType}
             chartData={availability.chartData}
+            scatterData={availability.scatterData}
             title={availability.chartTitle}
             compatiblePlotTypes={availability.compatiblePlotTypes}
             initialChartType={availability.originalChartType}

@@ -46,7 +46,7 @@ export function BillingSuccessPage() {
 
       const elapsed = Date.now() - startedAt.current;
       if (elapsed >= MAX_WAIT_MS) {
-        setStatusText('Taking longer than expected — opening billing…');
+        setStatusText('Taking longer than expected , opening billing…');
         finish(true);
         return;
       }
@@ -57,7 +57,10 @@ export function BillingSuccessPage() {
         const tier = sub.plan?.tier?.toLowerCase() ?? '';
         const paidActive =
           Boolean(sub.stripe_subscription_id) &&
-          (sub.status === 'active' || sub.status === 'trialing' || sub.status === 'past_due');
+          (sub.status === 'active' ||
+            sub.status === 'trial' ||
+            sub.status === 'trialing' ||
+            sub.status === 'past_due');
         const tierChanged =
           baselineTier.current != null && tier !== '' && tier !== baselineTier.current;
         const notFree = tier !== '' && !tier.includes('free');
@@ -68,7 +71,7 @@ export function BillingSuccessPage() {
           return;
         }
       } catch {
-        // Keep polling — webhook may still be in flight
+        // Keep polling , webhook may still be in flight
       }
 
       timeoutId = window.setTimeout(() => {

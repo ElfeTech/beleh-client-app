@@ -92,6 +92,51 @@ function buildPrice(
 }
 
 /**
+ * Map public `/api/usage/plans` rows into catalog-shaped plans for marketing/pricing UI
+ * (landing page) when Stripe catalog auth is unavailable.
+ */
+export function catalogPlansFromUsagePlans(usagePlans: Plan[]): BillingCatalogPlan[] {
+  const mapped = usagePlans
+    .filter((p) => p.is_active !== false)
+    .map((plan): BillingCatalogPlan => {
+      const prices: BillingPrice[] = [];
+      for (const interval of ['month', 'year'] as const) {
+        const amount = amountFromUsage(plan, interval);
+        if (amount == null) continue;
+        const serverDiscount =
+          interval === 'year' ? plan.discount_percent_yearly : plan.discount_percent_monthly;
+        prices.push(
+          buildPrice(
+            interval,
+            amount,
+            compareAtFromUsage(plan, interval),
+            'usd',
+            '',
+            serverDiscount,
+          ),
+        );
+      }
+      if (prices.length === 0) {
+        prices.push(buildPrice('month', 0, null, 'usd', ''));
+      }
+      const hasDiscount = prices.some((p) => (p.discount_percent ?? 0) > 0);
+      return {
+        plan_id: plan.id,
+        name: plan.name,
+        tier: plan.tier,
+        description: plan.description ?? '',
+        features: plan.features ?? {},
+        limits: plan.limits,
+        prices,
+        stripe_product_id: null,
+        discount_label: plan.discount_label ?? null,
+        has_discount: hasDiscount,
+      };
+    });
+  return sortPlansByPrice(mapped);
+}
+
+/**
  * Catalog prices only exist when Stripe Price IDs are linked; unit_amount may be null
  * if DB amounts were not synced. Fill amounts, compare-at prices, and discounts from
  * /api/usage/plans so pricing always reflects the database.
@@ -124,7 +169,7 @@ export function enrichCatalogPlans(
       );
     }
 
-    // DB has amounts but no Stripe-linked prices yet — still show configured pricing.
+    // DB has amounts but no Stripe-linked prices yet , still show configured pricing.
     if (usage) {
       for (const interval of ['month', 'year'] as const) {
         if (byInterval.has(interval)) continue;

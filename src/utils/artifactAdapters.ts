@@ -8,14 +8,27 @@ import type {
   FilterBarData,
   InsightData,
   KpiData,
+  ScatterData,
+  ScatterDataset,
+  ScatterPoint,
   TableData,
   UiArtifact,
 } from '../types/api';
 
-const CHART_TYPES = new Set<string>(['bar', 'line', 'doughnut', 'pie']);
+const CATEGORY_CHART_TYPES = new Set<string>(['column', 'bar', 'line', 'area', 'doughnut', 'pie']);
+
+const CHART_TYPES = new Set<string>([...CATEGORY_CHART_TYPES, 'scatter']);
 
 export function isChartArtifactType(type: string): type is ChartArtifactType {
   return CHART_TYPES.has(type);
+}
+
+export function isCategoryChartType(type: string): type is Exclude<ChartArtifactType, 'scatter'> {
+  return CATEGORY_CHART_TYPES.has(type);
+}
+
+export function isScatterArtifactType(type: string): type is 'scatter' {
+  return type === 'scatter';
 }
 
 export function asKpiData(data: Record<string, unknown>): KpiData {
@@ -55,6 +68,46 @@ export function asChartData(data: Record<string, unknown>): ChartData {
     datasets,
     source_tool_call_id: data.source_tool_call_id != null ? String(data.source_tool_call_id) : null,
   };
+}
+
+function coerceScatterPoint(raw: unknown): ScatterPoint | null {
+  if (raw == null || typeof raw !== 'object') return null;
+  const p = raw as Record<string, unknown>;
+  const x = typeof p.x === 'number' ? p.x : Number(p.x);
+  const y = typeof p.y === 'number' ? p.y : Number(p.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const point: ScatterPoint = { x, y };
+  if (p.label != null) point.label = String(p.label);
+  return point;
+}
+
+export function asScatterData(data: Record<string, unknown>): ScatterData {
+  const rawDatasets = Array.isArray(data.datasets) ? data.datasets : [];
+  const datasets: ScatterDataset[] = rawDatasets
+    .filter((d): d is Record<string, unknown> => d != null && typeof d === 'object')
+    .map((d) => {
+      const rawPoints = Array.isArray(d.points) ? d.points : [];
+      const points = rawPoints.map(coerceScatterPoint).filter((p): p is ScatterPoint => p != null);
+      return {
+        label: String(d.label ?? ''),
+        points,
+      };
+    });
+
+  return {
+    datasets,
+    x_label: data.x_label != null ? String(data.x_label) : undefined,
+    y_label: data.y_label != null ? String(data.y_label) : undefined,
+    source_tool_call_id: data.source_tool_call_id != null ? String(data.source_tool_call_id) : null,
+  };
+}
+
+export function isValidCategoryChartData(data: ChartData): boolean {
+  return data.labels.length > 0 && data.datasets.length > 0;
+}
+
+export function isValidScatterData(data: ScatterData): boolean {
+  return data.datasets.some((d) => d.points.length > 0);
 }
 
 export function asInsightData(data: Record<string, unknown>): InsightData {
@@ -231,7 +284,10 @@ export function findPanelViewArtifacts(artifacts: UiArtifact[]): UiArtifact[] {
 
 /** Prefer source_tool_call_id for charts; fall back to artifact id. */
 export function getArtifactReactKey(artifact: UiArtifact): string {
-  if (isChartArtifactType(artifact.type)) {
+  if (isScatterArtifactType(artifact.type)) {
+    const sourceId = asScatterData(artifact.data).source_tool_call_id;
+    if (sourceId) return sourceId;
+  } else if (isCategoryChartType(artifact.type)) {
     const sourceId = asChartData(artifact.data).source_tool_call_id;
     if (sourceId) return sourceId;
   }

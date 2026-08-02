@@ -619,17 +619,52 @@ export function formatUsd(amount: number, currency = 'usd'): string {
   }
 }
 
+/** Full locale count for LLM tokens (no k/M shortening). */
 export function formatTokenCount(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
   return value.toLocaleString();
 }
 
 export function formatUsageValue(value: number, metricKey: string): string {
-  return metricKey === 'tokens' ? formatTokenCount(value) : value.toLocaleString();
+  return metricKey === 'tokens' || metricKey === 'daily_tokens'
+    ? formatTokenCount(value)
+    : value.toLocaleString();
 }
 
 export function usagePercentage(used: number, limit: number): number {
-  if (limit <= 0) return 0;
+  // limit < 0 means unlimited; limit === 0 means no capacity
+  if (limit < 0) return 0;
+  if (limit === 0) return used > 0 ? 100 : 0;
   return Math.min(100, Math.max(0, (used / limit) * 100));
+}
+
+/** Format a reset_at ISO date for quota messaging (date only). */
+export function formatQuotaResetDate(resetAt: string | null | undefined): string | null {
+  if (!resetAt) return null;
+  try {
+    return new Date(resetAt).toLocaleDateString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  } catch {
+    return null;
+  }
+}
+
+/** Format reset_at with time , used for daily token reset messaging. */
+export function formatQuotaResetAt(resetAt: string | null | undefined): string | null {
+  if (!resetAt) return null;
+  try {
+    const d = new Date(resetAt);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString(undefined, {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    });
+  } catch {
+    return null;
+  }
 }

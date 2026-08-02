@@ -3,10 +3,12 @@ import type { ChartArtifactType, ChartData } from '../../types/api';
 import { ArtifactChart } from './artifacts/ArtifactChart';
 import './ChartModal.css';
 
+type CategoryChartType = Exclude<ChartArtifactType, 'scatter'>;
+
 interface ChartModalProps {
   isOpen: boolean;
   onClose: () => void;
-  chartType: ChartArtifactType;
+  chartType: CategoryChartType;
   chartData: ChartData;
   title?: string;
 }

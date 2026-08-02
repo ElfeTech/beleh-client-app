@@ -1,4 +1,4 @@
-/* —— Connector catalog (selection modal) —— */
+/* ,, Connector catalog (selection modal) ,, */
 .modal-container.connector-catalog-modal {
   max-width: 960px;
   width: 100%;
@@ -247,7 +247,7 @@ html[data-theme='dark'] .connector-catalog-search-input {
   }
 }
 
-/* —— Postgres enterprise modal —— */
+/* ,, Postgres enterprise modal ,, */
 .modal-container.enterprise-pg-modal {
   max-width: min(94vw, 40rem);
   width: 100%;
@@ -768,7 +768,7 @@ html[data-theme='dark'] .enterprise-pg-footer {
   }
 }
 
-/* —— Legacy connector form (shared) —— */
+/* ,, Legacy connector form (shared) ,, */
 .connector-form {
   display: flex;
   flex-direction: column;
@@ -793,7 +793,7 @@ html[data-theme='dark'] .enterprise-pg-footer {
   color: var(--gray-700);
 }
 
-/* Exclude .enterprise-input — Postgres modal uses its own padding (incl. icon inset) */
+/* Exclude .enterprise-input , Postgres modal uses its own padding (incl. icon inset) */
 .form-group input:not(.enterprise-input) {
   padding: 0.75rem 1rem;
   border: 1px solid var(--gray-200);

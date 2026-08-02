@@ -30,7 +30,7 @@ export function HelpSection() {
     {
       question: 'How do I invite team members?',
       answer:
-        'Go to Settings > Members and click "Invite Member". Enter their email address and select their role (Admin, Editor, or Viewer). They will receive an invitation email to join your workspace.',
+        'Go to Settings > Members and enter their email to send an invite. Invites are for the Member role. They receive an email with an accept link; new users can sign up with that link, and existing users sign in with the same email to join. Only workspace owners can invite or remove members.',
     },
     {
       question: 'What happens when I reach my query limit?',

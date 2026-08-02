@@ -12,6 +12,8 @@ import { apiClient } from '../services/apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
 import type {
   WorkspaceResponse,
+  WorkspaceRole,
+  WorkspaceUsageResponse,
   DataSourceResponse,
   WorkspaceContextResponse,
   ConnectorResponse,
@@ -23,6 +25,16 @@ import {
 } from '../lib/workspaceStateValidation';
 import { writeSelectedDatasetId } from '../lib/selectedDatasourceStorage';
 import { readActiveWorkspaceId, writeActiveWorkspaceId } from '../lib/uiMemory';
+import {
+  isWorkspaceRole,
+  resolveBackendUserId,
+  resolveCallerWorkspaceRole,
+  resolveRoleFromContext,
+} from '../utils/workspaceAccess';
+import { isWorkspaceMemberSelf } from '../utils/workspaceMembers';
+import { ApiRequestError } from '../utils/apiErrorMessage';
+import { fetchAllPages } from '../utils/fetchAllPages';
+import { LIST_PAGE_SIZE, MAX_LIST_PAGES } from '../constants/pagination';
 
 interface WorkspaceContextType {
   workspaces: WorkspaceResponse[];
@@ -33,12 +45,15 @@ interface WorkspaceContextType {
   setDatasources: (datasources: DataSourceResponse[]) => void;
   connectors: ConnectorResponse[];
   setConnectors: (connectors: ConnectorResponse[]) => void;
-  // usage: WorkspaceContextResponse | null; // Renamed for clarity? No, let's call it workspaceContext to avoid confusion with UsageContext
   workspaceContext: WorkspaceContextResponse | null;
+  /** Caller's role in the current workspace (owner | member). */
+  currentRole: WorkspaceRole | null;
+  workspaceUsage: WorkspaceUsageResponse | null;
   loading: boolean;
   refreshWorkspaces: () => Promise<void>;
   refreshDatasources: () => Promise<void>;
   refreshConnectors: () => Promise<void>;
+  refreshWorkspaceUsage: () => Promise<WorkspaceUsageResponse | null>;
   loadWorkspaceContext: (
     workspaceId: string,
     forceRefresh?: boolean,
@@ -63,6 +78,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const [datasources, setDatasources] = useState<DataSourceResponse[]>([]);
   const [connectors, setConnectors] = useState<ConnectorResponse[]>([]);
   const [workspaceContext, setWorkspaceContext] = useState<WorkspaceContextResponse | null>(null);
+  const [currentRole, setCurrentRole] = useState<WorkspaceRole | null>(null);
+  const [workspaceUsage, setWorkspaceUsage] = useState<WorkspaceUsageResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -105,6 +122,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     setDatasources([]);
     setConnectors([]);
     setWorkspaceContext(null);
+    setCurrentRole(null);
+    setWorkspaceUsage(null);
     setIsInitialized(false);
     loadedWorkspaceRef.current = null;
     sanitizedServerStateRef.current = null;
@@ -152,10 +171,19 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       const token = await user.getIdToken();
-      const response = await apiClient.listWorkspaces(token);
+      const listed = await fetchAllPages(
+        (page, pageSize) => apiClient.listWorkspacesPaginated(token, { page, page_size: pageSize }),
+        LIST_PAGE_SIZE,
+        MAX_LIST_PAGES,
+      );
 
-      // Extract items from paginated response
-      const fetchedWorkspaces = response.items;
+      // Attach caller role when missing (list API now returns it; fall back via members/owner_id).
+      const backendUserId = resolveBackendUserId(listed, user.uid, user.email);
+      const fetchedWorkspaces = listed.map((workspace) => {
+        if (isWorkspaceRole(workspace.role)) return workspace;
+        const role = resolveCallerWorkspaceRole(workspace, user.uid, user.email, backendUserId);
+        return role ? { ...workspace, role } : workspace;
+      });
       setWorkspaces(fetchedWorkspaces);
 
       // Only set default workspace on initial load
@@ -206,8 +234,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       const data = await apiCacheManager.fetch(
         'datasources',
         async (authToken: string, wId: string) => {
-          const response = await apiClient.listWorkspaceDatasources(authToken, wId);
-          return response.items;
+          return fetchAllPages(
+            (page, pageSize) =>
+              apiClient.listWorkspaceDatasourcesPaginated(authToken, wId, {
+                page,
+                page_size: pageSize,
+              }),
+            LIST_PAGE_SIZE,
+            MAX_LIST_PAGES,
+          );
         },
         [token, currentWorkspace.id],
       );
@@ -272,15 +307,69 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         );
 
         setWorkspaceContext(data);
+
+        let role = resolveRoleFromContext(data);
+        if (!role && isWorkspaceRole(data.workspace?.role)) {
+          role = data.workspace.role;
+        }
+        if (!role) {
+          try {
+            const membersPage = await apiClient.listWorkspaceMembers(token, workspaceId, {
+              page: 1,
+              page_size: 100,
+            });
+            const me = membersPage.items.find((m) =>
+              isWorkspaceMemberSelf(m, user.uid, user.email),
+            );
+            role = me?.role ?? null;
+          } catch (memberErr) {
+            if (
+              memberErr instanceof ApiRequestError &&
+              (memberErr.status === 403 || memberErr.status === 404)
+            ) {
+              setCurrentRole(null);
+              setWorkspaceContext(null);
+              return null;
+            }
+            console.warn('[WorkspaceContext] Could not resolve role from members:', memberErr);
+          }
+        }
+        setCurrentRole(role);
+        if (role) {
+          setWorkspaces((prev) =>
+            prev.map((w) => (w.id === workspaceId && w.role !== role ? { ...w, role } : w)),
+          );
+        }
         return data;
       } catch (error) {
         console.error('[WorkspaceContext] Failed to load workspace context:', error);
+        if (error instanceof ApiRequestError && (error.status === 403 || error.status === 404)) {
+          setCurrentWorkspace(null);
+        }
         setWorkspaceContext(null);
+        setCurrentRole(null);
         return null;
       }
     },
     [user],
   );
+
+  const refreshWorkspaceUsage = useCallback(async (): Promise<WorkspaceUsageResponse | null> => {
+    if (!user || !currentWorkspace) {
+      setWorkspaceUsage(null);
+      return null;
+    }
+    try {
+      const token = await user.getIdToken();
+      const usage = await apiClient.getWorkspaceUsage(token, currentWorkspace.id);
+      setWorkspaceUsage(usage);
+      return usage;
+    } catch (error) {
+      console.warn('[WorkspaceContext] Failed to fetch workspace usage:', error);
+      setWorkspaceUsage(null);
+      return null;
+    }
+  }, [user, currentWorkspace]);
 
   // Fetch datasources and connectors when workspace changes
   useEffect(() => {
@@ -288,8 +377,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       loadedWorkspaceRef.current = null;
       setDatasources([]);
       setConnectors([]);
-      setWorkspaceContext(null); // Clear context when workspace changes/clears
+      setWorkspaceContext(null);
+      setCurrentRole(null);
+      setWorkspaceUsage(null);
       return;
+    }
+
+    // Prefer role from list payload immediately when switching workspaces
+    if (isWorkspaceRole(currentWorkspace.role)) {
+      setCurrentRole(currentWorkspace.role);
     }
 
     // Only load if we haven't already loaded for this workspace
@@ -305,8 +401,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         // Individual refresh paths already log; continue to load persisted UI state
       }
       await loadWorkspaceContext(currentWorkspace.id);
+      await refreshWorkspaceUsage();
     })();
-  }, [user, currentWorkspace, refreshDatasources, refreshConnectors, loadWorkspaceContext]);
+  }, [
+    user,
+    currentWorkspace,
+    refreshDatasources,
+    refreshConnectors,
+    loadWorkspaceContext,
+    refreshWorkspaceUsage,
+  ]);
 
   // Fetch workspaces on mount - only runs once when user changes
   useEffect(() => {
@@ -427,10 +531,13 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         connectors,
         setConnectors,
         workspaceContext,
+        currentRole,
+        workspaceUsage,
         loading,
         refreshWorkspaces,
         refreshDatasources,
         refreshConnectors,
+        refreshWorkspaceUsage,
         loadWorkspaceContext,
         saveWorkspaceState,
         invalidateContextCache,

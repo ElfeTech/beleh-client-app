@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { NavLink } from 'react-router-dom';
 import { AuthContext } from '../../context/AuthContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
 import { HIDDEN_SETTINGS_CATEGORIES, isSettingsNavSectionVisible } from './settingsNav';
 import './SettingsSidebar.css';
 
@@ -186,8 +187,11 @@ function getInitials(name: string) {
 export const SettingsSidebar: React.FC<SettingsSidebarProps> = ({ onSignOut }) => {
   const authContext = useContext(AuthContext);
   const user = authContext?.user;
+  const { currentRole } = useWorkspace();
 
-  const visibleMenuItems = menuItems.filter((item) => isSettingsNavSectionVisible(item.id));
+  const visibleMenuItems = menuItems.filter((item) =>
+    isSettingsNavSectionVisible(item.id, currentRole),
+  );
 
   const groupedItems = visibleMenuItems.reduce(
     (acc, item) => {

@@ -1,11 +1,15 @@
 import type { ChartArtifactType, UiArtifact } from '../../../types/api';
 import {
   asChartData,
+  asScatterData,
   getArtifactReactKey,
+  isCategoryChartType,
   isChartArtifactType,
+  isScatterArtifactType,
 } from '../../../utils/artifactAdapters';
 import { ChartCard } from '../charts/ChartCard';
 import { ArtifactChart } from './ArtifactChart';
+import { ArtifactScatterChart } from './ArtifactScatterChart';
 import { ArtifactError } from './ArtifactError';
 import './artifacts.css';
 
@@ -43,11 +47,29 @@ export function ArtifactPanelGrid({
           );
         }
 
+        if (isScatterArtifactType(artifact.type)) {
+          const scatter = asScatterData(artifact.data);
+          return (
+            <div key={key} className="artifact-panel-grid__cell">
+              <ChartCard title={artifact.title || undefined}>
+                <ArtifactScatterChart data={scatter} />
+              </ChartCard>
+            </div>
+          );
+        }
+
+        if (!isCategoryChartType(artifact.type)) {
+          return null;
+        }
+
         const chart = asChartData(artifact.data);
         return (
           <div key={key} className="artifact-panel-grid__cell">
             <ChartCard title={artifact.title || undefined}>
-              <ArtifactChart type={artifact.type as ChartArtifactType} data={chart} />
+              <ArtifactChart
+                type={artifact.type as Exclude<ChartArtifactType, 'scatter'>}
+                data={chart}
+              />
             </ChartCard>
           </div>
         );

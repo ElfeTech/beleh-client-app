@@ -10,6 +10,11 @@ import type {
   ChatRunStreamHandlers,
   RunStatus,
 } from '../types/chatRun';
+import {
+  extractQuotaExceededDetail,
+  formatApiErrorMessage,
+  QuotaExceededError,
+} from '../utils/apiErrorMessage';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -93,7 +98,7 @@ export class ChatStreamUnavailableError extends Error {
   }
 }
 
-/** Redis down / temporary stream failure — do not disable stream capability. */
+/** Redis down / temporary stream failure , do not disable stream capability. */
 export class ChatStreamTransientError extends Error {
   status: number;
   constructor(status: number, message?: string) {
@@ -112,6 +117,7 @@ function isTransientStatus(status: number): boolean {
 }
 
 function mapHttpError(err: unknown): never {
+  if (err instanceof QuotaExceededError) throw err;
   const status = (err as { status?: number })?.status;
   if (typeof status === 'number') {
     if (isUnavailableStatus(status)) {
@@ -152,12 +158,33 @@ async function jsonAuth<T>(token: string, path: string, init?: RequestInit): Pro
       }
       throw new ChatStreamTransientError(response.status, detail);
     }
-    let detail = response.statusText;
+    let errorData: unknown = {};
     try {
-      const body = (await response.json()) as { detail?: string; message?: string };
-      detail = body.detail ?? body.message ?? detail;
+      errorData = await response.json();
     } catch {
       /* ignore */
+    }
+    const quota = extractQuotaExceededDetail(errorData);
+    if (quota || response.status === 429) {
+      throw new QuotaExceededError(
+        quota ?? {
+          error: 'quota_exceeded',
+          limit_type: 'llm_tokens',
+          current_usage: 0,
+          limit: 0,
+          remaining: 0,
+          message: formatApiErrorMessage(errorData, response.status),
+        },
+        response.status,
+      );
+    }
+    let detail = response.statusText;
+    if (errorData && typeof errorData === 'object') {
+      const body = errorData as { detail?: string; message?: string };
+      detail =
+        typeof body.detail === 'string'
+          ? body.detail
+          : (body.message ?? formatApiErrorMessage(errorData, response.status));
     }
     const err = new Error(detail || `Request failed (${response.status})`) as Error & {
       status?: number;
@@ -270,12 +297,29 @@ export async function getActiveRun(
   sessionId: string,
   signal?: AbortSignal,
 ): Promise<RunStatus | null> {
-  const data = await jsonAuth<ActiveRunResponse>(
-    token,
-    `/api/sessions/${encodeURIComponent(sessionId)}/runs/active`,
-    { method: 'GET', signal },
-  );
-  return data.run ?? null;
+  try {
+    const data = await jsonAuth<ActiveRunResponse>(
+      token,
+      `/api/sessions/${encodeURIComponent(sessionId)}/runs/active`,
+      { method: 'GET', signal },
+    );
+    return data.run ?? null;
+  } catch (err) {
+    // 404 here means "no active run" (or probe miss) , not "streaming unsupported".
+    // Never poison streamCapability from this endpoint.
+    if (err instanceof ChatStreamUnavailableError && err.status === 404) {
+      return null;
+    }
+    throw err;
+  }
+}
+
+export class ChatRunNotFoundError extends Error {
+  status = 404;
+  constructor(runId: string) {
+    super(`Chat run not found (${runId})`);
+    this.name = 'ChatRunNotFoundError';
+  }
 }
 
 export async function getRunStatus(
@@ -283,10 +327,18 @@ export async function getRunStatus(
   runId: string,
   signal?: AbortSignal,
 ): Promise<RunStatus> {
-  return jsonAuth<RunStatus>(token, `/api/runs/${encodeURIComponent(runId)}`, {
-    method: 'GET',
-    signal,
-  });
+  try {
+    return await jsonAuth<RunStatus>(token, `/api/runs/${encodeURIComponent(runId)}`, {
+      method: 'GET',
+      signal,
+    });
+  } catch (err) {
+    // Missing run ≠ streaming unavailable; callers should reattach / re-POST.
+    if (err instanceof ChatStreamUnavailableError && err.status === 404) {
+      throw new ChatRunNotFoundError(runId);
+    }
+    throw err;
+  }
 }
 
 export async function cancelRun(

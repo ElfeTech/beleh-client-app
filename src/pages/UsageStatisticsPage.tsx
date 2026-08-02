@@ -14,6 +14,7 @@ import {
 import { Activity, Database, Zap, TrendingUp, BarChart3, Layers } from 'lucide-react';
 import { useUsage } from '../context/UsageContext';
 import { useWorkspace } from '../context/WorkspaceContext';
+import { canShowWorkspaceUpgradeCta, PLAN_MANAGED_BY_OWNER_COPY } from '../utils/workspaceAccess';
 import { PlanValueCard } from '../components/usage/PlanValueCard';
 import { QuotaUsageGrid } from '../components/usage/QuotaUsageGrid';
 import { SettingsSectionHeader } from '../components/settings/SettingsSectionHeader';
@@ -122,12 +123,13 @@ interface UsageStatisticsPageProps {
 const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { id: routeWorkspaceId } = useParams<{ id: string }>();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, currentRole } = useWorkspace();
   const workspaceId = routeWorkspaceId ?? currentWorkspace?.id;
   const { currentUsage, getHistoricalUsage } = useUsage();
   const [history, setHistory] = useState<HistoricalUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState(30);
+  const showUpgrade = canShowWorkspaceUpgradeCta(currentRole);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -154,7 +156,7 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
       },
       {
         label: 'Tokens Consumed',
-        value: `${((history?.total_period?.total_llm_tokens ?? 0) / 1000).toFixed(1)}k`,
+        value: (history?.total_period?.total_llm_tokens ?? 0).toLocaleString(),
         icon: Zap,
         accent: 'var(--kpi-accent-amber)',
         iconClass: 'text-amber-500 bg-amber-500/10',
@@ -181,7 +183,6 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
     history?.daily_usage.map((d) => ({
       ...d,
       formattedDate: format(parseISO(d.date), 'MMM dd'),
-      tokensK: (d.llm_tokens / 1000).toFixed(2),
     })) ?? [];
 
   const hasChartData = chartData.length > 0;
@@ -262,8 +263,13 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
             </div>
 
             <section className="analytics-live-usage analytics-fade-in analytics-stagger-5">
-              <PlanValueCard />
-              <QuotaUsageGrid />
+              {showUpgrade ? <PlanValueCard /> : null}
+              {!showUpgrade ? (
+                <p className="text-sm text-[color:var(--text-secondary)] mb-3">
+                  {PLAN_MANAGED_BY_OWNER_COPY}
+                </p>
+              ) : null}
+              <QuotaUsageGrid mode={showUpgrade ? 'personal' : 'workspace'} />
             </section>
 
             {hasChartData ? (
@@ -339,10 +345,14 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
                         <Tooltip
                           cursor={{ fill: 'var(--bg-tertiary)', opacity: 0.4 }}
                           contentStyle={TOOLTIP_STYLE}
+                          formatter={(value) => [
+                            typeof value === 'number' ? value.toLocaleString() : String(value),
+                            'Tokens',
+                          ]}
                         />
                         <Bar
-                          dataKey="tokensK"
-                          name="Tokens (k)"
+                          dataKey="llm_tokens"
+                          name="Tokens"
                           fill="var(--chart-stroke)"
                           radius={[4, 4, 0, 0]}
                           barSize={20}
@@ -419,13 +429,15 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
                     >
                       Download Report
                     </button>
-                    <button
-                      type="button"
-                      className="px-6 py-2.5 rounded-xl bg-[color:var(--accent-teal-600)] text-white font-bold text-xs uppercase tracking-widest shadow-md hover:opacity-90 transition-all active:scale-[0.98]"
-                      onClick={() => navigate('/settings/billing?upgrade=1')}
-                    >
-                      Upgrade Capacity
-                    </button>
+                    {showUpgrade && (
+                      <button
+                        type="button"
+                        className="px-6 py-2.5 rounded-xl bg-[color:var(--accent-teal-600)] text-white font-bold text-xs uppercase tracking-widest shadow-md hover:opacity-90 transition-all active:scale-[0.98]"
+                        onClick={() => navigate('/settings/billing?upgrade=1')}
+                      >
+                        Upgrade Capacity
+                      </button>
+                    )}
                   </div>
                 </div>
               </footer>

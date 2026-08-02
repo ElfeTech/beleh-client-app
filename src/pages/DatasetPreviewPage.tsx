@@ -70,13 +70,23 @@ export const DatasetPreviewPage: React.FC = () => {
       setLoading(true);
       setError(null);
       const token = await user.getIdToken();
-      const response = await apiClient.listDatasetTables(token, datasetId);
-      setTables(response.tables);
-      if (response.tables.length > 0) {
+      const tables: DatasetTable[] = [];
+      let page = 1;
+      while (page <= 10) {
+        const response = await apiClient.listDatasetTables(token, datasetId, {
+          page,
+          page_size: 100,
+        });
+        tables.push(...(response.tables ?? []));
+        if (!response.has_next) break;
+        page += 1;
+      }
+      setTables(tables);
+      if (tables.length > 0) {
         const fromUrl = initialTable
-          ? response.tables.find((t) => t.table_name === initialTable)?.table_name
+          ? tables.find((t) => t.table_name === initialTable)?.table_name
           : undefined;
-        const firstTable = fromUrl ?? response.tables[0].table_name;
+        const firstTable = fromUrl ?? tables[0].table_name;
         setSelectedTable(firstTable);
         setLoading(false);
         await fetchPreview(firstTable, 1, pageSize);

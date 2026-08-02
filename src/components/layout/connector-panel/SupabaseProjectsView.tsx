@@ -274,7 +274,7 @@ export function SupabaseProjectsView({
             {filtered.map((project) => {
               const isBound = binding?.is_connected && binding.provider_project_id === project.id;
               const busy = bindingId === project.id;
-              let rowMeta = 'Inactive — cannot bind';
+              let rowMeta = 'Inactive , cannot bind';
               if (busy) rowMeta = 'Connecting…';
               else if (isBound) rowMeta = 'Currently bound';
               else if (project.is_active) rowMeta = 'Tap to bind to this workspace';

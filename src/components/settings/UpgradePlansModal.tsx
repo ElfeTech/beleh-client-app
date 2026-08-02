@@ -167,14 +167,21 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
 
                     {/* Features */}
                     <div className="plan-features">
-                      <div className="feature-item">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        <span>
-                          {plan.limits.monthly_query_limit.toLocaleString()} queries/month
-                        </span>
-                      </div>
+                      {plan.limits.monthly_query_limit > 0 ? (
+                        <div className="feature-item">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          <span>
+                            {plan.limits.monthly_query_limit.toLocaleString()} queries/month
+                          </span>
+                        </div>
+                      ) : null}
                       <div className="feature-item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="20 6 9 17 4 12" />
@@ -186,7 +193,9 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                         <span>
-                          {(plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K AI tokens/month
+                          {plan.limits.monthly_llm_token_limit <= 0
+                            ? 'Unlimited AI tokens'
+                            : `${(plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K AI tokens/month`}
                         </span>
                       </div>
                       <div className="feature-item">

@@ -4,14 +4,25 @@ import {
   asErrorData,
   asInsightData,
   asKpiData,
+  asScatterData,
   asTableData,
+  isCategoryChartType,
   isChartArtifactType,
+  isScatterArtifactType,
+  isValidCategoryChartData,
+  isValidScatterData,
 } from './artifactAdapters';
+import { isQuotaExceededError } from './apiErrorMessage';
+import { formatQuotaResetAt, formatQuotaResetDate } from './formatters';
 
 export interface WorkflowFailureInfo {
   title: string;
   detail: string;
   canRetry: boolean;
+  /** When set, failure is a plan quota block. */
+  quotaLimitType?: string;
+  upgradeHref?: string | null;
+  showUpgradeCta?: boolean;
 }
 
 function findErrorArtifact(artifacts: UiArtifact[]): UiArtifact | undefined {
@@ -36,9 +47,12 @@ function hasUsableSuccessContent(response: AssistantTurnResponse): boolean {
       if (t.columns.length > 0 && t.rows.length > 0) return true;
       continue;
     }
-    if (isChartArtifactType(a.type)) {
-      const c = asChartData(a.data);
-      if (c.labels.length > 0 && c.datasets.length > 0) return true;
+    if (isScatterArtifactType(a.type)) {
+      if (isValidScatterData(asScatterData(a.data))) return true;
+      continue;
+    }
+    if (isCategoryChartType(a.type) || isChartArtifactType(a.type)) {
+      if (isValidCategoryChartData(asChartData(a.data))) return true;
     }
   }
   return false;
@@ -77,6 +91,30 @@ export function getWorkflowFailure(response: AssistantTurnResponse): WorkflowFai
 }
 
 export function formatChatRequestError(err: unknown): WorkflowFailureInfo {
+  if (isQuotaExceededError(err)) {
+    const isDaily = err.quota.limit_type === 'daily_llm_tokens';
+    const resetLabel = isDaily
+      ? formatQuotaResetAt(err.quota.reset_at)
+      : formatQuotaResetDate(err.quota.reset_at);
+    const detailParts = [err.message];
+    if (isDaily && resetLabel) {
+      detailParts.push(`Daily limit reached , resets at ${resetLabel}.`);
+    } else if (
+      (err.quota.limit_type === 'queries' || err.quota.limit_type === 'llm_tokens') &&
+      resetLabel
+    ) {
+      detailParts.push(`Resets on ${resetLabel}.`);
+    }
+    return {
+      title: isDaily ? 'Daily limit reached' : 'Plan limit reached',
+      detail: detailParts.join(' '),
+      canRetry: false,
+      quotaLimitType: err.quota.limit_type,
+      upgradeHref: err.quota.upgrade_url || '/settings/billing?upgrade=1',
+      // Daily cap is not upgrade-only; GenerativeChat may still override by role.
+      showUpgradeCta: !isDaily,
+    };
+  }
   if (err instanceof Error) {
     const msg = err.message.trim();
     if (msg.includes('Authentication') || msg.includes('sign in')) {

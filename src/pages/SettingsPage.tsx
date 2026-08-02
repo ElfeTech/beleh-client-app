@@ -1,15 +1,16 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
+import { useWorkspace } from '../context/WorkspaceContext';
 import { SettingsSidebar } from '../components/settings/SettingsSidebar';
 import type { SettingsSection } from '../components/settings/SettingsSidebar';
-import { ComingSoon } from '../components/settings/ComingSoon';
 import { UsageSection } from '../components/settings/UsageSection';
 import { GeneralSection } from '../components/settings/GeneralSection';
 import { SecuritySection } from '../components/settings/SecuritySection';
 import { NotificationsSection } from '../components/settings/NotificationsSection';
 import { HelpSection } from '../components/settings/HelpSection';
 import { AboutSection } from '../components/settings/AboutSection';
+import { MembersSection } from '../components/settings/MembersSection';
 import { SettingsComplianceFooter } from '../components/settings/SettingsComplianceFooter';
 import { WorkspacesPage } from './WorkspacesPage';
 import UsageStatisticsPage from './UsageStatisticsPage';
@@ -33,6 +34,7 @@ const SettingsPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const authContext = useContext(AuthContext);
+  const { currentRole } = useWorkspace();
 
   const user = authContext?.user;
   const signOut = authContext?.signOut || (async () => {});
@@ -75,7 +77,12 @@ const SettingsPage: React.FC = () => {
   }
 
   const sectionFromPath = getActiveSectionFromPath();
-  if (sectionFromPath && !isSettingsNavSectionVisible(sectionFromPath)) {
+  // Only redirect once role is known so owners aren't bounced while workspace context loads.
+  if (
+    sectionFromPath &&
+    currentRole != null &&
+    !isSettingsNavSectionVisible(sectionFromPath, currentRole)
+  ) {
     return <Navigate to="/settings/general" replace />;
   }
 
@@ -138,13 +145,7 @@ const SettingsPage: React.FC = () => {
       case 'about':
         return <AboutSection />;
       case 'members':
-        return (
-          <ComingSoon
-            breadcrumbLabel="MEMBERS"
-            title="Team Members"
-            description="Invite and manage your workspace team members"
-          />
-        );
+        return <MembersSection />;
       default:
         return null;
     }
@@ -269,34 +270,36 @@ const SettingsPage: React.FC = () => {
                 />
               </svg>
             </button>
-            <button
-              type="button"
-              className="settings-menu-item"
-              onClick={() => handleSectionChange('members')}
-            >
-              <div className="menu-item-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            {isSettingsNavSectionVisible('members', currentRole) && (
+              <button
+                type="button"
+                className="settings-menu-item"
+                onClick={() => handleSectionChange('members')}
+              >
+                <div className="menu-item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                    />
+                  </svg>
+                </div>
+                <div className="menu-item-content">
+                  <span className="menu-item-title">Members</span>
+                  <span className="menu-item-subtitle">Invite and manage team members</span>
+                </div>
+                <svg className="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"
+                    d="M9 5l7 7-7 7"
                   />
                 </svg>
-              </div>
-              <div className="menu-item-content">
-                <span className="menu-item-title">Members</span>
-                <span className="menu-item-subtitle">Invite and manage team members</span>
-              </div>
-              <svg className="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
+              </button>
+            )}
           </div>
         </div>
 
@@ -365,34 +368,36 @@ const SettingsPage: React.FC = () => {
                 />
               </svg>
             </button>
-            <button
-              type="button"
-              className="settings-menu-item"
-              onClick={() => handleSectionChange('billing')}
-            >
-              <div className="menu-item-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            {isSettingsNavSectionVisible('billing', currentRole) && (
+              <button
+                type="button"
+                className="settings-menu-item"
+                onClick={() => handleSectionChange('billing')}
+              >
+                <div className="menu-item-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                    />
+                  </svg>
+                </div>
+                <div className="menu-item-content">
+                  <span className="menu-item-title">Billing & Plans</span>
+                  <span className="menu-item-subtitle">Manage subscription and payments</span>
+                </div>
+                <svg className="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+                    d="M9 5l7 7-7 7"
                   />
                 </svg>
-              </div>
-              <div className="menu-item-content">
-                <span className="menu-item-title">Billing & Plans</span>
-                <span className="menu-item-subtitle">Manage subscription and payments</span>
-              </div>
-              <svg className="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M9 5l7 7-7 7"
-                />
-              </svg>
-            </button>
+              </button>
+            )}
           </div>
         </div>
 
@@ -517,7 +522,7 @@ const SettingsPage: React.FC = () => {
         message="You will need to sign in again to access your workspaces and chats."
         confirmText="Sign out"
         cancelText="Cancel"
-        variant="warning"
+        variant="brand"
         isLoading={isSigningOut}
         onConfirm={handleSignOutConfirm}
         onCancel={() => setShowSignOutConfirm(false)}

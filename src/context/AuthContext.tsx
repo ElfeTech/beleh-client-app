@@ -2,6 +2,7 @@ import { createContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from 'firebase/auth';
 import { FirebaseError } from 'firebase/app';
 import { authService } from '../services/authService';
+import { invalidateSessionValidationCache } from '../lib/sessionValidationCache';
 
 interface AuthContextType {
   user: User | null;
@@ -62,6 +63,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     setLoading(true);
     try {
+      invalidateSessionValidationCache();
       await authService.signOut();
     } catch (error) {
       console.error('Error signing out:', error);

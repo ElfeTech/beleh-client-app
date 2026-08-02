@@ -1,8 +1,15 @@
 import type { ComponentType } from 'react';
 import type { ArtifactType, ChartArtifactType, UiArtifact } from '../../../types/api';
-import { asChartData, asTableData, tableRowsToRecords } from '../../../utils/artifactAdapters';
+import {
+  asChartData,
+  asScatterData,
+  asTableData,
+  isCategoryChartType,
+  tableRowsToRecords,
+} from '../../../utils/artifactAdapters';
 import { TableSchemaView } from '../TableSchemaView';
 import { ArtifactChart } from './ArtifactChart';
+import { ArtifactScatterChart } from './ArtifactScatterChart';
 import { ArtifactKpi } from './ArtifactKpi';
 import { ArtifactInsight } from './ArtifactInsight';
 import { ArtifactActionGroup } from './ArtifactActionGroup';
@@ -16,7 +23,7 @@ export interface ArtifactRenderContext {
   disabled?: boolean;
   filterValue?: string | null;
   onFilterChange?: (value: string | null) => void;
-  /** When true, skip table/chart — handled by ResponseViewTabs */
+  /** When true, skip table/chart , handled by ResponseViewTabs */
   skipDataViews?: boolean;
 }
 
@@ -44,10 +51,21 @@ function ArtifactTableStandalone({ artifact, context }: ArtifactComponentProps) 
 
 function ArtifactChartStandalone({ artifact, context }: ArtifactComponentProps) {
   if (context?.skipDataViews) return null;
+  if (!isCategoryChartType(artifact.type)) return null;
   const chart = asChartData(artifact.data);
   return (
     <ChartCard title={artifact.title || undefined}>
-      <ArtifactChart type={artifact.type as ChartArtifactType} data={chart} />
+      <ArtifactChart type={artifact.type as Exclude<ChartArtifactType, 'scatter'>} data={chart} />
+    </ChartCard>
+  );
+}
+
+function ArtifactScatterStandalone({ artifact, context }: ArtifactComponentProps) {
+  if (context?.skipDataViews) return null;
+  const scatter = asScatterData(artifact.data);
+  return (
+    <ChartCard title={artifact.title || undefined}>
+      <ArtifactScatterChart data={scatter} />
     </ChartCard>
   );
 }
@@ -84,13 +102,26 @@ function ArtifactErrorWrap({ artifact }: ArtifactComponentProps) {
   return <ArtifactError artifact={artifact} canRetry={false} />;
 }
 
+/** Soft fallback for unshipped / unknown artifact types , never a red Error card. */
+function ArtifactUnsupported({ artifact }: ArtifactComponentProps) {
+  return (
+    <p className="artifact-empty">
+      {artifact.title ? <strong>{artifact.title}: </strong> : null}
+      This visualization type isn&apos;t supported yet.
+    </p>
+  );
+}
+
 export const artifactRegistry: Record<ArtifactType, ComponentType<ArtifactComponentProps>> = {
   kpi: ArtifactKpiWrap,
   table: ArtifactTableStandalone,
+  column: ArtifactChartStandalone,
   bar: ArtifactChartStandalone,
   line: ArtifactChartStandalone,
+  area: ArtifactChartStandalone,
   doughnut: ArtifactChartStandalone,
   pie: ArtifactChartStandalone,
+  scatter: ArtifactScatterStandalone,
   insight: ArtifactInsightWrap,
   action_group: ArtifactActionGroupWrap,
   filter_bar: ArtifactFilterBarWrap,
@@ -98,13 +129,16 @@ export const artifactRegistry: Record<ArtifactType, ComponentType<ArtifactCompon
   error: ArtifactErrorWrap,
 };
 
-/** Types rendered inside ResponseViewTabs when both table and chart exist */
+/** Types rendered inside ResponseViewTabs / panel grid when data views exist */
 export const DATA_VIEW_ARTIFACT_TYPES = new Set<ArtifactType>([
   'table',
+  'column',
   'bar',
   'line',
+  'area',
   'doughnut',
   'pie',
+  'scatter',
 ]);
 
 export function ArtifactRenderer({
@@ -114,7 +148,6 @@ export function ArtifactRenderer({
   artifact: UiArtifact;
   context?: ArtifactRenderContext;
 }) {
-  const Comp = artifactRegistry[artifact.type];
-  if (!Comp) return null;
+  const Comp = artifactRegistry[artifact.type] ?? ArtifactUnsupported;
   return <Comp artifact={artifact} context={context} />;
 }

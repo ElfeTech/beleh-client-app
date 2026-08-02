@@ -1,7 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
+import { useWorkspace } from '../../context/WorkspaceContext';
 import { apiClient } from '../../services/apiClient';
+import {
+  canShowWorkspaceUpgradeCta,
+  isWorkspacesAtLimit,
+  workspaceLimitUpgradeMessage,
+} from '../../utils/workspaceAccess';
 
 interface WorkspaceModalProps {
   onClose: () => void;
@@ -10,12 +17,18 @@ interface WorkspaceModalProps {
 
 export function WorkspaceModal({ onClose, onSuccess }: WorkspaceModalProps) {
   const { user } = useAuth();
+  const { workspaceUsage, currentRole, refreshWorkspaceUsage } = useWorkspace();
   const [name, setName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-focus the input field when modal opens
+  const atLimit = isWorkspacesAtLimit(workspaceUsage);
+
+  useEffect(() => {
+    void refreshWorkspaceUsage();
+  }, [refreshWorkspaceUsage]);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       inputRef.current?.focus();
@@ -25,13 +38,14 @@ export function WorkspaceModal({ onClose, onSuccess }: WorkspaceModalProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !user) return;
+    if (!name.trim() || !user || atLimit) return;
 
     try {
       setIsCreating(true);
       setError(null);
       const token = await user.getIdToken();
       await apiClient.createWorkspace(token, name.trim());
+      await refreshWorkspaceUsage();
       onSuccess();
       onClose();
     } catch (err) {
@@ -66,12 +80,22 @@ export function WorkspaceModal({ onClose, onSuccess }: WorkspaceModalProps) {
               onChange={(e) => setName(e.target.value)}
               placeholder="Enter workspace name"
               required
+              disabled={atLimit}
             />
             <p className="form-hint">
-              Choose a descriptive name for your workspace (e.g., "Sales Analytics", "Marketing
-              Hub")
+              Choose a descriptive name for your workspace (e.g., &quot;Sales Analytics&quot;,
+              &quot;Marketing Hub&quot;)
             </p>
           </div>
+
+          {atLimit && (
+            <div className="form-error">
+              {workspaceLimitUpgradeMessage(currentRole, 'workspaces')}{' '}
+              {canShowWorkspaceUpgradeCta(currentRole) && (
+                <Link to="/settings/billing?upgrade=1">Upgrade</Link>
+              )}
+            </div>
+          )}
 
           {error && <div className="form-error">{error}</div>}
 
@@ -79,7 +103,11 @@ export function WorkspaceModal({ onClose, onSuccess }: WorkspaceModalProps) {
             <button type="button" className="secondary-btn" onClick={onClose} disabled={isCreating}>
               Cancel
             </button>
-            <button type="submit" className="primary-btn" disabled={!name.trim() || isCreating}>
+            <button
+              type="submit"
+              className="primary-btn"
+              disabled={!name.trim() || isCreating || atLimit}
+            >
               {isCreating ? 'Creating...' : 'Create Workspace'}
             </button>
           </div>

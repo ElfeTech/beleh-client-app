@@ -1,3 +1,9 @@
+import {
+  extractQuotaExceededDetail,
+  formatApiErrorMessage,
+  QuotaExceededError,
+} from '../utils/apiErrorMessage';
+
 export type SseEventHandler = (event: string, data: string, id?: string) => void;
 
 export interface ReadSseRequestOptions {
@@ -42,16 +48,37 @@ export async function readSseRequest(options: ReadSseRequestOptions): Promise<Re
   });
 
   if (!response.ok) {
-    let detail = response.statusText;
+    let errorData: unknown = {};
     try {
-      const errBody = (await response.json()) as { detail?: string; message?: string };
-      detail = errBody.detail ?? errBody.message ?? detail;
+      errorData = await response.json();
     } catch {
       try {
-        detail = (await response.text()) || detail;
+        const text = await response.text();
+        errorData = text ? { detail: text } : {};
       } catch {
         /* ignore */
       }
+    }
+    const quota = extractQuotaExceededDetail(errorData);
+    if (quota || response.status === 429) {
+      throw new QuotaExceededError(
+        quota ?? {
+          error: 'quota_exceeded',
+          limit_type: 'llm_tokens',
+          current_usage: 0,
+          limit: 0,
+          remaining: 0,
+          message: formatApiErrorMessage(errorData, response.status),
+        },
+        response.status,
+      );
+    }
+    let detail = response.statusText;
+    if (errorData && typeof errorData === 'object') {
+      const bodyObj = errorData as { detail?: unknown; message?: string };
+      if (typeof bodyObj.detail === 'string') detail = bodyObj.detail;
+      else if (typeof bodyObj.message === 'string') detail = bodyObj.message;
+      else detail = formatApiErrorMessage(errorData, response.status);
     }
     const err = new Error(detail || `Request failed (${response.status})`) as Error & {
       status?: number;

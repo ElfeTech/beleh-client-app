@@ -8,6 +8,7 @@ import {
 } from '../lib/landingHelpDb';
 import { createPublicHelpSession, streamPublicHelpMessage } from '../services/publicHelpApi';
 import type { LandingHelpMessage } from '../types/landingHelpChat';
+import { HELP_CHAT_MAX_CHARS } from '../constants/chatLimits';
 
 export type {
   LandingHelpMessage,
@@ -18,6 +19,8 @@ export type {
 export type UsePlatformHelpChatOptions = {
   /** IndexedDB database name for session persistence */
   persistenceDb?: string;
+  /** Max input characters (defaults to help chat limit). */
+  maxChars?: number;
 };
 
 function nextId(): string {
@@ -27,6 +30,7 @@ function nextId(): string {
 /** Shared platform help chat (SSE via `/api/public/help/*`). */
 export function usePlatformHelpChat(options?: UsePlatformHelpChatOptions) {
   const persistenceDb = options?.persistenceDb ?? LANDING_HELP_DB_NAME;
+  const maxChars = options?.maxChars ?? HELP_CHAT_MAX_CHARS;
 
   const [messages, setMessages] = useState<LandingHelpMessage[]>([]);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -121,7 +125,7 @@ export function usePlatformHelpChat(options?: UsePlatformHelpChatOptions) {
 
   const sendMessage = useCallback(
     async (prompt: string) => {
-      const trimmed = prompt.trim();
+      const trimmed = prompt.trim().slice(0, maxChars);
       if (!trimmed || isStreaming) return;
 
       setStreamError(null);
@@ -211,7 +215,7 @@ export function usePlatformHelpChat(options?: UsePlatformHelpChatOptions) {
         }
       }
     },
-    [ensureSession, isStreaming],
+    [ensureSession, isStreaming, maxChars],
   );
 
   const clearChat = useCallback(async () => {
@@ -281,7 +285,7 @@ export function usePlatformHelpChat(options?: UsePlatformHelpChatOptions) {
   };
 }
 
-/** @deprecated Prefer usePlatformHelpChat — kept for landing page imports */
+/** @deprecated Prefer usePlatformHelpChat , kept for landing page imports */
 export function useLandingHelpChat() {
   return usePlatformHelpChat({ persistenceDb: LANDING_HELP_DB_NAME });
 }

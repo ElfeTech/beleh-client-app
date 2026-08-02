@@ -1,4 +1,4 @@
-import { useState, useContext, useEffect, useCallback } from 'react';
+import { useState, useContext, useEffect, useCallback, useRef } from 'react';
 import { User } from 'lucide-react';
 import { updateProfile } from 'firebase/auth';
 import { AuthContext } from '../../context/AuthContext';
@@ -14,6 +14,13 @@ import './GeneralSection.css';
 
 type LanguageCode = 'en' | 'en-gb' | 'es' | 'fr' | 'de';
 type DateFormatCode = 'mdy' | 'dmy' | 'ymd';
+
+type SavedGeneralSettings = {
+  displayName: string;
+  language: LanguageCode;
+  dateFormat: DateFormatCode;
+  theme: ThemePreference;
+};
 
 function isThemePreference(v: unknown): v is ThemePreference {
   return v === 'system' || v === 'light' || v === 'dark';
@@ -31,10 +38,13 @@ export function GeneralSection() {
   const authContext = useContext(AuthContext);
   const firebaseUser = authContext?.user;
   const { themePreference, setThemePreference } = useTheme();
+  const themePreferenceRef = useRef(themePreference);
+  themePreferenceRef.current = themePreference;
 
   const [displayName, setDisplayName] = useState('');
   const [language, setLanguage] = useState<LanguageCode>('en');
   const [dateFormat, setDateFormat] = useState<DateFormatCode>('mdy');
+  const [savedSettings, setSavedSettings] = useState<SavedGeneralSettings | null>(null);
 
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,6 +63,7 @@ export function GeneralSection() {
       if (!u) {
         setIsLoading(false);
         setDisplayName('');
+        setSavedSettings(null);
         return;
       }
 
@@ -64,15 +75,33 @@ export function GeneralSection() {
         const me = await apiClient.getUserMe(token);
         if (cancelled) return;
 
-        setDisplayName(me.display_name?.trim() || u.displayName || '');
+        const nextDisplayName = me.display_name?.trim() || u.displayName || '';
         const prefs = me.preferences || {};
-        if (isLanguageCode(prefs.language)) setLanguage(prefs.language);
-        if (isDateFormatCode(prefs.date_format)) setDateFormat(prefs.date_format);
+        const nextLanguage = isLanguageCode(prefs.language) ? prefs.language : 'en';
+        const nextDateFormat = isDateFormatCode(prefs.date_format) ? prefs.date_format : 'mdy';
+        const nextTheme = isThemePreference(prefs.theme) ? prefs.theme : themePreferenceRef.current;
+
+        setDisplayName(nextDisplayName);
+        setLanguage(nextLanguage);
+        setDateFormat(nextDateFormat);
         if (isThemePreference(prefs.theme)) setThemePreference(prefs.theme);
+        setSavedSettings({
+          displayName: nextDisplayName,
+          language: nextLanguage,
+          dateFormat: nextDateFormat,
+          theme: nextTheme,
+        });
       } catch (e) {
         if (!cancelled) {
           setLoadError(e instanceof Error ? e.message : 'Could not load your settings.');
-          setDisplayName(u.displayName || '');
+          const fallbackName = u.displayName || '';
+          setDisplayName(fallbackName);
+          setSavedSettings({
+            displayName: fallbackName,
+            language: 'en',
+            dateFormat: 'mdy',
+            theme: themePreferenceRef.current,
+          });
         }
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -84,6 +113,13 @@ export function GeneralSection() {
       cancelled = true;
     };
   }, [firebaseUser, setThemePreference]);
+
+  const hasChanges =
+    savedSettings !== null &&
+    (displayName.trim() !== savedSettings.displayName.trim() ||
+      language !== savedSettings.language ||
+      dateFormat !== savedSettings.dateFormat ||
+      themePreference !== savedSettings.theme);
 
   const getInitials = (name: string) => {
     return name
@@ -132,6 +168,12 @@ export function GeneralSection() {
       });
 
       setDisplayName(me.display_name?.trim() || trimmed);
+      setSavedSettings({
+        displayName: me.display_name?.trim() || trimmed,
+        language,
+        dateFormat,
+        theme: themePreference,
+      });
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3200);
     } catch (e) {
@@ -376,7 +418,7 @@ export function GeneralSection() {
           type="button"
           className={`btn-gradient-primary ${saveSuccess ? 'is-success' : ''}`}
           onClick={() => void handleSave()}
-          disabled={isSaving || isLoading || !firebaseUser}
+          disabled={isSaving || isLoading || !firebaseUser || !hasChanges}
         >
           {isSaving ? 'Saving…' : saveSuccess ? 'Saved!' : 'Save changes'}
         </button>

@@ -56,7 +56,49 @@ import {
   writeDatasetsView,
   type DatasetsPageViewState,
 } from '../lib/uiMemory';
+import { canEditOrDeleteResource } from '../utils/workspaceAccess';
+import { ensureDemoRemovedAfterLiveSource, findDemoDatasource } from '../lib/workspaceDemo';
+import {
+  INITIAL_PAGE,
+  MAX_LIST_PAGES,
+  SEARCH_VISIBILITY_THRESHOLD,
+  TABLES_PAGE_SIZE,
+} from '../constants/pagination';
 import './DatasetsPage.css';
+
+async function fetchAllDatasetTables(token: string, datasetId: string): Promise<DatasetTable[]> {
+  const tables: DatasetTable[] = [];
+  let page = INITIAL_PAGE;
+  while (page <= MAX_LIST_PAGES) {
+    const response = await apiClient.listDatasetTables(token, datasetId, {
+      page,
+      page_size: TABLES_PAGE_SIZE,
+    });
+    tables.push(...(response.tables ?? []));
+    if (!response.has_next) break;
+    page += 1;
+  }
+  return tables;
+}
+
+async function fetchAllConnectorTables(
+  token: string,
+  workspaceId: string,
+  connectorId: string,
+): Promise<DatasetTable[]> {
+  const tables: DatasetTable[] = [];
+  let page = INITIAL_PAGE;
+  while (page <= MAX_LIST_PAGES) {
+    const response = await apiClient.listConnectorTables(token, workspaceId, connectorId, {
+      page,
+      page_size: TABLES_PAGE_SIZE,
+    });
+    tables.push(...(response.tables ?? []));
+    if (!response.has_next) break;
+    page += 1;
+  }
+  return tables;
+}
 
 type SourceFilter = 'all' | 'files' | 'databases';
 type MobileCatalogPane = 'sources' | 'schemas' | 'tables' | 'preview';
@@ -143,6 +185,7 @@ const DatasetsPage: React.FC = () => {
   const [connectorDetailTab, setConnectorDetailTab] = useState<ConnectorDetailTab>('columns');
   const [previewData, setPreviewData] = useState<DatasetTablePreviewResponse | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState(1);
   const [previewPageSize, setPreviewPageSize] = useState(10);
   const [datasetsViewHydrated, setDatasetsViewHydrated] = useState(false);
@@ -192,7 +235,18 @@ const DatasetsPage: React.FC = () => {
   const datasources = workspaceContext?.datasources || [];
   const connectors = workspaceContext?.connectors || [];
   const loading = workspaceContext?.loading || false;
+  const currentRole = workspaceContext?.currentRole ?? null;
   const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => {});
+
+  const canMutateSelected = (): boolean => {
+    if (!selectedItemForMenu) return false;
+    if (selectedItemForMenu.type === 'datasource') {
+      const ds = datasources.find((d) => d.id === selectedItemForMenu.id);
+      return canEditOrDeleteResource(currentRole, ds?.user_id, user?.uid);
+    }
+    const connector = connectors.find((c) => c.id === selectedItemForMenu.id);
+    return canEditOrDeleteResource(currentRole, connector?.user_id, user?.uid);
+  };
 
   const unifiedSources: UnifiedRow[] = useMemo(() => {
     const rows: UnifiedRow[] = [];
@@ -281,13 +335,9 @@ const DatasetsPage: React.FC = () => {
         setTablesLoading(true);
         try {
           const token = await user.getIdToken();
-          const response = await apiClient.listConnectorTables(
-            token,
-            workspaceId,
-            row.connector.id,
-          );
+          const tables = await fetchAllConnectorTables(token, workspaceId, row.connector.id);
           if (cancelled) return;
-          setCatalogTables(response.tables);
+          setCatalogTables(tables);
           setBrowseLevel('schemas');
           setSelectedSchemaName(null);
           setSelectedTableName(null);
@@ -323,10 +373,9 @@ const DatasetsPage: React.FC = () => {
       setTablesLoading(true);
       try {
         const token = await user.getIdToken();
-        const response = await apiClient.listDatasetTables(token, row.datasource.id);
+        const fetched = await fetchAllDatasetTables(token, row.datasource.id);
         if (cancelled) return;
-        const tables =
-          response.tables.length > 0 ? response.tables : tablesFromMetadata(row.datasource);
+        const tables = fetched.length > 0 ? fetched : tablesFromMetadata(row.datasource);
         setCatalogTables(tables);
         setBrowseLevel('tables');
         setSelectedSchemaName(null);
@@ -385,23 +434,45 @@ const DatasetsPage: React.FC = () => {
 
   const previewDatasetId =
     selectedCatalogRow?.kind === 'datasource' ? selectedCatalogRow.datasource.id : null;
+  const previewConnectorId =
+    selectedCatalogRow?.kind === 'connector' ? selectedCatalogRow.connector.id : null;
 
   useEffect(() => {
     setPreviewPage(1);
     setPreviewData(null);
-  }, [selectedTableName, previewDatasetId]);
+    setPreviewError(null);
+  }, [selectedTableName, previewDatasetId, previewConnectorId]);
 
   useEffect(() => {
-    if (!user || !previewDatasetId || !selectedTableName) {
+    if (!user || !selectedTableName) {
       setPreviewData(null);
       setPreviewLoading(false);
+      setPreviewError(null);
       return;
     }
 
-    if (
-      selectedCatalogRow?.kind !== 'datasource' ||
-      selectedCatalogRow.datasource.status !== 'READY'
-    ) {
+    // File/dataset sources: preview whenever a READY table is selected.
+    const canPreviewDatasource =
+      selectedCatalogRow?.kind === 'datasource' &&
+      selectedCatalogRow.datasource.status === 'READY' &&
+      Boolean(previewDatasetId);
+
+    // Connectors: fetch rows when the Data tab is open (schema sync must be complete).
+    const canPreviewConnector =
+      selectedCatalogRow?.kind === 'connector' &&
+      selectedCatalogRow.connector.metadata_status === 'COMPLETED' &&
+      Boolean(previewConnectorId) &&
+      Boolean(workspaceId) &&
+      connectorDetailTab === 'data';
+
+    if (!canPreviewDatasource && !canPreviewConnector) {
+      if (selectedCatalogRow?.kind === 'connector' && connectorDetailTab !== 'data') {
+        // Keep any prior preview while on Columns; don't clear mid-switch.
+        setPreviewLoading(false);
+        return;
+      }
+      setPreviewData(null);
+      setPreviewLoading(false);
       return;
     }
 
@@ -409,18 +480,32 @@ const DatasetsPage: React.FC = () => {
 
     (async () => {
       setPreviewLoading(true);
+      setPreviewError(null);
       try {
         const token = await user.getIdToken();
-        const response = await apiClient.getDatasetTablePreview(
-          token,
-          previewDatasetId,
-          selectedTableName,
-          previewPage,
-          previewPageSize,
-        );
+        const response =
+          canPreviewConnector && previewConnectorId && workspaceId
+            ? await apiClient.getConnectorTablePreview(
+                token,
+                workspaceId,
+                previewConnectorId,
+                selectedTableName,
+                previewPage,
+                previewPageSize,
+              )
+            : await apiClient.getDatasetTablePreview(
+                token,
+                previewDatasetId!,
+                selectedTableName,
+                previewPage,
+                previewPageSize,
+              );
         if (!cancelled) setPreviewData(response);
-      } catch {
-        if (!cancelled) setPreviewData(null);
+      } catch (err: unknown) {
+        if (!cancelled) {
+          setPreviewData(null);
+          setPreviewError(err instanceof Error ? err.message : 'Failed to load table preview.');
+        }
       } finally {
         if (!cancelled) setPreviewLoading(false);
       }
@@ -429,7 +514,17 @@ const DatasetsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [user, previewDatasetId, selectedTableName, previewPage, previewPageSize, selectedCatalogRow]);
+  }, [
+    user,
+    workspaceId,
+    previewDatasetId,
+    previewConnectorId,
+    selectedTableName,
+    previewPage,
+    previewPageSize,
+    selectedCatalogRow,
+    connectorDetailTab,
+  ]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -586,6 +681,35 @@ const DatasetsPage: React.FC = () => {
     setDatasetToRename(null);
   };
 
+  const handleLiveSourceSuccess = async () => {
+    const demoId = findDemoDatasource(datasources)?.id ?? null;
+    const hadDemo = Boolean(demoId) || datasources.some((d) => Boolean(d.is_demo));
+    if (workspaceContext?.refreshConnectors) {
+      await workspaceContext.refreshConnectors();
+    }
+    if (workspaceContext?.refreshDatasources) {
+      await workspaceContext.refreshDatasources();
+    }
+    if (hadDemo && user && workspaceId) {
+      try {
+        const token = await user.getIdToken();
+        await ensureDemoRemovedAfterLiveSource(token, workspaceId, datasources);
+        if (workspaceContext?.refreshDatasources) {
+          await workspaceContext.refreshDatasources();
+        }
+        if (demoId && datasourceContext?.selectedDatasourceId === demoId) {
+          datasourceContext.setSelectedDatasourceId(null);
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+    if (workspaceContext?.refreshWorkspaceUsage) {
+      await workspaceContext.refreshWorkspaceUsage();
+    }
+    toast.success('Datasource connected successfully.');
+  };
+
   const getMenuItems = (): ActionSheetItem[] => {
     const items: ActionSheetItem[] = [];
 
@@ -626,46 +750,50 @@ const DatasetsPage: React.FC = () => {
         },
       });
 
-      items.push({
-        id: 'rename',
-        label: 'Rename',
-        icon: (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-        ),
-        variant: 'default' as const,
-        onClick: handleRename,
-      });
+      if (canMutateSelected()) {
+        items.push({
+          id: 'rename',
+          label: 'Rename',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          ),
+          variant: 'default' as const,
+          onClick: handleRename,
+        });
 
-      items.push({
-        id: 'update',
-        label: 'Update Dataset',
-        icon: (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-        ),
-        variant: 'default' as const,
-        onClick: handleEdit,
-      });
+        items.push({
+          id: 'update',
+          label: 'Update Dataset',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          ),
+          variant: 'default' as const,
+          onClick: handleEdit,
+        });
+      }
     }
 
-    items.push({
-      id: 'delete',
-      label: selectedItemForMenu?.type === 'datasource' ? 'Delete Dataset' : 'Delete Connector',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        </svg>
-      ),
-      variant: 'danger' as const,
-      onClick: handleDelete,
-    });
+    if (canMutateSelected()) {
+      items.push({
+        id: 'delete',
+        label: selectedItemForMenu?.type === 'datasource' ? 'Delete Dataset' : 'Delete Connector',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        ),
+        variant: 'danger' as const,
+        onClick: handleDelete,
+      });
+    }
 
     return items;
   };
@@ -706,46 +834,50 @@ const DatasetsPage: React.FC = () => {
         },
       });
 
-      items.push({
-        id: 'rename',
-        label: 'Rename',
-        icon: (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-          </svg>
-        ),
-        variant: 'default',
-        onClick: handleRename,
-      });
+      if (canMutateSelected()) {
+        items.push({
+          id: 'rename',
+          label: 'Rename',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          ),
+          variant: 'default',
+          onClick: handleRename,
+        });
 
-      items.push({
-        id: 'update',
-        label: 'Update Dataset',
-        icon: (
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="17 8 12 3 7 8" />
-            <line x1="12" y1="3" x2="12" y2="15" />
-          </svg>
-        ),
-        variant: 'default',
-        onClick: handleEdit,
-      });
+        items.push({
+          id: 'update',
+          label: 'Update Dataset',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          ),
+          variant: 'default',
+          onClick: handleEdit,
+        });
+      }
     }
 
-    items.push({
-      id: 'delete',
-      label: selectedItemForMenu?.type === 'datasource' ? 'Delete Dataset' : 'Delete Connector',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        </svg>
-      ),
-      variant: 'danger',
-      onClick: handleDelete,
-    });
+    if (canMutateSelected()) {
+      items.push({
+        id: 'delete',
+        label: selectedItemForMenu?.type === 'datasource' ? 'Delete Dataset' : 'Delete Connector',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        ),
+        variant: 'danger',
+        onClick: handleDelete,
+      });
+    }
 
     return items;
   };
@@ -819,16 +951,18 @@ const DatasetsPage: React.FC = () => {
 
         {!loading && hasContent && (
           <div className="sc-toolbar">
-            <div className="sc-search-wrap">
-              <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
-              <input
-                className="sc-search-input"
-                placeholder="Search by name, type, or host…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Search data sources"
-              />
-            </div>
+            {unifiedSources.length > SEARCH_VISIBILITY_THRESHOLD && (
+              <div className="sc-search-wrap">
+                <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
+                <input
+                  className="sc-search-input"
+                  placeholder="Search by name, type, or host…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Search data sources"
+                />
+              </div>
+            )}
             <div className="sc-filter-pills" role="tablist" aria-label="Filter sources">
               {(['all', 'files', 'databases'] as const).map((key) => (
                 <button
@@ -947,19 +1081,37 @@ const DatasetsPage: React.FC = () => {
                           : row.connector.status === 'ACTIVE';
 
                       return (
-                        <button
+                        <div
                           key={catalogSourceKey(ref)}
-                          type="button"
-                          className={`sc-source-item ${isSelected ? 'is-selected' : ''}`}
-                          disabled={!ready && row.kind === 'datasource'}
-                          onClick={() => handleCatalogSourceSelect(ref)}
+                          role="button"
+                          tabIndex={ready || row.kind !== 'datasource' ? 0 : -1}
+                          className={`sc-source-item ${isSelected ? 'is-selected' : ''} ${
+                            !ready && row.kind === 'datasource' ? 'is-disabled' : ''
+                          }`}
+                          aria-disabled={!ready && row.kind === 'datasource' ? true : undefined}
+                          onClick={() => {
+                            if (!ready && row.kind === 'datasource') return;
+                            handleCatalogSourceSelect(ref);
+                          }}
+                          onKeyDown={(e) => {
+                            if (!ready && row.kind === 'datasource') return;
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleCatalogSourceSelect(ref);
+                            }
+                          }}
                         >
                           <div className="sc-source-item__row">
                             <span className="sc-source-item__icon" aria-hidden>
                               {renderSourceIcon(row)}
                             </span>
                             <div>
-                              <p className="sc-source-item__name">{title}</p>
+                              <p className="sc-source-item__name">
+                                {title}
+                                {row.kind === 'datasource' && row.datasource.is_demo ? (
+                                  <span className="sc-source-item__sample-badge">Sample data</span>
+                                ) : null}
+                              </p>
                               <p className="sc-source-item__host">{hostHint}</p>
                             </div>
                           </div>
@@ -984,7 +1136,7 @@ const DatasetsPage: React.FC = () => {
                               Options
                             </button>
                           </div>
-                        </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -1027,7 +1179,7 @@ const DatasetsPage: React.FC = () => {
                         selectedCatalogRow?.kind === 'connector' &&
                         (selectedCatalogRow.connector.metadata_status === 'PENDING' ||
                           selectedCatalogRow.connector.metadata_status === 'PROCESSING')
-                          ? '—'
+                          ? ','
                           : schemaGroups.length
                       })`
                     : isConnectorSource
@@ -1035,7 +1187,7 @@ const DatasetsPage: React.FC = () => {
                       : `Sheets & tables (${
                           selectedCatalogRow?.kind === 'datasource' &&
                           selectedCatalogRow.datasource.status !== 'READY'
-                            ? '—'
+                            ? ','
                             : catalogTables.length
                         })`}
                 </div>
@@ -1208,12 +1360,16 @@ const DatasetsPage: React.FC = () => {
                     table={selectedTable}
                     activeTab={connectorDetailTab}
                     onTabChange={setConnectorDetailTab}
-                    onUseInChat={() =>
-                      handleUseInChat({
-                        kind: 'connector',
-                        id: selectedCatalogRow.connector.id,
-                      })
-                    }
+                    preview={previewData}
+                    previewLoading={previewLoading}
+                    previewError={previewError}
+                    page={previewPage}
+                    pageSize={previewPageSize}
+                    onPageChange={setPreviewPage}
+                    onPageSizeChange={(size) => {
+                      setPreviewPageSize(size);
+                      setPreviewPage(1);
+                    }}
                   />
                 ) : selectedCatalogRow?.kind === 'connector' &&
                   browseLevel === 'schemas' &&
@@ -1225,7 +1381,7 @@ const DatasetsPage: React.FC = () => {
                     <h3>Pick a schema</h3>
                     <p>
                       PostgreSQL catalogs start with schemas. Open one to browse its tables, then
-                      inspect columns or analyze the data in chat.
+                      inspect columns or preview rows.
                     </p>
                   </div>
                 ) : selectedCatalogRow?.kind === 'connector' &&
@@ -1238,7 +1394,7 @@ const DatasetsPage: React.FC = () => {
                     <h3>Pick a table</h3>
                     <p>
                       Select a table in <strong>{selectedSchemaName ?? 'this schema'}</strong> to
-                      view columns or explore its data.
+                      view columns or preview its data.
                     </p>
                   </div>
                 ) : selectedCatalogRow?.kind === 'datasource' &&
@@ -1284,13 +1440,7 @@ const DatasetsPage: React.FC = () => {
           workspaceId={workspaceId}
           onClose={() => setShowConnectionPanel(false)}
           onSuccess={() => {
-            if (workspaceContext?.refreshConnectors) {
-              void workspaceContext.refreshConnectors();
-            }
-            if (workspaceContext?.refreshDatasources) {
-              void workspaceContext.refreshDatasources();
-            }
-            toast.success('Datasource connected successfully.');
+            void handleLiveSourceSuccess();
           }}
         />
       )}

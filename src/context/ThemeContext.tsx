@@ -83,10 +83,10 @@ export function ThemeProvider({ children }: ThemeProviderProps) {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, [themePreference, applyTheme]);
 
-  // Apply theme on initial mount
+  // Keep document theme in sync (system preference + explicit light/dark).
   useEffect(() => {
     applyTheme(theme);
-  }, []);
+  }, [theme, applyTheme]);
 
   return (
     <ThemeContext.Provider value={{ theme, themePreference, setThemePreference }}>

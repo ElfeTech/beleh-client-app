@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import logo from '../../assets/logo.webp';
 import { AUTH_BRAND_PANEL, AUTH_FORM_COPY, type AuthGoogleSplitMode } from './authBrandContent';
-import { Sparkles } from 'lucide-react';
 import '../../pages/SignIn.css';
 
 export type { AuthGoogleSplitMode };
@@ -34,6 +34,111 @@ const LOADING_LABEL: Record<AuthGoogleSplitMode, string> = {
   signup: 'Creating account...',
 };
 
+function AuthBrandHeroWaves() {
+  return (
+    <svg
+      className="landing-hero-bg-svg"
+      viewBox="0 0 1440 700"
+      preserveAspectRatio="xMidYMid slice"
+      aria-hidden
+    >
+      <g className="drift">
+        <path
+          d="M-40 560 C 140 500, 260 620, 440 560 S 740 480, 920 560 S 1220 620, 1400 560 S 1700 480, 1880 560"
+          stroke="#2FE6B8"
+          strokeWidth="1.4"
+          fill="none"
+          opacity=".22"
+        />
+        <path
+          d="M680 560 C 860 500, 980 620, 1160 560 S 1460 480, 1640 560 S 1940 620, 2120 560 S 2420 480, 2600 560"
+          stroke="#2FE6B8"
+          strokeWidth="1.4"
+          fill="none"
+          opacity=".22"
+        />
+      </g>
+      <g className="drift slow">
+        <path
+          d="M-40 620 C 160 560, 300 680, 500 610 S 820 540, 1000 610 S 1320 680, 1500 610 S 1820 540, 2000 610"
+          stroke="#3B82F6"
+          strokeWidth="1.2"
+          fill="none"
+          opacity=".18"
+        />
+        <path
+          d="M680 620 C 880 560, 1020 680, 1220 610 S 1540 540, 1720 610 S 2040 680, 2220 610 S 2540 540, 2720 610"
+          stroke="#3B82F6"
+          strokeWidth="1.2"
+          fill="none"
+          opacity=".18"
+        />
+      </g>
+      <g className="drift" style={{ animationDuration: '58s' }}>
+        <path
+          d="M-40 460 C 200 410, 340 500, 560 450 S 900 400, 1080 450 S 1420 500, 1560 450"
+          stroke="#2FE6B8"
+          strokeWidth="1"
+          fill="none"
+          opacity=".13"
+        />
+        <path
+          d="M680 460 C 920 410, 1060 500, 1280 450 S 1620 400, 1800 450 S 2140 500, 2280 450"
+          stroke="#2FE6B8"
+          strokeWidth="1"
+          fill="none"
+          opacity=".13"
+        />
+      </g>
+      <circle
+        className="dot"
+        cx="180"
+        cy="180"
+        r="2.5"
+        fill="#2FE6B8"
+        opacity=".5"
+        style={{ animationDelay: '0s' }}
+      />
+      <circle
+        className="dot"
+        cx="1240"
+        cy="140"
+        r="2"
+        fill="#3B82F6"
+        opacity=".5"
+        style={{ animationDelay: '1.2s' }}
+      />
+      <circle
+        className="dot"
+        cx="960"
+        cy="260"
+        r="2.5"
+        fill="#2FE6B8"
+        opacity=".4"
+        style={{ animationDelay: '2.1s' }}
+      />
+      <circle
+        className="dot"
+        cx="320"
+        cy="320"
+        r="2"
+        fill="#3B82F6"
+        opacity=".4"
+        style={{ animationDelay: '.6s' }}
+      />
+      <circle
+        className="dot"
+        cx="1380"
+        cy="320"
+        r="2.5"
+        fill="#2FE6B8"
+        opacity=".35"
+        style={{ animationDelay: '3s' }}
+      />
+    </svg>
+  );
+}
+
 export function AuthGoogleSplitPage({
   mode,
   error,
@@ -41,39 +146,21 @@ export function AuthGoogleSplitPage({
   onGoogleAuth,
 }: AuthGoogleSplitPageProps) {
   const footer = FOOTER_COPY[mode];
-  const brand = AUTH_BRAND_PANEL[mode];
+  const brand = AUTH_BRAND_PANEL;
   const form = AUTH_FORM_COPY[mode];
 
   return (
     <div className="auth-split-page">
       <div className="auth-brand-panel auth-brand-panel--signin">
+        <div className="signin-brand-atmosphere" aria-hidden>
+          <div className="signin-brand-atmosphere__glow" />
+          <AuthBrandHeroWaves />
+        </div>
+
         <div className="brand-content brand-content--signin">
-          <header className="signin-brand-header">
-            <p className="signin-brand-eyebrow">ASK. ANALYZE. DECIDE.</p>
-            <div className="signin-brand-alpha-badge" aria-label="Alpha version 2.6">
-              <span className="signin-brand-alpha-badge__dot" aria-hidden />
-              ALPHA V0.1.0
-            </div>
-          </header>
-
-          <p className="signin-brand-kicker">
-            <Sparkles
-              className="signin-brand-kicker__icon"
-              size={14}
-              strokeWidth={2.25}
-              aria-hidden
-            />
-            {brand.kicker}
-          </p>
-
           <h1 className="signin-brand-title">
-            {brand.titleLine1}
-            <span className="signin-brand-title__line">
-              {brand.titlePrefix ? (
-                <span className="signin-brand-title__to">{brand.titlePrefix}</span>
-              ) : null}
-              <span className="signin-brand-title__accent">{brand.titleAccent}</span>
-            </span>
+            {brand.titleLine1}{' '}
+            <span className="signin-brand-title__accent">{brand.titleAccent}</span>
           </h1>
 
           <p className="signin-brand-description">{brand.description}</p>
@@ -82,7 +169,7 @@ export function AuthGoogleSplitPage({
             {brand.featureCards.map(({ icon: Icon, title, description }) => (
               <article key={title} className="signin-brand-card">
                 <div className="signin-brand-card__icon" aria-hidden>
-                  <Icon size={20} strokeWidth={2} />
+                  <Icon size={20} strokeWidth={1.75} />
                 </div>
                 <div className="signin-brand-card__body">
                   <h2 className="signin-brand-card__title">{title}</h2>
@@ -96,8 +183,15 @@ export function AuthGoogleSplitPage({
 
       <div className="auth-form-panel auth-form-panel--signin">
         <div className="form-content">
+          <Link to="/" className="signin-back-home">
+            <ArrowLeft size={16} strokeWidth={2.25} aria-hidden />
+            Back to home
+          </Link>
+
           <div className="signin-form-brand">
-            <img src={logo} alt="Beleh" className="signin-form-logo" />
+            <Link to="/" aria-label="Beleh home">
+              <img src={logo} alt="Beleh" className="signin-form-logo" />
+            </Link>
           </div>
 
           <div className="form-header">

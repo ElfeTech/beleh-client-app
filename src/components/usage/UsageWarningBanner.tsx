@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useUsage } from '../../context/UsageContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
+import {
+  canShowWorkspaceUpgradeCta,
+  PLAN_MANAGED_BY_OWNER_COPY,
+} from '../../utils/workspaceAccess';
 import './UsageWarningBanner.css';
 
 export function UsageWarningBanner() {
   const { summary, hasWarning } = useUsage();
+  const { currentRole } = useWorkspace();
   const [isDismissed, setIsDismissed] = useState(false);
+  const showUpgrade = canShowWorkspaceUpgradeCta(currentRole);
 
   // Reset dismissal when warnings change
   useEffect(() => {
@@ -25,6 +32,11 @@ export function UsageWarningBanner() {
 
   const isCritical = warning.level === 'critical';
   const isWarning = warning.level === 'warning';
+  const isDailyCap = warning.metric === 'daily_llm_tokens';
+  const message =
+    showUpgrade || isDailyCap
+      ? warning.message
+      : `${warning.message} ${PLAN_MANAGED_BY_OWNER_COPY}`;
 
   return (
     <div
@@ -47,11 +59,17 @@ export function UsageWarningBanner() {
         )}
       </div>
       <div className="warning-content">
-        <strong className="warning-title">{isCritical ? 'Limit Reached' : 'Usage Warning'}</strong>
-        <p className="warning-message">{warning.message}</p>
+        <strong className="warning-title">
+          {isDailyCap && isCritical
+            ? 'Daily limit reached'
+            : isCritical
+              ? 'Limit Reached'
+              : 'Usage Warning'}
+        </strong>
+        <p className="warning-message">{message}</p>
       </div>
       <div className="warning-actions">
-        {hasWarning('critical') && (
+        {showUpgrade && hasWarning('critical') && !isDailyCap && (
           <Link to="/settings/billing?upgrade=1" className="upgrade-link">
             Upgrade Plan
           </Link>

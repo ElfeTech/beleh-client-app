@@ -12,7 +12,7 @@ export function isValidSessionIdForState(sessionId: string | null | undefined): 
 
 /**
  * The workspace /state endpoint only accepts datasource (dataset) IDs in
- * last_active_dataset_id — not connector IDs and not deleted/stale IDs.
+ * last_active_dataset_id , not connector IDs and not deleted/stale IDs.
  */
 export function resolveDatasetIdForStateEndpoint(
   datasetId: string | null | undefined,

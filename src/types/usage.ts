@@ -53,6 +53,9 @@ export interface UsageMetrics {
   llm_tokens_used: number;
   llm_tokens_limit: number;
   llm_tokens_remaining: number;
+  daily_llm_tokens_used?: number;
+  daily_llm_tokens_limit?: number;
+  daily_llm_tokens_remaining?: number;
   rows_scanned_used: number;
   rows_scanned_limit: number;
   rows_scanned_remaining: number;
@@ -83,12 +86,16 @@ export interface CurrentUsageResponse {
   billing_cycle_start: string;
   billing_cycle_end: string;
   reset_at: string;
+  daily_reset_at?: string | null;
   last_updated: string;
   value?: PlanValueBlock | null;
+  is_trial?: boolean;
+  trial_end?: string | null;
+  plan_status?: string | null;
 }
 
 /**
- * Remaining quota — includes API $ fields plus client-derived query counters
+ * Remaining quota , includes API $ fields plus client-derived query counters
  * used by existing UI (sidebar, banners).
  */
 export interface RemainingQuotaResponse {
@@ -123,7 +130,15 @@ export interface UsageSummary {
 export interface UsageWarning {
   level: 'info' | 'warning' | 'critical';
   message: string;
-  metric: 'queries' | 'datasources' | 'members' | 'tokens' | 'rows' | 'charts';
+  metric:
+    | 'queries'
+    | 'datasources'
+    | 'members'
+    | 'tokens'
+    | 'llm_tokens'
+    | 'daily_llm_tokens'
+    | 'rows'
+    | 'charts';
   percentage: number;
 }
 

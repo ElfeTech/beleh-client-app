@@ -1,14 +1,19 @@
 import type {
+  AcceptInvitationResponse,
   AssistantTurnResponse,
+  AuthTokenRequest,
   DataSourceMetadata,
   DataSourceResponse,
   IntentRequest,
-  UserCreate,
   UserResponse,
   UserMeResponse,
   UserMePatch,
   WorkspaceCreate,
+  WorkspaceInvitation,
+  WorkspaceInvitationCreate,
+  WorkspaceMember,
   WorkspaceResponse,
+  WorkspaceUsageResponse,
   ChatSessionCreate,
   ChatSessionRead,
   ChatMessageRead,
@@ -25,7 +30,10 @@ import type {
   ConnectionTestRequest,
   ConnectionTestResponse,
   ConnectorTablesResponse,
+  WorkspaceDemoStatus,
+  WorkspaceDemoConnectResponse,
 } from '../types/api';
+import { normalizeWorkspaceMember } from '../utils/workspaceMembers';
 import type {
   CurrentUsageResponse,
   RemainingQuotaResponse,
@@ -49,7 +57,9 @@ import type { FeedbackSubmission } from '../types/feedback';
 import {
   ApiRequestError,
   extractApiErrorCode,
+  extractQuotaExceededDetail,
   formatApiErrorMessage,
+  QuotaExceededError,
 } from '../utils/apiErrorMessage';
 import type {
   ProviderConnection,
@@ -63,6 +73,7 @@ import type {
   WorkspaceProviderCredentials,
   WorkspaceProviderUnbindResponse,
 } from '../types/provider';
+import { isPublicPath, signInPathWithReturn } from '../lib/publicRoutes';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
@@ -179,19 +190,21 @@ class APIClient {
               true,
             ); // Mark as retry to prevent infinite loop
           } else {
-            // Refresh failed, redirect to sign-in (avoid hijacking OAuth return tab)
+            // Refresh failed, redirect to sign-in (avoid hijacking public pages / OAuth return tab)
             console.error('[API] Token refresh failed (no user or token), redirecting to sign-in');
             const path = typeof window !== 'undefined' ? window.location.pathname : '';
-            if (path !== '/signin' && path !== '/signup' && !path.startsWith('/auth/')) {
-              window.location.href = '/signin';
+            const search = typeof window !== 'undefined' ? window.location.search : '';
+            if (!isPublicPath(path)) {
+              window.location.href = signInPathWithReturn(path, search);
             }
             throw new Error('Authentication session expired. Please sign in again.');
           }
         } catch (refreshError) {
           console.error('[API] Error during token refresh:', refreshError);
           const path = typeof window !== 'undefined' ? window.location.pathname : '';
-          if (path !== '/signin' && path !== '/signup' && !path.startsWith('/auth/')) {
-            window.location.href = '/signin';
+          const search = typeof window !== 'undefined' ? window.location.search : '';
+          if (!isPublicPath(path)) {
+            window.location.href = signInPathWithReturn(path, search);
           }
           throw new Error('Authentication session expired. Please sign in again.');
         }
@@ -225,6 +238,20 @@ class APIClient {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[API] Error response:', errorData);
+        const quota = extractQuotaExceededDetail(errorData);
+        if (quota || response.status === 429) {
+          throw new QuotaExceededError(
+            quota ?? {
+              error: 'quota_exceeded',
+              limit_type: 'llm_tokens',
+              current_usage: 0,
+              limit: 0,
+              remaining: 0,
+              message: formatApiErrorMessage(errorData, response.status),
+            },
+            response.status,
+          );
+        }
         const message = formatApiErrorMessage(errorData, response.status);
         throw new ApiRequestError(message, {
           status: response.status,
@@ -240,8 +267,9 @@ class APIClient {
     }
   }
 
-  async registerUser(idToken: string): Promise<UserResponse> {
-    const payload: UserCreate = { token: idToken };
+  async registerUser(idToken: string, inviteToken?: string | null): Promise<UserResponse> {
+    const payload: AuthTokenRequest = { token: idToken };
+    if (inviteToken) payload.invite_token = inviteToken;
 
     return this.request<UserResponse>('/api/auth/register', {
       method: 'POST',
@@ -249,8 +277,9 @@ class APIClient {
     });
   }
 
-  async loginUser(idToken: string): Promise<UserResponse> {
-    const payload: UserCreate = { token: idToken };
+  async loginUser(idToken: string, inviteToken?: string | null): Promise<UserResponse> {
+    const payload: AuthTokenRequest = { token: idToken };
+    if (inviteToken) payload.invite_token = inviteToken;
 
     return this.request<UserResponse>('/api/auth/login', {
       method: 'POST',
@@ -352,6 +381,178 @@ class APIClient {
     });
   }
 
+  async getWorkspaceUsage(authToken: string, workspaceId: string): Promise<WorkspaceUsageResponse> {
+    return this.request<WorkspaceUsageResponse>(`/api/workspaces/${workspaceId}/usage`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async listWorkspaceMembers(
+    authToken: string,
+    workspaceId: string,
+    params: PaginationParams = {},
+  ): Promise<PaginatedResponse<WorkspaceMember>> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+    const data = await this.request<WorkspaceMember[] | PaginatedResponse<WorkspaceMember>>(
+      `/api/workspaces/${workspaceId}/members${qs ? `?${qs}` : ''}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+    if (Array.isArray(data)) {
+      return {
+        items: data.map(normalizeWorkspaceMember),
+        page: params.page ?? 1,
+        page_size: params.page_size ?? data.length,
+        total_items: data.length,
+        total_pages: 1,
+        has_next: false,
+        has_previous: false,
+      };
+    }
+    return {
+      ...data,
+      items: (data.items ?? []).map(normalizeWorkspaceMember),
+    };
+  }
+
+  async removeWorkspaceMember(
+    authToken: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
+    return this.request<void>(`/api/workspaces/${workspaceId}/members/${userId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async createInvitation(
+    authToken: string,
+    workspaceId: string,
+    body: WorkspaceInvitationCreate,
+  ): Promise<WorkspaceInvitation> {
+    return this.request<WorkspaceInvitation>(`/api/workspaces/${workspaceId}/invitations`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ email: body.email.trim(), role: body.role ?? 'member' }),
+    });
+  }
+
+  async listInvitations(
+    authToken: string,
+    workspaceId: string,
+    params: PaginationParams = {},
+  ): Promise<PaginatedResponse<WorkspaceInvitation>> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+    const data = await this.request<WorkspaceInvitation[] | PaginatedResponse<WorkspaceInvitation>>(
+      `/api/workspaces/${workspaceId}/invitations${qs ? `?${qs}` : ''}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+    if (Array.isArray(data)) {
+      return {
+        items: data,
+        page: params.page ?? 1,
+        page_size: params.page_size ?? data.length,
+        total_items: data.length,
+        total_pages: 1,
+        has_next: false,
+        has_previous: false,
+      };
+    }
+    return data;
+  }
+
+  async revokeInvitation(
+    authToken: string,
+    workspaceId: string,
+    invitationId: string,
+  ): Promise<void> {
+    return this.request<void>(`/api/workspaces/${workspaceId}/invitations/${invitationId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async resendInvitation(
+    authToken: string,
+    workspaceId: string,
+    invitationId: string,
+  ): Promise<WorkspaceInvitation> {
+    return this.request<WorkspaceInvitation>(
+      `/api/workspaces/${workspaceId}/invitations/${invitationId}/resend`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async acceptInvitation(authToken: string, token: string): Promise<AcceptInvitationResponse> {
+    // Backend returns WorkspaceMemberResponse (no workspace_id on schema).
+    const data = await this.request<WorkspaceMember & { workspace_id?: string }>(
+      `/api/invitations/${encodeURIComponent(token)}/accept`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+    const member = normalizeWorkspaceMember(data);
+    let workspaceId = data.workspace_id;
+
+    if (!workspaceId) {
+      // Diff workspaces before/after is unavailable here; list and prefer non-default
+      // newest membership when only one new join is expected.
+      try {
+        const listed = await this.listWorkspaces(authToken);
+        const items = listed.items ?? [];
+        if (items.length === 1) {
+          workspaceId = items[0].id;
+        } else if (items.length > 0) {
+          // Prefer a non-default workspace (invitees usually join a non-default).
+          const joined = items.find((w) => !w.is_default) ?? items[0];
+          workspaceId = joined.id;
+        }
+      } catch {
+        /* leave undefined; caller falls back to home */
+      }
+    }
+
+    return {
+      workspace_id: workspaceId,
+      member,
+    };
+  }
+
   async listWorkspaceDatasources(
     authToken: string,
     workspaceId: string,
@@ -391,6 +592,39 @@ class APIClient {
   async getDatasource(authToken: string, datasourceId: string): Promise<DataSourceResponse> {
     return this.request<DataSourceResponse>(`/api/datasets/datasources/${datasourceId}`, {
       method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async getWorkspaceDemo(authToken: string, workspaceId: string): Promise<WorkspaceDemoStatus> {
+    return this.request<WorkspaceDemoStatus>(`/api/workspaces/${workspaceId}/demo`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async connectWorkspaceDemo(
+    authToken: string,
+    workspaceId: string,
+  ): Promise<WorkspaceDemoConnectResponse> {
+    return this.request<WorkspaceDemoConnectResponse>(
+      `/api/workspaces/${workspaceId}/demo/connect`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async deleteWorkspaceDemo(authToken: string, workspaceId: string): Promise<void> {
+    return this.request<void>(`/api/workspaces/${workspaceId}/demo`, {
+      method: 'DELETE',
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
@@ -918,13 +1152,26 @@ class APIClient {
   }
 
   // Dataset Preview Methods
-  async listDatasetTables(authToken: string, datasetId: string): Promise<DatasetTablesResponse> {
-    return this.request<DatasetTablesResponse>(`/api/datasets/${datasetId}/tables`, {
-      method: 'GET',
-      headers: {
-        Authorization: `Bearer ${authToken}`,
+  async listDatasetTables(
+    authToken: string,
+    datasetId: string,
+    params: PaginationParams = {},
+  ): Promise<DatasetTablesResponse> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+
+    return this.request<DatasetTablesResponse>(
+      `/api/datasets/${datasetId}/tables${qs ? `?${qs}` : ''}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
       },
-    });
+    );
   }
 
   async getDatasetTablePreview(
@@ -940,7 +1187,31 @@ class APIClient {
     });
 
     return this.request<DatasetTablePreviewResponse>(
-      `/api/datasets/${datasetId}/tables/${tableName}/preview?${queryParams.toString()}`,
+      `/api/datasets/${datasetId}/tables/${encodeURIComponent(tableName)}/preview?${queryParams.toString()}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async getConnectorTablePreview(
+    authToken: string,
+    workspaceId: string,
+    connectorId: string,
+    tableName: string,
+    page: number = 1,
+    pageSize: number = 50,
+  ): Promise<DatasetTablePreviewResponse> {
+    const queryParams = new URLSearchParams({
+      page: page.toString(),
+      page_size: pageSize.toString(),
+    });
+
+    return this.request<DatasetTablePreviewResponse>(
+      `/api/connectors/workspaces/${encodeURIComponent(workspaceId)}/${encodeURIComponent(connectorId)}/tables/${encodeURIComponent(tableName)}/preview?${queryParams.toString()}`,
       {
         method: 'GET',
         headers: {
@@ -995,9 +1266,16 @@ class APIClient {
     authToken: string,
     workspaceId: string,
     connectorId: string,
+    params: PaginationParams = {},
   ): Promise<ConnectorTablesResponse> {
+    const queryParams = new URLSearchParams();
+    if (params.page !== undefined) queryParams.append('page', params.page.toString());
+    if (params.page_size !== undefined)
+      queryParams.append('page_size', params.page_size.toString());
+    const qs = queryParams.toString();
+
     return this.request<ConnectorTablesResponse>(
-      `/api/connectors/workspaces/${workspaceId}/${connectorId}/tables`,
+      `/api/connectors/workspaces/${workspaceId}/${connectorId}/tables${qs ? `?${qs}` : ''}`,
       {
         method: 'GET',
         headers: {
@@ -1020,7 +1298,7 @@ class APIClient {
     });
   }
 
-  // Provider (Supabase OAuth) — /api/v1
+  // Provider (Supabase OAuth) , /api/v1
   async getProviderOAuthUrl(authToken: string): Promise<ProviderOAuthUrlResponse> {
     return this.request<ProviderOAuthUrlResponse>('/api/v1/provider/oauth/url', {
       method: 'GET',
@@ -1124,7 +1402,7 @@ class APIClient {
 
   /**
    * Sandbox / agent tooling only. Production returns 403 PROVIDER_CREDENTIALS_DISABLED.
-   * Never call from product UI — BI features use binding status + server-side query execution.
+   * Never call from product UI , BI features use binding status + server-side query execution.
    */
   async getWorkspaceProviderCredentials(
     authToken: string,

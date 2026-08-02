@@ -21,7 +21,7 @@ function isNumericValue(value: unknown): boolean {
 }
 
 function formatScalarDisplay(value: unknown): string {
-  if (value == null) return '—';
+  if (value == null) return ',';
   if (typeof value === 'number') {
     return formatNumber(value, { compact: true, decimals: 4 });
   }

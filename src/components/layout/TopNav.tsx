@@ -1,16 +1,20 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useWorkspace } from '../../context/WorkspaceContext';
+import { canAccessBillingSettings } from '../../utils/workspaceAccess';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import logoImage from '../../assets/logo.webp';
 
 export function TopNav() {
   const { user, signOut } = useAuth();
+  const { currentRole } = useWorkspace();
   const navigate = useNavigate();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const showBilling = canAccessBillingSettings(currentRole);
 
   const initials = user?.displayName
     ? user.displayName
@@ -93,19 +97,21 @@ export function TopNav() {
                   </svg>
                   Settings
                 </button>
-                <button
-                  className="profile-dropdown-item"
-                  onClick={() => {
-                    navigate('/settings/billing');
-                    setIsProfileOpen(false);
-                  }}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
-                    <line x1="1" y1="10" x2="23" y2="10" />
-                  </svg>
-                  Billing
-                </button>
+                {showBilling && (
+                  <button
+                    className="profile-dropdown-item"
+                    onClick={() => {
+                      navigate('/settings/billing');
+                      setIsProfileOpen(false);
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                      <line x1="1" y1="10" x2="23" y2="10" />
+                    </svg>
+                    Billing
+                  </button>
+                )}
                 <div className="profile-dropdown-divider"></div>
                 <button
                   className="profile-dropdown-item danger"
@@ -133,7 +139,7 @@ export function TopNav() {
         message="You will need to sign in again to access your workspaces and chats."
         confirmText="Sign out"
         cancelText="Cancel"
-        variant="warning"
+        variant="brand"
         isLoading={isSigningOut}
         onConfirm={handleSignOutConfirm}
         onCancel={() => setShowSignOutConfirm(false)}

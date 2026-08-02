@@ -13,7 +13,8 @@ function deleteSessionSearchParam(prev: URLSearchParams): URLSearchParams {
 /** Keep active chat session in ?session= so hard refresh restores the thread. */
 export function useSessionInUrl(workspaceId: string | undefined) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeSessionId, setActiveSessionId, sessions, isNewChatDraft } = useChatSession();
+  const { activeSessionId, setActiveSessionId, sessions, isNewChatDraft, sessionsReady } =
+    useChatSession();
   const skipUrlWriteRef = useRef(false);
   const hydratedRef = useRef(false);
 
@@ -45,7 +46,7 @@ export function useSessionInUrl(workspaceId: string | undefined) {
     setSearchParams,
   ]);
 
-  // URL → context (once sessions are loaded)
+  // URL → context (once sessions are loaded , including empty list)
   useEffect(() => {
     if (!workspaceId) return;
     if (isNewChatDraft) return;
@@ -55,11 +56,12 @@ export function useSessionInUrl(workspaceId: string | undefined) {
       if (fromUrl === 'undefined' || fromUrl === '1') {
         setSearchParams(deleteSessionSearchParam, { replace: true });
       }
-      hydratedRef.current = true;
+      if (sessionsReady) hydratedRef.current = true;
       return;
     }
 
-    if (sessions.length === 0) return;
+    // Wait until we know this user's session list (empty is a valid result).
+    if (!sessionsReady) return;
 
     const exists = sessions.some((s) => s.id === fromUrl);
     if (!exists) {
@@ -82,6 +84,7 @@ export function useSessionInUrl(workspaceId: string | undefined) {
     isNewChatDraft,
     searchParams,
     sessions,
+    sessionsReady,
     activeSessionId,
     setActiveSessionId,
     setSearchParams,

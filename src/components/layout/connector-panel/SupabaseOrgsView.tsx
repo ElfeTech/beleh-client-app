@@ -297,7 +297,7 @@ export function SupabaseOrgsView({
                 : `Connected ${formatDistanceToNow(new Date(conn.connected_at), { addSuffix: true })}`;
               const unhealthyDetail = rowHealth?.detail
                 ? formatProviderErrorToast(rowHealth.detail, rowHealth.detail)
-                : 'Connection unhealthy — reconnect required';
+                : 'Connection unhealthy , reconnect required';
               const isReconnecting = reconnectingId === conn.id;
               let statusClass = '';
               let statusLabel = 'Connected';

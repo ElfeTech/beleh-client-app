@@ -7,6 +7,7 @@ import { LANDING_HELP_SUGGESTED_PROMPTS } from '../landing/landingHelpPrompts';
 import { MarkdownText } from '../MarkdownText';
 import { ThinkingShimmer } from '../chat/ThinkingShimmer';
 import { cn } from '../../lib/utils';
+import { SUPPORT_CHAT_MAX_CHARS } from '../../constants/chatLimits';
 import './SupportHelpBubble.css';
 
 interface SupportHelpBubbleProps {
@@ -110,7 +111,10 @@ function SupportHelpPanel({ onClose }: { onClose: () => void }) {
     sendMessage,
     clearChat,
     retrySession,
-  } = usePlatformHelpChat({ persistenceDb: APP_HELP_DB_NAME });
+  } = usePlatformHelpChat({
+    persistenceDb: APP_HELP_DB_NAME,
+    maxChars: SUPPORT_CHAT_MAX_CHARS,
+  });
 
   const [input, setInput] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
@@ -273,8 +277,9 @@ function SupportHelpPanel({ onClose }: { onClose: () => void }) {
           placeholder="Ask anything about the platform…"
           value={input}
           disabled={disabled}
+          maxLength={SUPPORT_CHAT_MAX_CHARS}
           onChange={(e) => {
-            setInput(e.target.value);
+            setInput(e.target.value.slice(0, SUPPORT_CHAT_MAX_CHARS));
             const el = e.target;
             el.style.height = 'auto';
             el.style.height = `${Math.min(el.scrollHeight, 96)}px`;

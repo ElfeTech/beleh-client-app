@@ -212,7 +212,7 @@ export function writeStreamCapability(uid: string, available: boolean): void {
   if (available) {
     set(scope, UI_KEYS.streamCapability, true);
   } else {
-    // Only persist "unavailable" temporarily — backend may ship later.
+    // Only persist "unavailable" temporarily , backend may ship later.
     set(scope, UI_KEYS.streamCapability, false, {
       ttlMs: STREAM_CAPABILITY_NEGATIVE_TTL_MS,
     });

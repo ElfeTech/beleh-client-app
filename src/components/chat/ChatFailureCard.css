@@ -61,6 +61,13 @@
   background: color-mix(in srgb, var(--error) 8%, var(--bg-primary));
 }
 
+.chat-failure-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
 .chat-failure-card__retry {
   display: inline-flex;
   align-items: center;
@@ -74,6 +81,7 @@
   border: 1px solid color-mix(in srgb, var(--error) 40%, var(--border-primary));
   border-radius: var(--radius-md, 0.5rem);
   cursor: pointer;
+  text-decoration: none;
   transition:
     background-color 0.15s ease,
     border-color 0.15s ease;

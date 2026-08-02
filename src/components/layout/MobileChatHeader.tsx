@@ -2,8 +2,12 @@ import React, { useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { WorkspaceContext } from '../../context/WorkspaceContext';
 import { DatasourceContext } from '../../context/DatasourceContext';
-import { useUsage } from '../../context/UsageContext';
-import { formatCompactNumber } from '../../utils/formatters';
+import {
+  isUnlimitedLimit,
+  usagePct,
+  USAGE_HARD_LIMIT_PCT,
+  USAGE_SOFT_WARN_PCT,
+} from '../../utils/workspaceAccess';
 import './MobileChatHeader.css';
 
 interface MobileChatHeaderProps {
@@ -24,36 +28,45 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
   const navigate = useNavigate();
   const context = useContext(WorkspaceContext);
   const datasourceContext = useContext(DatasourceContext);
-  const { remaining } = useUsage();
 
   if (!context || !datasourceContext) {
     return null;
   }
 
-  const { currentWorkspace, datasources } = context;
+  const { currentWorkspace, datasources, currentRole, workspaceUsage } = context;
   const { selectedDatasourceId } = datasourceContext;
 
   // Reserved for future use when dataset selector is shown in header
   const _selectedDataset = datasources.find((ds) => ds.id === selectedDatasourceId);
   void _selectedDataset;
 
-  // Calculate usage status and color
-  const getUsageStatus = () => {
-    if (!remaining) return { level: 'normal', color: '#10b981' };
-    const percentage = remaining.percentage_used;
+  const periodUsed = workspaceUsage?.llm_tokens_used ?? 0;
+  const periodLimit = workspaceUsage?.llm_tokens_limit;
+  const dailyUsed = workspaceUsage?.daily_llm_tokens_used ?? 0;
+  const dailyLimit = workspaceUsage?.daily_llm_tokens_limit;
 
-    if (percentage >= 90) return { level: 'critical', color: '#ef4444' };
-    if (percentage >= 70) return { level: 'warning', color: '#f59e0b' };
+  // Prefer the tighter of period vs daily when both are capped.
+  const periodPct =
+    periodLimit != null && !isUnlimitedLimit(periodLimit) ? usagePct(periodUsed, periodLimit) : 0;
+  const dailyPct =
+    dailyLimit != null && !isUnlimitedLimit(dailyLimit) ? usagePct(dailyUsed, dailyLimit) : 0;
+  const percentageUsed = Math.max(periodPct, dailyPct);
+  const hasTokenMeter =
+    (periodLimit != null && !isUnlimitedLimit(periodLimit)) ||
+    (dailyLimit != null && !isUnlimitedLimit(dailyLimit));
+
+  const getUsageStatus = () => {
+    if (!hasTokenMeter) return { level: 'normal', color: '#10b981' };
+    if (percentageUsed >= USAGE_HARD_LIMIT_PCT) return { level: 'critical', color: '#ef4444' };
+    if (percentageUsed >= USAGE_SOFT_WARN_PCT) return { level: 'warning', color: '#f59e0b' };
     return { level: 'normal', color: '#10b981' };
   };
 
   const usageStatus = getUsageStatus();
-  const queriesRemaining = remaining?.queries_remaining ?? 0;
-  const queriesLimit = remaining?.queries_limit ?? 0;
-  const percentageUsed = remaining?.percentage_used ?? 0;
+  const displayPct = Math.round(percentageUsed);
 
   const handleUsageClick = () => {
-    navigate('/settings/billing');
+    navigate(currentRole === 'owner' ? '/settings/billing' : '/settings/usage');
   };
 
   return (
@@ -77,14 +90,13 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
           </svg>
         </button>
 
-        {/* Mobile Usage Badge - Circular Progress */}
+        {/* Mobile Usage Badge - Circular Progress (AI tokens) */}
         <button
           className={`mobile-usage-badge ${usageStatus.level}`}
           onClick={handleUsageClick}
-          aria-label={`${queriesRemaining} queries remaining out of ${queriesLimit}`}
+          aria-label={hasTokenMeter ? `${displayPct}% of AI token quota used` : 'Open usage'}
         >
           <svg className="usage-circle" viewBox="0 0 48 48">
-            {/* Background circle */}
             <circle
               className="usage-circle-bg"
               cx="24"
@@ -93,7 +105,6 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
               fill="none"
               strokeWidth="4"
             />
-            {/* Progress circle */}
             <circle
               className="usage-circle-progress"
               cx="24"
@@ -106,7 +117,6 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
               transform="rotate(-90 24 24)"
               style={{ stroke: usageStatus.color }}
             />
-            {/* Center text - remaining count */}
             <text
               x="24"
               y="24"
@@ -114,7 +124,7 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
               dominantBaseline="central"
               className="usage-circle-text"
             >
-              {formatCompactNumber(queriesRemaining, 0)}
+              {hasTokenMeter ? `${displayPct}%` : ','}
             </text>
           </svg>
         </button>

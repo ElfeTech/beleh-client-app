@@ -4,6 +4,7 @@ import { CreditCard, Check, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUsage } from '../../context/UsageContext';
 import { useAuth } from '../../context/useAuth';
+import { useWorkspace } from '../../context/WorkspaceContext';
 import { apiClient } from '../../services/apiClient';
 import { QuotaUsageGrid } from '../usage/QuotaUsageGrid';
 import type { BillingCatalogPlan, BillingPrice, BillingSubscription } from '../../types/billing';
@@ -18,10 +19,16 @@ import {
   yearlySavingsPercent,
 } from '../../lib/billingCatalog';
 import { planFeatureList } from '../../lib/planFeatures';
+import { trialDaysLeft } from '../../utils/workspaceAccess';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 import { BillingCycleToggle, type BillingCycle } from './BillingCycleToggle';
 import './SettingsShared.css';
 import './UsageSection.css';
+
+/** Trial / Stripe trialing , entitled to use AI. */
+function isEntitledTrialStatus(status: string | null | undefined): boolean {
+  return status === 'trial' || status === 'trialing';
+}
 
 function formatMoney(unitAmount: number, currency: string): string {
   const amount = unitAmount / 100;
@@ -67,6 +74,26 @@ function isCurrentCatalogPlan(
   return plan.tier.toLowerCase() === currentTier.toLowerCase();
 }
 
+/** Index in price-sorted catalog; higher index = higher tier. */
+function catalogPlanIndex(
+  plans: BillingCatalogPlan[],
+  subscription: BillingSubscription | null,
+  usagePlanId?: string,
+  usageTier?: string,
+): number {
+  return plans.findIndex((p) => isCurrentCatalogPlan(p, subscription, usagePlanId, usageTier));
+}
+
+function resolveActiveCatalogPlan(
+  plans: BillingCatalogPlan[],
+  subscription: BillingSubscription | null,
+  usagePlanId?: string,
+  usageTier?: string,
+): BillingCatalogPlan | null {
+  const idx = catalogPlanIndex(plans, subscription, usagePlanId, usageTier);
+  return idx >= 0 ? plans[idx] : null;
+}
+
 function formatPeriodDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -95,6 +122,7 @@ export function UsageSection() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUsage, isLoading, error, refreshUsageAfterAction } = useUsage();
+  const { workspaceUsage } = useWorkspace();
 
   const [catalogPlans, setCatalogPlans] = useState<BillingCatalogPlan[]>([]);
   const [subscription, setSubscription] = useState<BillingSubscription | null>(null);
@@ -247,15 +275,50 @@ export function UsageSection() {
   }
 
   const usagePlan = currentUsage?.plan;
-  const planName = subscription?.plan?.name ?? usagePlan?.name ?? 'Free';
-  const planDescription = usagePlan?.description ?? subscription?.plan?.name ?? planName;
+  const activeCatalogPlan = resolveActiveCatalogPlan(
+    catalogPlans,
+    subscription,
+    usagePlan?.id,
+    usagePlan?.tier,
+  );
+  const meterPlanLimits = activeCatalogPlan?.limits ?? usagePlan?.limits ?? null;
+  const currentPlanIndex = catalogPlanIndex(
+    catalogPlans,
+    subscription,
+    usagePlan?.id,
+    usagePlan?.tier,
+  );
+  const planName = subscription?.plan?.name ?? activeCatalogPlan?.name ?? usagePlan?.name ?? 'Free';
+  const planDescription =
+    activeCatalogPlan?.description ??
+    usagePlan?.description ??
+    subscription?.plan?.name ??
+    planName;
   const periodEnd = formatPeriodDate(
     subscription?.billing_cycle_end ?? currentUsage?.billing_cycle_end,
   );
-  const status = subscription?.status ?? null;
+  const status = subscription?.status ?? workspaceUsage?.plan_status ?? null;
   const isPastDue = status === 'past_due' || status === 'unpaid';
+  const isExpired =
+    status === 'expired' ||
+    workspaceUsage?.plan_status === 'expired' ||
+    currentUsage?.plan_status === 'expired';
+  const isOnTrial =
+    isEntitledTrialStatus(status) ||
+    Boolean(subscription?.is_trial) ||
+    Boolean(workspaceUsage?.is_trial) ||
+    Boolean(currentUsage?.is_trial);
+  const trialEndIso =
+    subscription?.trial_end ?? workspaceUsage?.trial_end ?? currentUsage?.trial_end ?? null;
+  const daysLeft = isOnTrial ? trialDaysLeft(trialEndIso) : null;
   const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
   const hasStripeSub = Boolean(subscription?.stripe_subscription_id);
+
+  /** Public upgrade grid: Free stays off pricing unless it is the current plan. */
+  const publicCatalogPlans = catalogPlans.filter((p) => {
+    if (!isFreeTier(p)) return true;
+    return isCurrentCatalogPlan(p, subscription, usagePlan?.id, usagePlan?.tier);
+  });
   const showCycleToggle = catalogPlans.some(
     (p) =>
       p.prices.some((pr) => pr.interval === 'month') &&
@@ -289,15 +352,38 @@ export function UsageSection() {
         </section>
       )}
 
+      {isExpired && (
+        <section className="billing-alert billing-alert--past-due settings-card" role="alert">
+          <div>
+            <h3>Trial ended</h3>
+            <p>Your free trial has expired. Upgrade to unlock AI chat and continue analyzing.</p>
+          </div>
+          <button
+            type="button"
+            className="billing-stripe-portal-btn"
+            onClick={() => {
+              plansSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }}
+          >
+            Upgrade plan
+          </button>
+        </section>
+      )}
+
       <section className="billing-current-plan settings-card">
         <div className="billing-current-plan__top">
           <div className="billing-current-plan__badges">
             <span className="billing-badge billing-badge--current">Current plan: {planName}</span>
             {status && (
               <span
-                className={`billing-badge billing-badge--status billing-badge--status-${status}`}
+                className={`billing-badge billing-badge--status billing-badge--status-${status === 'trial' ? 'trialing' : status}`}
               >
                 {status.replaceAll('_', ' ')}
+              </span>
+            )}
+            {isOnTrial && daysLeft != null && !isExpired && (
+              <span className="billing-badge billing-badge--status billing-badge--status-trialing">
+                {daysLeft === 0 ? 'Ends today' : `${daysLeft} day${daysLeft === 1 ? '' : 's'} left`}
               </span>
             )}
             {cancelAtPeriodEnd && (
@@ -314,11 +400,15 @@ export function UsageSection() {
         </div>
         <h2 className="billing-current-plan__name">{planDescription}</h2>
         <p className="billing-current-plan__desc">
-          {periodEnd
-            ? cancelAtPeriodEnd
-              ? `Access continues until ${periodEnd}.`
-              : `Current billing period ends ${periodEnd}.`
-            : 'Usage resets each billing cycle.'}
+          {isExpired
+            ? 'AI chat is locked until you upgrade.'
+            : isOnTrial && trialEndIso
+              ? `Free trial ends ${formatPeriodDate(trialEndIso) ?? 'soon'}.`
+              : periodEnd
+                ? cancelAtPeriodEnd
+                  ? `Access continues until ${periodEnd}.`
+                  : `Current billing period ends ${periodEnd}.`
+                : 'Usage resets each billing cycle.'}
         </p>
         {hasStripeSub && (
           <div className="billing-current-plan__actions">
@@ -340,7 +430,7 @@ export function UsageSection() {
           Plan includes &amp; usage tracker
         </h3>
 
-        <QuotaUsageGrid />
+        <QuotaUsageGrid mode="personal" planLimits={meterPlanLimits} />
       </section>
 
       <section className="billing-section" ref={plansSectionRef} id="billing-plans">
@@ -368,13 +458,19 @@ export function UsageSection() {
           </div>
         ) : (
           <div className="billing-plans-grid">
-            {catalogPlans.map((tierPlan) => {
+            {publicCatalogPlans.map((tierPlan) => {
               const isCurrent = isCurrentCatalogPlan(
                 tierPlan,
                 subscription,
                 usagePlan?.id,
                 usagePlan?.tier,
               );
+              const tierIndex = catalogPlans.findIndex((p) => p.plan_id === tierPlan.plan_id);
+              const isDowngrade =
+                !isCurrent &&
+                currentPlanIndex >= 0 &&
+                tierIndex >= 0 &&
+                tierIndex < currentPlanIndex;
               const recommended = isProTier(tierPlan);
               const enterprise = isEnterpriseTier(tierPlan);
               const free = isFreeTier(tierPlan);
@@ -403,11 +499,19 @@ export function UsageSection() {
                 cta = (
                   <button
                     type="button"
-                    className="billing-tier-card__btn billing-tier-card__btn--upgrade"
+                    className={`billing-tier-card__btn ${
+                      isDowngrade
+                        ? 'billing-tier-card__btn--downgrade'
+                        : 'billing-tier-card__btn--upgrade'
+                    }`}
                     disabled={Boolean(checkoutPriceId)}
                     onClick={() => void startCheckout(checkoutPrice)}
                   >
-                    {busy ? 'Redirecting…' : `Upgrade to ${tierPlan.name}`}
+                    {busy
+                      ? 'Redirecting…'
+                      : isDowngrade
+                        ? `Downgrade to ${tierPlan.name}`
+                        : `Upgrade to ${tierPlan.name}`}
                   </button>
                 );
               } else if (enterprise && (free || displayAmount == null)) {
@@ -486,7 +590,7 @@ export function UsageSection() {
                       </>
                     ) : (
                       <span className="billing-tier-card__amount">
-                        {enterprise ? 'Custom' : free ? '$0' : '—'}
+                        {enterprise ? 'Custom' : free ? '$0' : ','}
                       </span>
                     )}
                   </div>

@@ -7,9 +7,6 @@ import {
   ChevronRight,
   Plus,
   Search,
-  Sun,
-  Moon,
-  Monitor,
   LogOut,
   RefreshCw,
   LayoutGrid,
@@ -22,7 +19,6 @@ import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import logoImage from '../../assets/logo.webp';
 import { ChatSessionContext, useChatSession } from '../../context/ChatSessionContext';
-import { useTheme, type ThemePreference } from '../../context/ThemeContext';
 import { useAuth } from '../../context/useAuth';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useUsage } from '../../context/UsageContext';
@@ -36,14 +32,8 @@ import {
   readSidebarCollapsed,
   writeSidebarCollapsed,
 } from '../../lib/uiMemory';
+import { SEARCH_VISIBILITY_THRESHOLD } from '../../constants/pagination';
 import './UnifiedSidebar.css';
-
-const THEME_OPTIONS: { value: ThemePreference; label: string; short: string; icon: typeof Sun }[] =
-  [
-    { value: 'light', label: 'Light theme', short: 'Light', icon: Sun },
-    { value: 'dark', label: 'Dark theme', short: 'Dark', icon: Moon },
-    { value: 'system', label: 'Match system', short: 'System', icon: Monitor },
-  ];
 
 function initialsFromUser(
   displayName: string | null | undefined,
@@ -88,15 +78,17 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   const navigate = useNavigate();
   const { id: workspaceId } = useParams<{ id: string }>();
   const path = location.pathname;
-  const { currentWorkspace, workspaces } = useWorkspace();
+  const { currentWorkspace, workspaces, workspaceUsage } = useWorkspace();
   const { summary, currentUsage } = useUsage();
   const chatContext = useContext(ChatSessionContext);
   const {
     loadWorkspaceSessions,
+    loadMoreSessions,
+    sessionsHasMore,
+    isLoadingMoreSessions,
     invalidateWorkspaceSessions,
     isLoading: sessionsLoading,
   } = useChatSession();
-  const { themePreference, setThemePreference } = useTheme();
 
   useEffect(() => {
     if (!user?.uid) return;
@@ -196,9 +188,35 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   const workspaceBase = effectiveWorkspaceId ? `/workspace/${effectiveWorkspaceId}` : '';
 
   const planLabel = useMemo(() => {
-    const name = summary?.plan_name || currentUsage?.plan?.name || 'Free';
+    const tier = workspaceUsage?.plan_tier;
+    const name = summary?.plan_name || currentUsage?.plan?.name || tier || 'Free';
     return `${name} plan`.toUpperCase();
-  }, [summary?.plan_name, currentUsage?.plan?.name]);
+  }, [summary?.plan_name, currentUsage?.plan?.name, workspaceUsage?.plan_tier]);
+
+  const usageFooterLine = useMemo(() => {
+    if (!workspaceUsage) return null;
+    const parts: string[] = [];
+    const tUsed = workspaceUsage.llm_tokens_used;
+    const tLimit = workspaceUsage.llm_tokens_limit;
+    if (tUsed != null && tLimit != null && tLimit >= 0) {
+      const pct = Math.min(100, Math.round((tUsed / tLimit) * 100));
+      parts.push(`${pct}% AI tokens`);
+    }
+    const dUsed = workspaceUsage.daily_llm_tokens_used;
+    const dLimit = workspaceUsage.daily_llm_tokens_limit;
+    if (dUsed != null && dLimit != null && dLimit >= 0) {
+      const pct = Math.min(100, Math.round((dUsed / dLimit) * 100));
+      parts.push(`${pct}% daily`);
+    }
+    if (workspaceUsage.is_trial && workspaceUsage.trial_end) {
+      const end = new Date(workspaceUsage.trial_end).getTime();
+      if (!Number.isNaN(end)) {
+        const days = Math.max(0, Math.ceil((end - Date.now()) / (24 * 60 * 60 * 1000)));
+        parts.push(days === 0 ? 'trial ends today' : `${days}d left`);
+      }
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
+  }, [workspaceUsage]);
 
   const handleSessionClick = (sessionId: string) => {
     if (!effectiveWorkspaceId) return;
@@ -351,55 +369,69 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                       </button>
                     </div>
                   </div>
-                  <div className="unified-sidebar__sessions-search">
-                    <Search
-                      className="unified-sidebar__sessions-search-icon"
-                      size={16}
-                      strokeWidth={2}
-                      aria-hidden
-                    />
-                    <input
-                      type="search"
-                      className="unified-sidebar__sessions-search-input"
-                      placeholder="Search chats…"
-                      value={sessionSearchQuery}
-                      onChange={(e) => setSessionSearchQuery(e.target.value)}
-                      aria-label="Search recent chats"
-                    />
-                  </div>
+                  {sessions.length > SEARCH_VISIBILITY_THRESHOLD && (
+                    <div className="unified-sidebar__sessions-search">
+                      <Search
+                        className="unified-sidebar__sessions-search-icon"
+                        size={16}
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                      <input
+                        type="search"
+                        className="unified-sidebar__sessions-search-input"
+                        placeholder="Search chats…"
+                        value={sessionSearchQuery}
+                        onChange={(e) => setSessionSearchQuery(e.target.value)}
+                        aria-label="Search recent chats"
+                      />
+                    </div>
+                  )}
                   <div className="unified-sidebar__sessions-list no-scrollbar">
                     {filteredSessions.length > 0 ? (
-                      filteredSessions.map((session) => (
-                        <div
-                          key={session.id}
-                          className="sidebar-session-row group relative flex items-center"
-                        >
+                      <>
+                        {filteredSessions.map((session) => (
+                          <div
+                            key={session.id}
+                            className="sidebar-session-row group relative flex items-center"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleSessionClick(session.id)}
+                              className={cn(
+                                'sidebar-session-btn flex-1',
+                                activeSessionId === session.id && 'sidebar-session-btn--active',
+                              )}
+                            >
+                              <span className="sidebar-session-title truncate">
+                                {session.title || `Chat ${session.id.slice(0, 8)}`}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleSessionMenuClick(e, session.id)}
+                              className={cn(
+                                'sidebar-session-menu-btn',
+                                menuAnchorEl &&
+                                  actionSessionId === session.id &&
+                                  'sidebar-session-menu-btn--open',
+                              )}
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {sessionsHasMore && !sessionSearchQuery.trim() && (
                           <button
                             type="button"
-                            onClick={() => handleSessionClick(session.id)}
-                            className={cn(
-                              'sidebar-session-btn flex-1',
-                              activeSessionId === session.id && 'sidebar-session-btn--active',
-                            )}
+                            className="unified-sidebar__load-more"
+                            disabled={isLoadingMoreSessions}
+                            onClick={() => void loadMoreSessions()}
                           >
-                            <span className="sidebar-session-title truncate">
-                              {session.title || `Chat ${session.id.slice(0, 8)}`}
-                            </span>
+                            {isLoadingMoreSessions ? 'Loading…' : 'Load more chats'}
                           </button>
-                          <button
-                            type="button"
-                            onClick={(e) => handleSessionMenuClick(e, session.id)}
-                            className={cn(
-                              'sidebar-session-menu-btn',
-                              menuAnchorEl &&
-                                actionSessionId === session.id &&
-                                'sidebar-session-menu-btn--open',
-                            )}
-                          >
-                            <MoreVertical className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
-                      ))
+                        )}
+                      </>
                     ) : sessions.length > 0 ? (
                       <div className="rounded-lg border border-dashed border-[color:var(--sidebar-border)] px-3 py-5 text-center">
                         <p className="sidebar-empty-hint mb-1">No matching chats</p>
@@ -448,74 +480,33 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
         </nav>
 
         <footer className={cn('unified-sidebar__footer', collapsed && 'px-2')}>
-          <div
-            className={cn(
-              'sidebar-appearance-panel',
-              collapsed && 'sidebar-appearance-panel--collapsed',
-            )}
+          <NavLink
+            to="/settings/general"
+            title="Settings"
+            className={() =>
+              cn(
+                'sidebar-settings-link',
+                settingsAreaActive && 'sidebar-settings-link--active',
+                collapsed && 'sidebar-settings-link--collapsed',
+              )
+            }
           >
-            {!collapsed ? (
-              <div className="sidebar-appearance-panel__head">
-                <span className="sidebar-appearance-panel__title">Appearance</span>
-                <span className="sidebar-appearance-panel__hint">Theme &amp; preferences</span>
-              </div>
-            ) : null}
-
-            <div
-              className={cn('sidebar-theme-shell', collapsed && 'sidebar-theme-shell--collapsed')}
-              role="group"
-              aria-label="Color theme"
-            >
-              {THEME_OPTIONS.map(({ value, label, short, icon: Icon }) => {
-                const selected = themePreference === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    title={label}
-                    aria-label={label}
-                    aria-pressed={selected}
-                    onClick={() => setThemePreference(value)}
-                    className={cn(
-                      'sidebar-theme-option',
-                      selected && 'sidebar-theme-option--selected',
-                    )}
-                  >
-                    <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    {!collapsed && <span>{short}</span>}
-                  </button>
-                );
-              })}
-            </div>
-
-            <NavLink
-              to="/settings/general"
-              title="Settings"
-              className={() =>
-                cn(
-                  'sidebar-settings-link',
-                  settingsAreaActive && 'sidebar-settings-link--active',
-                  collapsed && 'sidebar-settings-link--collapsed',
-                )
-              }
-            >
-              <span className="sidebar-settings-link__icon" aria-hidden>
-                <Settings className="h-4 w-4 shrink-0" strokeWidth={2} />
-              </span>
-              {!collapsed && (
-                <>
-                  <span className="sidebar-settings-link__text">
-                    <span className="sidebar-settings-link__label">Settings</span>
-                    <span className="sidebar-settings-link__sub">Account, billing &amp; more</span>
-                  </span>
-                  <ChevronRight
-                    className="sidebar-settings-link__chevron h-4 w-4 shrink-0"
-                    strokeWidth={2}
-                  />
-                </>
-              )}
-            </NavLink>
-          </div>
+            <span className="sidebar-settings-link__icon" aria-hidden>
+              <Settings className="h-4 w-4 shrink-0" strokeWidth={2} />
+            </span>
+            {!collapsed && (
+              <>
+                <span className="sidebar-settings-link__text">
+                  <span className="sidebar-settings-link__label">Settings</span>
+                  <span className="sidebar-settings-link__sub">Account, billing &amp; more</span>
+                </span>
+                <ChevronRight
+                  className="sidebar-settings-link__chevron h-4 w-4 shrink-0"
+                  strokeWidth={2}
+                />
+              </>
+            )}
+          </NavLink>
 
           {user && (
             <div
@@ -538,6 +529,9 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                     <p className="unified-sidebar__footer-email">{user.email}</p>
                   ) : null}
                   <p className="unified-sidebar__footer-plan">{planLabel}</p>
+                  {usageFooterLine ? (
+                    <p className="unified-sidebar__footer-usage">{usageFooterLine}</p>
+                  ) : null}
                 </div>
               )}
               <button
@@ -595,7 +589,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
           message="You will need to sign in again to access your workspaces and chats."
           confirmText="Sign out"
           cancelText="Cancel"
-          variant="warning"
+          variant="brand"
           isLoading={isSigningOut}
           onConfirm={handleSignOutConfirm}
           onCancel={() => setShowSignOutConfirm(false)}

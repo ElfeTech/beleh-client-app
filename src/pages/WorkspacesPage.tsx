@@ -13,6 +13,15 @@ import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSh
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { WorkspaceModal } from '../components/layout/WorkspaceModal';
 import type { WorkspaceResponse } from '../types/api';
+import {
+  canDeleteWorkspace,
+  canRenameWorkspace,
+  createWorkspaceOwnershipHelper,
+  isWorkspacesAtLimit,
+  PLAN_LIMIT_REACHED_TOOLTIP,
+  workspaceLimitUpgradeMessage,
+  workspaceOwnershipLabel,
+} from '../utils/workspaceAccess';
 import './WorkspacesPage.css';
 
 export function WorkspacesPage() {
@@ -20,8 +29,15 @@ export function WorkspacesPage() {
   const location = useLocation();
   const isSettingsEmbed = location.pathname.startsWith('/settings/');
   const { user } = useAuth();
-  const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces, loading } =
-    useWorkspace();
+  const {
+    workspaces,
+    currentWorkspace,
+    setCurrentWorkspace,
+    refreshWorkspaces,
+    workspaceUsage,
+    currentRole,
+    loading,
+  } = useWorkspace();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [syncFrequency, setSyncFrequency] = useState('hourly');
@@ -36,6 +52,10 @@ export function WorkspacesPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+
+  const ownership = createWorkspaceOwnershipHelper(workspaces, user?.uid, user?.email);
+  const hasMixedOwnership =
+    workspaces.some((w) => ownership.isShared(w)) && workspaces.some((w) => !ownership.isShared(w));
 
   useEffect(() => {
     const handleResize = () => {
@@ -128,6 +148,17 @@ export function WorkspacesPage() {
     navigate(`/workspace/${workspace.id}`);
   };
 
+  const handleSwitchWorkspace = (workspace: WorkspaceResponse) => {
+    if (currentWorkspace?.id === workspace.id) {
+      navigate(`/workspace/${workspace.id}`);
+      return;
+    }
+    setCurrentWorkspace(workspace);
+    writeActiveWorkspaceId(workspace.id);
+    toast.success(`Switched to "${workspace.name}"`);
+    navigate(`/workspace/${workspace.id}`);
+  };
+
   const handleCreateSuccess = async () => {
     await refreshWorkspaces();
     setShowCreateModal(false);
@@ -136,7 +167,7 @@ export function WorkspacesPage() {
   const handleReindexTables = async (workspace: WorkspaceResponse) => {
     setReindexingId(workspace.id);
     try {
-      // Schema re-index API not yet available — surface intent in UI
+      // Schema re-index API not yet available , surface intent in UI
       await new Promise((resolve) => setTimeout(resolve, 800));
       toast.success(`Re-index queued for "${workspace.name}"`);
     } catch {
@@ -147,40 +178,60 @@ export function WorkspacesPage() {
   };
 
   const workspaceDescription = (workspace: WorkspaceResponse) => {
+    if (ownership.isShared(workspace)) {
+      return 'Shared with you from another team. You have member access under their subscription.';
+    }
     if (workspace.is_default) {
       return 'Primary workspace for schema catalogs, AI-assisted queries, and governance metadata.';
     }
     return 'Downloading database metadata updates locks zero reads/writes.';
   };
 
-  const getMenuItems = (): ContextMenuItem[] | ActionSheetItem[] => [
-    {
-      id: 'edit',
-      label: 'Edit Workspace',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-      ),
-      variant: 'default' as const,
-      onClick: handleEdit,
-      disabled: selectedWorkspace?.is_default,
-    },
-    {
-      id: 'delete',
-      label: 'Delete Workspace',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        </svg>
-      ),
-      variant: 'danger' as const,
-      onClick: handleDelete,
-      disabled: selectedWorkspace?.is_default,
-    },
-  ];
+  const ownershipBadge = (workspace: WorkspaceResponse) => {
+    const kind = ownership.kind(workspace);
+    if (kind === 'owned' && !hasMixedOwnership) return null;
+    return (
+      <span
+        className={`workspace-ownership-badge workspace-ownership-badge--${kind}`}
+        title={kind === 'shared' ? 'Shared with you from another team' : 'Your workspace'}
+      >
+        {workspaceOwnershipLabel(kind)}
+      </span>
+    );
+  };
+
+  const getMenuItems = (): ContextMenuItem[] | ActionSheetItem[] => {
+    const canRename = canRenameWorkspace(currentRole);
+    const canDelete = canDeleteWorkspace(currentRole, selectedWorkspace, user?.uid);
+    return [
+      {
+        id: 'edit',
+        label: 'Edit Workspace',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+          </svg>
+        ),
+        variant: 'default' as const,
+        onClick: handleEdit,
+        disabled: !canRename || selectedWorkspace?.is_default,
+      },
+      {
+        id: 'delete',
+        label: 'Delete Workspace',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        ),
+        variant: 'danger' as const,
+        onClick: handleDelete,
+        disabled: !canDelete,
+      },
+    ];
+  };
 
   return (
     <div
@@ -203,7 +254,15 @@ export function WorkspacesPage() {
             <button
               type="button"
               className="btn-gradient-primary create-workspace-button"
-              onClick={() => setShowCreateModal(true)}
+              onClick={() => {
+                if (isWorkspacesAtLimit(workspaceUsage)) {
+                  toast.error(workspaceLimitUpgradeMessage(currentRole, 'workspaces'));
+                  return;
+                }
+                setShowCreateModal(true);
+              }}
+              disabled={isWorkspacesAtLimit(workspaceUsage)}
+              title={isWorkspacesAtLimit(workspaceUsage) ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19" />
@@ -273,25 +332,54 @@ export function WorkspacesPage() {
             </div>
           ) : (
             <ul className="ws-settings-list">
-              {filteredWorkspaces.map((workspace) => (
-                <li key={workspace.id} className="ws-settings-row">
-                  <div className="ws-settings-row__icon" aria-hidden>
-                    <Building2 size={22} strokeWidth={1.75} />
-                  </div>
-                  <div className="ws-settings-row__body">
-                    <h3 className="ws-settings-row__title">{workspace.name}</h3>
-                    <p className="ws-settings-row__desc">{workspaceDescription(workspace)}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="ws-settings-reindex-btn"
-                    disabled={reindexingId === workspace.id}
-                    onClick={() => void handleReindexTables(workspace)}
+              {filteredWorkspaces.map((workspace) => {
+                const isActive = currentWorkspace?.id === workspace.id;
+                return (
+                  <li
+                    key={workspace.id}
+                    className={`ws-settings-row ${
+                      ownership.isShared(workspace) ? 'ws-settings-row--shared' : ''
+                    } ${isActive ? 'ws-settings-row--active' : ''}`}
                   >
-                    {reindexingId === workspace.id ? 'Indexing…' : 'Re-index tables now'}
-                  </button>
-                </li>
-              ))}
+                    <div className="ws-settings-row__icon" aria-hidden>
+                      <Building2 size={22} strokeWidth={1.75} />
+                    </div>
+                    <div className="ws-settings-row__body">
+                      <div className="ws-settings-row__title-row">
+                        <h3 className="ws-settings-row__title">{workspace.name}</h3>
+                        {ownershipBadge(workspace)}
+                        {workspace.is_default && (
+                          <span className="workspace-default-badge">Default</span>
+                        )}
+                        {isActive && (
+                          <span className="workspace-ownership-badge workspace-ownership-badge--owned">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <p className="ws-settings-row__desc">{workspaceDescription(workspace)}</p>
+                    </div>
+                    <div className="ws-settings-row__actions">
+                      <button
+                        type="button"
+                        className="ws-settings-switch-btn"
+                        disabled={isActive}
+                        onClick={() => handleSwitchWorkspace(workspace)}
+                      >
+                        {isActive ? 'Current' : 'Switch'}
+                      </button>
+                      <button
+                        type="button"
+                        className="ws-settings-reindex-btn"
+                        disabled={reindexingId === workspace.id}
+                        onClick={() => void handleReindexTables(workspace)}
+                      >
+                        {reindexingId === workspace.id ? 'Indexing…' : 'Re-index tables'}
+                      </button>
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </section>
@@ -347,7 +435,17 @@ export function WorkspacesPage() {
                 <button
                   type="button"
                   className="btn-gradient-primary empty-create-btn"
-                  onClick={() => setShowCreateModal(true)}
+                  onClick={() => {
+                    if (isWorkspacesAtLimit(workspaceUsage)) {
+                      toast.error(workspaceLimitUpgradeMessage(currentRole, 'workspaces'));
+                      return;
+                    }
+                    setShowCreateModal(true);
+                  }}
+                  disabled={isWorkspacesAtLimit(workspaceUsage)}
+                  title={
+                    isWorkspacesAtLimit(workspaceUsage) ? PLAN_LIMIT_REACHED_TOOLTIP : undefined
+                  }
                 >
                   Create Workspace
                 </button>
@@ -358,7 +456,9 @@ export function WorkspacesPage() {
               {filteredWorkspaces.map((workspace) => (
                 <div
                   key={workspace.id}
-                  className={`workspace-card ${currentWorkspace?.id === workspace.id ? 'active' : ''}`}
+                  className={`workspace-card ${currentWorkspace?.id === workspace.id ? 'active' : ''} ${
+                    ownership.isShared(workspace) ? 'workspace-card--shared' : ''
+                  }`}
                 >
                   <div
                     className="workspace-card-content"
@@ -371,6 +471,7 @@ export function WorkspacesPage() {
                     </div>
                     <div className="workspace-card-info">
                       <h3 className="workspace-card-name">{workspace.name}</h3>
+                      {ownershipBadge(workspace)}
                       {workspace.is_default && (
                         <span className="workspace-default-badge">Default</span>
                       )}

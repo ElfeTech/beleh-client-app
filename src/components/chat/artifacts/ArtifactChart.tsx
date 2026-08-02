@@ -1,17 +1,19 @@
 import {
-  BarChart as RechartsBarChart,
+  Area,
+  AreaChart as RechartsAreaChart,
   Bar,
-  LineChart as RechartsLineChart,
-  Line,
-  PieChart as RechartsPieChart,
-  Pie,
+  BarChart as RechartsBarChart,
+  CartesianGrid,
   Cell,
+  Legend,
+  Line,
+  LineChart as RechartsLineChart,
+  Pie,
+  PieChart as RechartsPieChart,
+  ResponsiveContainer,
+  Tooltip,
   XAxis,
   YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
 } from 'recharts';
 import type { ChartArtifactType, ChartData } from '../../../types/api';
 import { chartDataToSeries } from '../../../utils/artifactAdapters';
@@ -38,8 +40,10 @@ function formatAxisValue(value: number): string {
   return value.toFixed(2);
 }
 
+type CategoryChartType = Exclude<ChartArtifactType, 'scatter'>;
+
 interface ArtifactChartProps {
-  type: ChartArtifactType;
+  type: CategoryChartType;
   data: ChartData;
   isExpanded?: boolean;
 }
@@ -109,7 +113,7 @@ export function ArtifactChart({ type, data, isExpanded = false }: ArtifactChartP
     }));
     const size = isExpanded ? 650 : 450;
     const outer = isExpanded ? 180 : 115;
-    const inner = type === 'doughnut' || type === 'pie' ? (isExpanded ? 110 : 65) : 0;
+    const inner = type === 'doughnut' ? (isExpanded ? 110 : 65) : 0;
 
     return (
       <div className="modern-pie-chart">
@@ -190,7 +194,104 @@ export function ArtifactChart({ type, data, isExpanded = false }: ArtifactChartP
     );
   }
 
-  // bar (default)
+  if (type === 'area') {
+    return (
+      <div className="modern-bar-chart">
+        <ResponsiveContainer width="100%" height={height}>
+          <RechartsAreaChart data={points} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+            <XAxis
+              dataKey="name"
+              angle={-45}
+              textAnchor="end"
+              height={80}
+              tick={{ fill: '#6b7280', fontSize: 12 }}
+            />
+            <YAxis
+              tick={{ fill: '#6b7280', fontSize: 12 }}
+              tickFormatter={(v) => formatAxisValue(v)}
+            />
+            <Tooltip content={<BarTooltip />} />
+            {legend}
+            {multi ? (
+              seriesKeys.map((key, i) => (
+                <Area
+                  key={key}
+                  type="monotone"
+                  dataKey={key}
+                  name={key}
+                  stroke={COLORS[i % COLORS.length]}
+                  fill={COLORS[i % COLORS.length]}
+                  fillOpacity={0.28}
+                  strokeWidth={2}
+                />
+              ))
+            ) : (
+              <Area
+                type="monotone"
+                dataKey="value"
+                name={yLabel || 'Value'}
+                stroke={COLORS[0]}
+                fill={COLORS[0]}
+                fillOpacity={0.28}
+                strokeWidth={2}
+              />
+            )}
+          </RechartsAreaChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  // Horizontal category bars (`bar`)
+  if (type === 'bar') {
+    const barHeight = Math.max(height, Math.min(560, 48 + points.length * 36));
+    return (
+      <div className="modern-bar-chart">
+        <ResponsiveContainer width="100%" height={barHeight}>
+          <RechartsBarChart
+            layout="vertical"
+            data={points}
+            margin={{ top: 16, right: 30, left: 12, bottom: 16 }}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" horizontal={false} />
+            <XAxis
+              type="number"
+              tick={{ fill: '#6b7280', fontSize: 12 }}
+              tickFormatter={(v) => formatAxisValue(v)}
+            />
+            <YAxis
+              type="category"
+              dataKey="name"
+              width={96}
+              tick={{ fill: '#6b7280', fontSize: 12 }}
+            />
+            <Tooltip content={<BarTooltip />} />
+            {legend}
+            {multi ? (
+              seriesKeys.map((key, i) => (
+                <Bar
+                  key={key}
+                  dataKey={key}
+                  name={key}
+                  fill={COLORS[i % COLORS.length]}
+                  radius={[0, 4, 4, 0]}
+                />
+              ))
+            ) : (
+              <Bar dataKey="value" name={yLabel || 'Value'} radius={[0, 4, 4, 0]}>
+                {points.map((_, index) => (
+                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                ))}
+              </Bar>
+            )}
+          </RechartsBarChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
+  // Vertical columns (`column` , default category compare)
   return (
     <div className="modern-bar-chart">
       <ResponsiveContainer width="100%" height={height}>

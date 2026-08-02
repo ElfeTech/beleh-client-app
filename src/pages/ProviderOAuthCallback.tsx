@@ -38,7 +38,7 @@ export function ProviderOAuthCallback() {
       try {
         window.close();
       } catch {
-        /* ignore — some browsers block close if not opened by script */
+        /* ignore , some browsers block close if not opened by script */
       }
     }, 200);
 

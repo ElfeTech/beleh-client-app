@@ -1,4 +1,4 @@
-// Billing API types — matches /api/billing/* Stripe subscription contract
+// Billing API types , matches /api/billing/* Stripe subscription contract
 
 import type { PlanFeatures, PlanLimits } from './usage';
 
@@ -55,18 +55,24 @@ export interface PortalResponse {
 
 export type BillingSubscriptionStatus =
   | 'active'
+  | 'trial'
   | 'trialing'
+  | 'expired'
   | 'past_due'
   | 'canceled'
   | 'incomplete'
   | 'incomplete_expired'
   | 'unpaid'
-  | 'paused';
+  | 'paused'
+  | (string & {});
 
 export interface BillingSubscriptionPlan {
   plan_id: string;
   name: string;
   tier: string;
+  /** Period AI token pool when returned on the subscription plan payload. */
+  monthly_llm_token_limit?: number | null;
+  daily_llm_token_limit?: number | null;
 }
 
 export interface BillingSubscription {
@@ -78,4 +84,7 @@ export interface BillingSubscription {
   stripe_subscription_id: string | null;
   stripe_price_id: string | null;
   features: PlanFeatures;
+  /** ISO end of free trial when status is trial/trialing. */
+  trial_end?: string | null;
+  is_trial?: boolean;
 }

@@ -1,12 +1,14 @@
 import type { ProviderOAuthMessage } from '../types/provider';
 import { apiClient } from '../services/apiClient';
 import { invalidateProviderOrgCaches } from './providerCache';
+import { centeredPopupFeatures } from './centeredPopup';
 
 export type ProviderOAuthResult =
   | { ok: true; organization?: string }
   | { ok: false; error: string };
 
-const POPUP_FEATURES = 'width=600,height=760,menubar=no,toolbar=no,status=no,resizable=yes';
+const POPUP_WIDTH = 600;
+const POPUP_HEIGHT = 760;
 const POPUP_NAME = 'provider-oauth';
 const POPUP_POLL_MS = 400;
 /** Wait after popup.closed so a late postMessage / BroadcastChannel can still win. */
@@ -135,7 +137,11 @@ export function openProviderOAuthPopup(authorizeUrl: string): Promise<ProviderOA
       channel = null;
     }
 
-    const popup = window.open(authorizeUrl, POPUP_NAME, POPUP_FEATURES);
+    const popup = window.open(
+      authorizeUrl,
+      POPUP_NAME,
+      centeredPopupFeatures(POPUP_WIDTH, POPUP_HEIGHT),
+    );
     if (!popup) {
       finish({
         ok: false,
@@ -146,7 +152,7 @@ export function openProviderOAuthPopup(authorizeUrl: string): Promise<ProviderOA
 
     pollId = window.setInterval(() => {
       if (!popup.closed) return;
-      // Do not fail immediately — callback may still deliver via BroadcastChannel
+      // Do not fail immediately , callback may still deliver via BroadcastChannel
       // a few ms after close (common race with postMessage + window.close()).
       if (closeGraceId != null) return;
       closeGraceId = window.setTimeout(() => {
@@ -170,7 +176,7 @@ export function openProviderOAuthPopup(authorizeUrl: string): Promise<ProviderOA
  * On success, invalidates connections/health caches (and optional projects cache).
  *
  * If the popup closes without a signal (COOP / race), we still treat the flow as
- * successful when the connections list shows a new or refreshed grant — the
+ * successful when the connections list shows a new or refreshed grant , the
  * backend may have completed the exchange already.
  */
 export async function reconnectProviderOrganization(

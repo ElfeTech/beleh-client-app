@@ -32,7 +32,7 @@ export function migrateLegacyUiMemory(uid?: string | null): void {
   }
 
   try {
-    // Active workspace / session — already raw compat keys; normalize invalid values
+    // Active workspace / session , already raw compat keys; normalize invalid values
     const aw = getRawCompat('activeWorkspaceId');
     if (aw) writeActiveWorkspaceId(aw === 'undefined' ? null : aw);
 

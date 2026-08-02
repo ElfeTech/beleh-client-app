@@ -1,16 +1,29 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authService } from '../services/authService';
 import { resolveAuthenticatedHomePath } from '../lib/resolveAuthenticatedHome';
+import { captureInviteTokenFromLocation, persistInviteToken } from '../lib/inviteToken';
+import { completePendingInviteAccept } from '../lib/completePendingInviteAccept';
+import { safeReturnPath } from '../lib/publicRoutes';
 import { AuthGatewayTransition } from '../components/auth/AuthGatewayTransition';
 import { AuthGoogleSplitPage } from '../components/auth/AuthGoogleSplitPage';
 
 export function SignIn() {
   const [error, setError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [searchParams] = useSearchParams();
   const { user, loading: authLoadingState, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fromQuery = searchParams.get('invite_token')?.trim();
+    if (fromQuery) {
+      persistInviteToken(fromQuery);
+    } else {
+      captureInviteTokenFromLocation();
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (authLoadingState || !user) return;
@@ -21,6 +34,20 @@ export function SignIn() {
         const token =
           (await authService.getValidIdToken(false)) ?? (await authService.getValidIdToken(true));
         if (!token || cancelled) return;
+
+        const invitePath = await completePendingInviteAccept();
+        if (cancelled) return;
+        if (invitePath) {
+          navigate(invitePath, { replace: true });
+          return;
+        }
+
+        const returnTo = safeReturnPath(searchParams.get('next'));
+        if (returnTo) {
+          navigate(returnTo, { replace: true });
+          return;
+        }
+
         const path = await resolveAuthenticatedHomePath();
         if (!cancelled) navigate(path, { replace: true });
       } catch {
@@ -31,7 +58,7 @@ export function SignIn() {
     return () => {
       cancelled = true;
     };
-  }, [user, authLoadingState, navigate]);
+  }, [user, authLoadingState, navigate, searchParams]);
 
   const showGatewayTransition = authLoading || (!authLoadingState && !!user);
 

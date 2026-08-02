@@ -4,7 +4,7 @@ interface IconProps {
   readonly className?: string;
 }
 
-/** Snapped data cable — load / network failure */
+/** Snapped data cable , load / network failure */
 export function ConnectionLoadErrorIcon({ className }: IconProps) {
   return (
     <svg
@@ -97,7 +97,7 @@ export function ConnectionLoadErrorIcon({ className }: IconProps) {
   );
 }
 
-/** Broken key / revoked grant — reconnect required */
+/** Broken key / revoked grant , reconnect required */
 export function ConnectionReconnectIcon({ className }: IconProps) {
   return (
     <svg
@@ -191,7 +191,7 @@ export function ConnectionReconnectIcon({ className }: IconProps) {
   );
 }
 
-/** Flatlined signal — unhealthy org grant */
+/** Flatlined signal , unhealthy org grant */
 export function ConnectionUnhealthyIcon({ className }: IconProps) {
   return (
     <svg
@@ -251,7 +251,7 @@ export function ConnectionUnhealthyIcon({ className }: IconProps) {
   );
 }
 
-/** Empty org invite — first connect */
+/** Empty org invite , first connect */
 export function ConnectionEmptyOrgsIcon({ className }: IconProps) {
   return (
     <svg

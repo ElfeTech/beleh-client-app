@@ -15,7 +15,7 @@ function ValueMetric({ label, amount, currency, emphasize = false }: Readonly<Va
     <div className={`billing-value-metric${emphasize ? ' billing-value-metric--emphasize' : ''}`}>
       <span className="billing-value-metric__label">{label}</span>
       <span className="billing-value-metric__amount">
-        {amount != null ? formatUsd(amount, currency) : '—'}
+        {amount != null ? formatUsd(amount, currency) : ','}
       </span>
     </div>
   );

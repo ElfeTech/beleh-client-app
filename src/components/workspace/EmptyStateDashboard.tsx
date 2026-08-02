@@ -34,7 +34,7 @@ export function EmptyStateDashboard({
             <p className="empty-state-description">
               {showStartDemo
                 ? 'Try a quick demo: ask sample questions and see how AI turns your questions into charts and insights. Then upload your own data to get started for real.'
-                : 'This is where your insights come to life. Upload your first dataset to start chatting with your data, uncovering patterns, and generating reports—all in one place.'}
+                : 'This is where your insights come to life. Upload your first dataset to start chatting with your data, uncovering patterns, and generating reports,all in one place.'}
             </p>
           </div>
 

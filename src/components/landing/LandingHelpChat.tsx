@@ -1,9 +1,38 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowUpRight, Eraser, RefreshCw } from 'lucide-react';
-import { useLandingHelpChat } from '../../hooks/useLandingHelpChat';
+import { RefreshCw } from 'lucide-react';
+import { usePlatformHelpChat } from '../../hooks/useLandingHelpChat';
+import { LANDING_HELP_DB_NAME } from '../../lib/landingHelpDb';
 import { LANDING_HELP_SUGGESTED_PROMPTS } from './landingHelpPrompts';
 import { MarkdownText } from '../MarkdownText';
+import { HELP_CHAT_MAX_CHARS } from '../../constants/chatLimits';
 import './LandingHelpChat.css';
+
+function SparkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M12 2v4M12 18v4M2 12h4M18 12h4"
+        stroke="#06110d"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 12h16M13 5l7 7-7 7"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
 
 export function LandingHelpChat() {
   const {
@@ -15,11 +44,10 @@ export function LandingHelpChat() {
     sendMessage,
     clearChat,
     retrySession,
-  } = useLandingHelpChat();
+  } = usePlatformHelpChat({ persistenceDb: LANDING_HELP_DB_NAME });
 
   const [input, setInput] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const disabled = !sessionReady || Boolean(sessionError) || isStreaming;
 
@@ -32,16 +60,13 @@ export function LandingHelpChat() {
   const handleSubmit = (e?: FormEvent) => {
     e?.preventDefault();
     const text = input.trim();
-    if (!text) return;
+    if (!text || disabled) return;
     setInput('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-    }
     void sendMessage(text);
   };
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
       e.preventDefault();
       handleSubmit();
     }
@@ -50,36 +75,53 @@ export function LandingHelpChat() {
   const showSuggestions = messages.length === 0 && sessionReady && !sessionError;
 
   return (
-    <div className="landing-help-chat" aria-label="Ask about Beleh">
-      <div className="landing-help-chat__chrome">
-        <div className="landing-help-chat__dots">
-          <span className="landing-help-chat__dot landing-help-chat__dot--red" />
-          <span className="landing-help-chat__dot landing-help-chat__dot--yellow" />
-          <span className="landing-help-chat__dot landing-help-chat__dot--green" />
+    <div className="landing-demo-panel" id="askBeleh" aria-label="Ask about Beleh">
+      <div className="landing-demo-topbar">
+        <div className="who">
+          <span className="ico">
+            <SparkIcon />
+          </span>
+          <div>
+            <b>Ask Beleh</b>
+            <small>Questions about the platform</small>
+          </div>
         </div>
-        <span className="landing-help-chat__title">Ask Beleh</span>
-        <div className="landing-help-chat__chrome-actions">
-          <button
-            type="button"
-            className="landing-help-chat__clear"
-            disabled={!sessionReady || isStreaming}
-            onClick={() => void clearChat()}
-            aria-label="Clear conversation"
-          >
-            <Eraser size={12} strokeWidth={2.25} />
-            Clear
-          </button>
-          <span className="landing-help-chat__path">Product help</span>
-        </div>
+        <button
+          type="button"
+          className="clear-btn"
+          disabled={!sessionReady || isStreaming}
+          onClick={() => void clearChat()}
+        >
+          Clear
+        </button>
       </div>
 
-      <div className="landing-help-chat__body" ref={listRef}>
+      <div className="landing-demo-chips">
+        {LANDING_HELP_SUGGESTED_PROMPTS.map((prompt) => (
+          <button
+            key={prompt}
+            type="button"
+            className="chip"
+            disabled={disabled}
+            onClick={() => void sendMessage(prompt)}
+          >
+            {prompt}
+          </button>
+        ))}
+      </div>
+
+      <div className="landing-demo-body" ref={listRef}>
         {!sessionReady && !sessionError && (
-          <p className="landing-help-chat__status">Initializing help session…</p>
+          <div className="landing-demo-msg ai">
+            <span className="ico">
+              <SparkIcon />
+            </span>
+            <div className="bubble">Initializing help session…</div>
+          </div>
         )}
 
         {sessionError && (
-          <div className="landing-help-chat__banner landing-help-chat__banner--error">
+          <div className="landing-demo-banner landing-demo-banner--error">
             <p>{sessionError}</p>
             <button type="button" onClick={() => void retrySession()}>
               <RefreshCw size={14} />
@@ -89,77 +131,74 @@ export function LandingHelpChat() {
         )}
 
         {streamError && !sessionError && (
-          <div className="landing-help-chat__banner landing-help-chat__banner--warn">
+          <div className="landing-demo-banner landing-demo-banner--warn">
             <p>{streamError}</p>
           </div>
         )}
 
         {showSuggestions && (
-          <div className="landing-help-chat__suggestions">
-            <p className="landing-help-chat__suggestions-label">Try asking</p>
-            <div className="landing-help-chat__suggestion-chips">
-              {LANDING_HELP_SUGGESTED_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  className="landing-help-chat__chip"
-                  disabled={disabled}
-                  onClick={() => void sendMessage(prompt)}
-                >
-                  {prompt}
-                </button>
-              ))}
+          <div className="landing-demo-msg ai">
+            <span className="ico">
+              <SparkIcon />
+            </span>
+            <div className="bubble">
+              Hi , I&apos;m the Beleh assistant. Ask me anything about the platform: pricing,
+              security, how connections work, or whether you&apos;ll ever have to write SQL (you
+              won&apos;t).
             </div>
           </div>
         )}
 
         {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`landing-help-chat__row landing-help-chat__row--${msg.role}`}
-          >
+          <div key={msg.id} className={`landing-demo-msg ${msg.role === 'user' ? 'user' : 'ai'}`}>
             {msg.role === 'assistant' && (
-              <div className="landing-help-chat__avatar" aria-hidden>
-                AI
+              <span className="ico">
+                <SparkIcon />
+              </span>
+            )}
+            {msg.role === 'user' ? (
+              msg.content
+            ) : (
+              <div className={`bubble ${msg.status === 'error' ? 'bubble--error' : ''}`}>
+                {msg.status === 'streaming' && !msg.content ? (
+                  <div className="landing-demo-typing" aria-hidden>
+                    <i />
+                    <i />
+                    <i />
+                  </div>
+                ) : (
+                  <>
+                    <MarkdownText>{msg.content}</MarkdownText>
+                    {msg.status === 'streaming' && (
+                      <span className="landing-demo-caret" aria-hidden />
+                    )}
+                  </>
+                )}
               </div>
             )}
-            <div
-              className={`landing-help-chat__bubble landing-help-chat__bubble--${msg.role} ${msg.status === 'error' ? 'landing-help-chat__bubble--error' : ''}`}
-            >
-              {msg.role === 'assistant' ? (
-                <div className="landing-help-chat__text">
-                  <MarkdownText>{msg.content}</MarkdownText>
-                  {msg.status === 'streaming' && (
-                    <span className="landing-help-chat__caret" aria-hidden />
-                  )}
-                </div>
-              ) : (
-                <span className="landing-help-chat__text">{msg.content}</span>
-              )}
-            </div>
           </div>
         ))}
       </div>
 
-      <form className="landing-help-chat__composer" onSubmit={handleSubmit}>
-        <textarea
-          ref={textareaRef}
-          className="landing-help-chat__input"
-          rows={1}
+      <form className="landing-demo-input" onSubmit={handleSubmit}>
+        <input
+          type="text"
           placeholder="Ask anything about the platform…"
+          autoComplete="off"
           value={input}
           disabled={disabled}
-          onChange={(e) => setInput(e.target.value)}
+          maxLength={HELP_CHAT_MAX_CHARS}
+          onChange={(e) => setInput(e.target.value.slice(0, HELP_CHAT_MAX_CHARS))}
           onKeyDown={handleKeyDown}
           aria-label="Message"
         />
         <button
           type="submit"
-          className="landing-help-chat__send"
+          className="send"
           disabled={disabled || !input.trim()}
-          aria-label="Send message"
+          aria-label="Send"
         >
-          <ArrowUpRight size={16} strokeWidth={2.5} />
+          <SendIcon />
         </button>
       </form>
     </div>

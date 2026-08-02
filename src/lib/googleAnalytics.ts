@@ -96,7 +96,7 @@ export function initGoogleTagManager(): void {
   gtmInitialized = true;
 }
 
-/** SPA page view — use on route changes. */
+/** SPA page view , use on route changes. */
 export function trackPageView(pagePath: string, pageTitle?: string): void {
   if (!isProductionAnalytics() || typeof window === 'undefined') return;
 

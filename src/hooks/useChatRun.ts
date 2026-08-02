@@ -15,6 +15,7 @@ import {
 import {
   attachChatRun,
   cancelRun,
+  ChatRunNotFoundError,
   ChatStreamTransientError,
   ChatStreamUnavailableError,
   getActiveRun,
@@ -27,6 +28,7 @@ import {
   readStreamCapability,
   writeStreamCapability,
 } from '../lib/uiMemory/keys';
+import { quotaExceededFromStreamError, QuotaExceededError } from '../utils/apiErrorMessage';
 
 export type ChatRunSendOptions = {
   skipUserMessage?: boolean;
@@ -56,29 +58,37 @@ const POLL_INTERVAL_MS = 1500;
 const POLL_MAX_MS = 5 * 60 * 1000;
 const SSE_REATTACH_MAX = 3;
 
+const DEFAULT_SHIMMER_PHRASES = [
+  'Analyzing your data…',
+  'Checking the schema…',
+  'Running the analysis…',
+  'Preparing insights…',
+];
+
+const PHASE_SHIMMER_LEAD: Record<ChatRunPhase, string> = {
+  planning: 'Planning the analysis…',
+  querying: 'Querying your data…',
+  analyzing: 'Analyzing results…',
+  rendering: 'Preparing insights…',
+};
+
+/** Keep a rotating list so the shimmer never collapses to a single frozen phrase. */
 function phasePhrases(phase: ChatRunPhase | null, label: string | null): string[] {
-  if (label) return [label];
-  switch (phase) {
-    case 'planning':
-      return ['Planning the analysis…'];
-    case 'querying':
-      return ['Querying your data…'];
-    case 'analyzing':
-      return ['Analyzing results…'];
-    case 'rendering':
-      return ['Preparing insights…'];
-    default:
-      return [
-        'Analyzing your data…',
-        'Checking the schema…',
-        'Running the analysis…',
-        'Preparing insights…',
-      ];
-  }
+  const lead = (label && label.trim()) || (phase && PHASE_SHIMMER_LEAD[phase]) || null;
+
+  if (!lead) return DEFAULT_SHIMMER_PHRASES;
+
+  return [lead, ...DEFAULT_SHIMMER_PHRASES.filter((p) => p !== lead)];
 }
 
-function runFailureMessage(snap: RunStatus): string {
-  return snap.error_detail || snap.error_code || 'Run failed';
+function runFailureError(snap: RunStatus): Error {
+  const quota = quotaExceededFromStreamError({
+    error_code: snap.error_code ?? undefined,
+    detail: snap.error_detail ?? undefined,
+    message: snap.error_detail ?? undefined,
+  });
+  if (quota) return quota;
+  return new Error(snap.error_detail || snap.error_code || 'Run failed');
 }
 
 function isTerminalStatus(status: RunStatus['status']): boolean {
@@ -240,7 +250,7 @@ export function useChatRun(params: UseChatRunParams) {
         return true;
       }
       if (snap.status === 'failed' || snap.status === 'cancelled') {
-        await finishFailure(uidLocal, sid, new Error(runFailureMessage(snap)), prompt);
+        await finishFailure(uidLocal, sid, runFailureError(snap), prompt);
         return true;
       }
       return false;
@@ -305,8 +315,26 @@ export function useChatRun(params: UseChatRunParams) {
         message?: string;
         code?: string;
         retryable?: boolean;
+        limit_type?: string;
+        current_usage?: number;
+        limit?: number;
+        remaining?: number;
+        reset_at?: string | null;
+        upgrade_url?: string | null;
       }) => {
-        const err = new Error(payload.detail ?? payload.message ?? 'Stream error');
+        const quota =
+          quotaExceededFromStreamError(payload) ??
+          (payload.code?.toUpperCase() === 'QUOTA_EXCEEDED'
+            ? new QuotaExceededError({
+                error: 'quota_exceeded',
+                limit_type: 'llm_tokens',
+                current_usage: 0,
+                limit: 0,
+                remaining: 0,
+                message: payload.detail ?? payload.message ?? undefined,
+              })
+            : null);
+        const err = quota ?? new Error(payload.detail ?? payload.message ?? 'Stream error');
         void finishFailure(uidLocal, sid, err, prompt);
       },
     }),
@@ -451,9 +479,12 @@ export function useChatRun(params: UseChatRunParams) {
           patchChatRun(uidLocal, sid, { lastSeq: next }, workspaceIdRef.current);
         };
 
-        const result = runId
-          ? await attachChatRun(token, runId, seq, handlers, signal, onSeq)
-          : await startChatRun(
+        let result: Awaited<ReturnType<typeof startChatRun>>;
+        try {
+          if (runId) {
+            result = await attachChatRun(token, runId, seq, handlers, signal, onSeq);
+          } else {
+            result = await startChatRun(
               token,
               sid,
               {
@@ -465,8 +496,23 @@ export function useChatRun(params: UseChatRunParams) {
               signal,
               onSeq,
             );
-
-        writeStreamCapability(uidLocal, true);
+            writeStreamCapability(uidLocal, true);
+          }
+        } catch (err) {
+          // Stale run id / attach miss: fall through to idempotent start POST.
+          if (
+            runId &&
+            (err instanceof ChatRunNotFoundError ||
+              (err instanceof ChatStreamUnavailableError && err.status === 404))
+          ) {
+            runId = null;
+            seq = -1;
+            patchChatRun(uidLocal, sid, { runId: null, lastSeq: -1 }, workspaceIdRef.current);
+            setActiveRunId(null);
+            continue;
+          }
+          throw err;
+        }
 
         if (result.lastSeq != null) {
           seq = result.lastSeq;
@@ -542,9 +588,10 @@ export function useChatRun(params: UseChatRunParams) {
           sid = await ensureSessionRef.current(trimmed, datasourceId);
         }
 
-        const preferStream = readStreamCapability(uid) !== false;
+        // Interactive send always tries SSE first. A prior negative capability cache
+        // (often from a resume race on the first turn) must not pin later prompts to
+        // legacy , only a failed start POST should fall back for this turn.
         const wid = workspaceIdRef.current;
-
         setChatRun(
           uid,
           sid,
@@ -560,15 +607,10 @@ export function useChatRun(params: UseChatRunParams) {
             partialText: '',
             lastSeq: -1,
             startedAt: Date.now(),
-            mode: preferStream ? 'stream' : 'legacy',
+            mode: 'stream',
           },
           wid,
         );
-
-        if (!preferStream) {
-          await runLegacyBlocking(uid, sid, trimmed, datasourceId, clientTurnId, ac.signal);
-          return;
-        }
 
         try {
           await attachOrStartStream(
@@ -676,7 +718,7 @@ export function useChatRun(params: UseChatRunParams) {
     applyPersisted(pending);
   }, [uid, sessionId, workspaceId, applyPersisted]);
 
-  // Resume / reattach — deps are only uid/sessionId/workspaceId (helpers via refs)
+  // Resume / reattach , deps are only uid/sessionId/workspaceId (helpers via refs)
   useEffect(() => {
     if (!uid || !workspaceId) return;
 
@@ -689,6 +731,14 @@ export function useChatRun(params: UseChatRunParams) {
     // Ensure we are on the session that owns the run
     if (sessionId !== pending.sessionId) {
       restoreSessionIdRef.current?.(pending.sessionId);
+      return;
+    }
+
+    // send() already owns this turn (e.g. sessionId assigned mid-send). Do not start a
+    // second stream / legacy path , that race was marking streamCapability=false and
+    // forcing consecutive prompts onto legacy chat.
+    if (sendInFlightRef.current) {
+      applyPersistedRef.current(pending);
       return;
     }
 
@@ -720,45 +770,61 @@ export function useChatRun(params: UseChatRunParams) {
                 return;
               }
             } catch (err) {
-              if (err instanceof ChatStreamUnavailableError) {
-                writeStreamCapability(uid, false);
-              } else if (!(err instanceof ChatStreamTransientError)) {
+              if (err instanceof ChatRunNotFoundError) {
+                runId = null;
+                patchChatRun(uid, sid, { runId: null }, workspaceId);
+              } else if (err instanceof ChatStreamTransientError) {
+                /* keep runId; fall through to attach / poll */
+              } else if (!(err instanceof ChatStreamUnavailableError)) {
                 throw err;
+              } else {
+                // Unexpected unavailable on status , clear stale id, try start POST
+                runId = null;
+                patchChatRun(uid, sid, { runId: null }, workspaceId);
               }
             }
 
-            try {
-              await attachOrStartStreamRef.current(
-                uid,
-                sid,
-                pending.prompt,
-                pending.datasourceId,
-                pending.clientTurnId,
-                runId,
-                pending.lastSeq,
-                ac.signal,
-              );
-              return;
-            } catch (err) {
-              if (err instanceof ChatStreamTransientError) {
-                const polled = await pollRunUntilTerminalRef.current(
+            if (runId) {
+              try {
+                await attachOrStartStreamRef.current(
                   uid,
                   sid,
-                  runId,
                   pending.prompt,
+                  pending.datasourceId,
+                  pending.clientTurnId,
+                  runId,
+                  pending.lastSeq,
                   ac.signal,
                 );
-                if (polled || terminalHandledRef.current) return;
-              }
-              if (err instanceof ChatStreamUnavailableError) {
-                writeStreamCapability(uid, false);
-              } else {
-                throw err;
+                return;
+              } catch (err) {
+                if (err instanceof ChatStreamTransientError) {
+                  const polled = await pollRunUntilTerminalRef.current(
+                    uid,
+                    sid,
+                    runId,
+                    pending.prompt,
+                    ac.signal,
+                  );
+                  if (polled || terminalHandledRef.current) return;
+                }
+                if (
+                  err instanceof ChatRunNotFoundError ||
+                  (err instanceof ChatStreamUnavailableError && err.status === 404)
+                ) {
+                  runId = null;
+                  patchChatRun(uid, sid, { runId: null }, workspaceId);
+                } else if (err instanceof ChatStreamUnavailableError) {
+                  // Attach endpoint missing , try start POST before legacy
+                  runId = null;
+                } else {
+                  throw err;
+                }
               }
             }
           }
 
-          // No runId yet — discover via active run, then attach
+          // No runId yet , discover via active run, then attach
           const active = await getActiveRun(token, sid, ac.signal);
           if (active) {
             runId = active.run_id;
@@ -796,20 +862,29 @@ export function useChatRun(params: UseChatRunParams) {
           }
 
           // Idempotent re-POST with same client_turn_id
-          await attachOrStartStreamRef.current(
-            uid,
-            sid,
-            pending.prompt,
-            pending.datasourceId,
-            pending.clientTurnId,
-            null,
-            -1,
-            ac.signal,
-          );
-          return;
+          try {
+            await attachOrStartStreamRef.current(
+              uid,
+              sid,
+              pending.prompt,
+              pending.datasourceId,
+              pending.clientTurnId,
+              null,
+              -1,
+              ac.signal,
+            );
+            return;
+          } catch (err) {
+            if (err instanceof ChatStreamUnavailableError) {
+              writeStreamCapability(uid, false);
+            } else {
+              throw err;
+            }
+          }
         } catch (err) {
           if (err instanceof ChatStreamUnavailableError) {
-            writeStreamCapability(uid, false);
+            // Only the start POST should disable capability (handled above).
+            // Other unavailable probes fall through to legacy for this turn only.
           } else if (err instanceof ChatStreamTransientError) {
             if (pending.runId) {
               const polled = await pollRunUntilTerminalRef.current(
@@ -827,6 +902,8 @@ export function useChatRun(params: UseChatRunParams) {
             return;
           } else if (ac.signal.aborted) {
             return;
+          } else {
+            throw err;
           }
         }
       }
