@@ -359,3 +359,74 @@
     height: 480px;
   }
 }
+
+/* Light mode: elevated white card, stronger secondary text */
+html[data-landing-theme='light'] .landing-demo-panel,
+.landing-page[data-theme='light'] .landing-demo-panel {
+  background: #ffffff;
+  border: 1px solid rgba(11, 17, 32, 0.12);
+  box-shadow:
+    0 28px 60px -28px rgba(15, 40, 70, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+}
+
+html[data-landing-theme='light'] .landing-demo-topbar .who b,
+.landing-page[data-theme='light'] .landing-demo-topbar .who b {
+  color: #0b1120;
+}
+
+html[data-landing-theme='light'] .landing-demo-topbar .who small,
+.landing-page[data-theme='light'] .landing-demo-topbar .who small {
+  color: #4b5568;
+  font-weight: 500;
+}
+
+html[data-landing-theme='light'] .landing-demo-topbar .clear-btn,
+.landing-page[data-theme='light'] .landing-demo-topbar .clear-btn {
+  color: #4b5568;
+  border-color: rgba(11, 17, 32, 0.16);
+}
+
+html[data-landing-theme='light'] .landing-demo-chips .chip,
+.landing-page[data-theme='light'] .landing-demo-chips .chip {
+  color: #3a4558;
+  background: #f3f5f2;
+  border-color: rgba(11, 17, 32, 0.14);
+}
+
+html[data-landing-theme='light'] .landing-demo-chips .chip:hover:not(:disabled),
+.landing-page[data-theme='light'] .landing-demo-chips .chip:hover:not(:disabled) {
+  color: #0b1120;
+  background: #e8ebe6;
+  border-color: var(--teal-dim);
+}
+
+html[data-landing-theme='light'] .landing-demo-msg.ai,
+.landing-page[data-theme='light'] .landing-demo-msg.ai {
+  color: #1f2937;
+}
+
+html[data-landing-theme='light'] .landing-demo-msg.ai .bubble,
+.landing-page[data-theme='light'] .landing-demo-msg.ai .bubble {
+  background: #f5f7f4;
+  border-color: rgba(11, 17, 32, 0.1);
+  color: #1f2937;
+}
+
+html[data-landing-theme='light'] .landing-demo-msg.user,
+.landing-page[data-theme='light'] .landing-demo-msg.user {
+  background: #e8eefb;
+  color: #0b1120;
+}
+
+html[data-landing-theme='light'] .landing-demo-input input,
+.landing-page[data-theme='light'] .landing-demo-input input {
+  background: #f5f7f4;
+  border-color: rgba(11, 17, 32, 0.14);
+  color: #0b1120;
+}
+
+html[data-landing-theme='light'] .landing-demo-input input::placeholder,
+.landing-page[data-theme='light'] .landing-demo-input input::placeholder {
+  color: #6b7280;
+}

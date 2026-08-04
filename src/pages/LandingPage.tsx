@@ -3,6 +3,7 @@ import { LandingNav, useLandingTheme } from '../components/landing/LandingNav';
 import { LandingHero } from '../components/landing/LandingHero';
 import { LandingProblem } from '../components/landing/LandingProblem';
 import { LandingHow } from '../components/landing/LandingHow';
+import { LandingPlatformEmulator } from '../components/landing/LandingPlatformEmulator';
 import { LandingFeatures } from '../components/landing/LandingFeatures';
 import { LandingSavings } from '../components/landing/LandingSavings';
 import { LandingProof } from '../components/landing/LandingProof';
@@ -65,6 +66,7 @@ export default function LandingPage() {
       <LandingHero />
       <LandingProblem />
       <LandingHow />
+      <LandingPlatformEmulator />
       <LandingFeatures />
       <LandingSavings />
       <LandingProof />

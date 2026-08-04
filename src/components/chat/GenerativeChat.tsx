@@ -48,6 +48,7 @@ import { getAskPromptsFromArtifacts } from '../../utils/artifactAdapters';
 import { MarkdownText } from '../MarkdownText';
 import { CopyTextButton } from './CopyTextButton';
 import { readComposerDraft, writeComposerDraft } from '../../lib/uiMemory';
+import { shuffleArray } from '../../lib/shuffleArray';
 import {
   canShowDemoOnboardingCta,
   connectAndWaitReady,
@@ -59,6 +60,7 @@ import {
   readDemoCopy,
   type DemoOnboardingCopy,
 } from '../../lib/workspaceDemo';
+import { resolveDemoSuggestedPrompts } from './ChatWelcome';
 
 const CLARIFY_SOURCE_RE =
   /\b(which|what|select|choose|pick|specify|clarify).{0,40}\b(source|dataset|database|datasource|connector|table)\b|\b(source|dataset|database|datasource).{0,20}\b(which|clarify|specify)\b/i;
@@ -109,6 +111,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   const [demoCopy, setDemoCopy] = useState<DemoOnboardingCopy | null>(null);
   const [demoConnecting, setDemoConnecting] = useState(false);
   const [demoStatusLoading, setDemoStatusLoading] = useState(false);
+  /** Sample prompts the user already sent — excluded from later previews. */
+  const [usedDemoPrompts, setUsedDemoPrompts] = useState<string[]>([]);
 
   const chatBlockReason = getChatQuotaBlockReason(workspaceUsage);
   const chatQuotaBlocked = !canSendChat(workspaceUsage);
@@ -190,8 +194,16 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       const fromApi = copyFromDemoStatus(status);
       const cached = readDemoCopy(workspaceId);
       if (fromApi) {
-        setDemoCopy(fromApi);
-        persistDemoCopy(workspaceId, fromApi);
+        const merged: DemoOnboardingCopy = {
+          headline: fromApi.headline,
+          message: fromApi.message,
+          suggested_prompts:
+            fromApi.suggested_prompts.length > 0
+              ? fromApi.suggested_prompts
+              : (cached?.suggested_prompts ?? []),
+        };
+        setDemoCopy(merged);
+        persistDemoCopy(workspaceId, merged);
       } else if (status.connected && cached) {
         setDemoCopy(cached);
       } else if (status.connected) {
@@ -235,7 +247,9 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       const result = await connectAndWaitReady(token, workspaceId, {
         usage: workspaceUsage,
       });
+      // Prefer connect-response prompts immediately so chips render as soon as READY.
       setDemoCopy(result.copy);
+      persistDemoCopy(workspaceId, result.copy);
       setSelectedDatasourceId(result.datasource.id);
 
       try {
@@ -253,6 +267,19 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       }
 
       await Promise.all([refreshDatasources(), refreshWorkspaceUsage(), refreshDemoStatus()]);
+      // refreshDemoStatus may overwrite copy; keep connect prompts if status omits them.
+      setDemoCopy((prev) => {
+        const prompts = prev?.suggested_prompts?.length
+          ? prev.suggested_prompts
+          : result.copy.suggested_prompts;
+        const next = {
+          headline: prev?.headline?.trim() || result.copy.headline,
+          message: prev?.message?.trim() || result.copy.message,
+          suggested_prompts: prompts,
+        };
+        persistDemoCopy(workspaceId, next);
+        return next;
+      });
       toast.success(result.already_connected ? 'Sample data ready.' : 'Sample data connected.');
     } catch (err) {
       if (isQuotaExceededError(err)) {
@@ -458,24 +485,15 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       // Sort by timestamp ascending for display
       setLocalMessages(mapped.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
     } else if (!loadingHistory) {
-      if (activeSessionId) {
-        const welcome: Message = {
-          id: 'welcome',
-          role: 'assistant',
-          content:
-            "Hello! I'm your AI Data Assistant. To get started, select a data source from the dropdown below or just start typing for a general conversation.",
-          timestamp: new Date(),
-        };
-        setLocalMessages((prev) => {
-          const hasRealThread = prev.some(
-            (m) => m.role === 'user' || (m.role === 'assistant' && m.id !== 'welcome'),
-          );
-          if (hasRealThread) return prev;
-          return [welcome];
-        });
-      } else {
-        setLocalMessages([]);
-      }
+      // Empty sessions use ChatWelcome (incl. demo suggested_prompts chips).
+      // Do not inject a placeholder assistant bubble that would compete with it.
+      setLocalMessages((prev) => {
+        const hasRealThread = prev.some(
+          (m) => m.role === 'user' || (m.role === 'assistant' && m.id !== 'welcome'),
+        );
+        if (hasRealThread) return prev;
+        return [];
+      });
     }
   }, [apiMessages, loadingHistory, activeSessionId]);
 
@@ -775,17 +793,33 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   };
 
   const handleWelcomePrompt = (prompt: string) => {
+    const trimmed = prompt.trim();
+    if (trimmed) {
+      setUsedDemoPrompts((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    }
     setInput(prompt);
     void sendMessage(prompt);
   };
 
+  const handleSuggestedPrompt = (prompt: string) => {
+    const trimmed = prompt.trim();
+    if (trimmed) {
+      setUsedDemoPrompts((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]));
+    }
+    void sendMessage(prompt);
+  };
+
+  // Empty active sessions (e.g. right after demo connect) still show ChatWelcome
+  // so API suggested_prompts can be clicked as the first user message.
   const showWelcomeScreen = useMemo(() => {
-    if (activeSessionId) return false;
     if (loadingHistory) return false;
-    if ((apiMessages?.length ?? 0) > 0) return false;
     if (isWaiting) return false;
-    return localMessages.length === 0;
-  }, [activeSessionId, loadingHistory, apiMessages, localMessages, isWaiting]);
+    if ((apiMessages?.length ?? 0) > 0) return false;
+    const hasRealThread = localMessages.some(
+      (m) => m.id !== 'welcome' && (m.role === 'user' || m.role === 'assistant'),
+    );
+    return !hasRealThread;
+  }, [loadingHistory, apiMessages, localMessages, isWaiting]);
 
   const hasDatasources = hasWorkspaceSources;
   // Avoid flashing the empty-state CTA before the first datasource/connector fetch settles.
@@ -793,16 +827,93 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     !workspaceLoading &&
     (hasDatasources || workspaceContext?.workspace.id === currentWorkspace?.id);
 
-  const latestAssistantWithSuggestionsId = useMemo(() => {
+  const selectedIsDemo = useMemo(() => {
+    if (!selectedDatasourceId) return Boolean(demoStatus?.connected);
+    const ds = datasources.find((d) => d.id === selectedDatasourceId);
+    return (
+      Boolean(ds?.is_demo) ||
+      Boolean(demoStatus?.connected && demoStatus.datasource?.id === selectedDatasourceId)
+    );
+  }, [selectedDatasourceId, datasources, demoStatus]);
+
+  const latestAssistantId = useMemo(() => {
     for (let i = localMessages.length - 1; i >= 0; i--) {
       const m = localMessages[i];
-      if (m.role !== 'assistant' || m.id === 'welcome') continue;
+      if (m.role === 'assistant' && m.id !== 'welcome' && !m.failure) return m.id;
+    }
+    return null;
+  }, [localMessages]);
+
+  /** Sample-datasource follow-ups: reshuffle remaining (unused) prompts per assistant turn. */
+  const demoPromptPool = useMemo(
+    () => resolveDemoSuggestedPrompts(demoCopy?.suggested_prompts),
+    [demoCopy?.suggested_prompts],
+  );
+
+  const shuffledDemoFollowUps = useMemo(() => {
+    if (!selectedIsDemo || !latestAssistantId) return [];
+    const used = new Set(usedDemoPrompts.map((p) => p.trim()));
+    const remaining = demoPromptPool.filter((p) => !used.has(p.trim()));
+    return shuffleArray(remaining);
+    // latestAssistantId intentionally triggers a fresh shuffle per response
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reshuffle when turn or used set changes
+  }, [selectedIsDemo, latestAssistantId, demoPromptPool, usedDemoPrompts]);
+
+  const demoSuggestionsExhausted =
+    selectedIsDemo &&
+    Boolean(latestAssistantId) &&
+    demoPromptPool.length > 0 &&
+    shuffledDemoFollowUps.length === 0;
+
+  // Keep used set in sync with user messages that match the sample prompt pool.
+  useEffect(() => {
+    if (!selectedIsDemo || demoPromptPool.length === 0) return;
+    const pool = new Set(demoPromptPool.map((p) => p.trim()));
+    const fromThread = localMessages
+      .filter((m) => m.role === 'user')
+      .map((m) => m.content.trim())
+      .filter((text) => pool.has(text));
+    if (fromThread.length === 0) return;
+    setUsedDemoPrompts((prev) => {
+      let changed = false;
+      const next = [...prev];
+      for (const text of fromThread) {
+        if (!next.includes(text)) {
+          next.push(text);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [selectedIsDemo, demoPromptPool, localMessages]);
+
+  useEffect(() => {
+    if (!selectedIsDemo) setUsedDemoPrompts([]);
+  }, [selectedIsDemo]);
+
+  const latestAssistantWithSuggestionsId = useMemo(() => {
+    if (
+      selectedIsDemo &&
+      latestAssistantId &&
+      (shuffledDemoFollowUps.length > 0 || demoSuggestionsExhausted)
+    ) {
+      return latestAssistantId;
+    }
+    for (let i = localMessages.length - 1; i >= 0; i--) {
+      const m = localMessages[i];
+      if (m.role !== 'assistant' || m.id === 'welcome' || m.failure) continue;
       const meta = m.metadata as ChatMessageMetadata | undefined;
       const prompts = getAskPromptsFromArtifacts(meta?.artifacts ?? []);
       return prompts.length ? m.id : null;
     }
     return null;
-  }, [localMessages]);
+  }, [
+    localMessages,
+    selectedIsDemo,
+    latestAssistantId,
+    shuffledDemoFollowUps.length,
+    demoSuggestionsExhausted,
+  ]);
 
   const handleConnectorSelect = (connectorId: string) => {
     setInput(`I want to connect ${connectorId}`);
@@ -840,6 +951,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
               demoHeadline={demoCopy?.headline}
               demoMessage={demoCopy?.message}
               demoPrompts={demoCopy?.suggested_prompts}
+              preferDemoPrompts={selectedIsDemo}
+              usedPrompts={usedDemoPrompts}
             />
           ) : null}
           <AnimatePresence initial={false}>
@@ -970,13 +1083,20 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                         msg.id === latestAssistantWithSuggestionsId &&
                         (() => {
                           const meta = msg.metadata as ChatMessageMetadata | undefined;
-                          const suggested = getAskPromptsFromArtifacts(meta?.artifacts ?? []);
-                          if (!suggested.length) return null;
+                          const fromArtifacts = getAskPromptsFromArtifacts(meta?.artifacts ?? []);
+                          const suggested = selectedIsDemo ? shuffledDemoFollowUps : fromArtifacts;
+                          if (!suggested.length && !demoSuggestionsExhausted) return null;
                           return (
                             <SuggestedPrompts
                               prompts={suggested}
-                              onSelect={(prompt) => void sendMessage(prompt)}
+                              onSelect={handleSuggestedPrompt}
                               disabled={isWaiting}
+                              label={selectedIsDemo ? 'Try another sample question' : undefined}
+                              exhaustedHint={
+                                demoSuggestionsExhausted
+                                  ? "You've tried the sample questions — ask your own about this dataset to explore further."
+                                  : null
+                              }
                             />
                           );
                         })()}

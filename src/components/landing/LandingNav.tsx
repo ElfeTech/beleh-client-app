@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTheme, type Theme } from '../../context/ThemeContext';
 import logo from '../../assets/logo.webp';
 
 interface LandingNavProps {
@@ -93,23 +94,32 @@ export function LandingNav({ isScrolled, isLight, onToggleTheme }: LandingNavPro
   );
 }
 
-/** Session-only theme; no storage. Applies `data-landing-theme` on documentElement. */
-export function useLandingTheme() {
-  const [isLight, setIsLight] = useState(false);
+function applyLandingThemeAttr(theme: Theme) {
+  if (theme === 'light') {
+    document.documentElement.dataset.landingTheme = 'light';
+  } else {
+    delete document.documentElement.dataset.landingTheme;
+  }
+}
 
-  useEffect(() => {
-    if (isLight) {
-      document.documentElement.dataset.landingTheme = 'light';
-    } else {
-      delete document.documentElement.dataset.landingTheme;
-    }
+/**
+ * Landing theme follows the shared app preference:
+ * - default / stored `system` → OS light/dark
+ * - user toggle → persist explicit `light` or `dark` in localStorage
+ */
+export function useLandingTheme() {
+  const { theme, setThemePreference } = useTheme();
+  const isLight = theme === 'light';
+
+  useLayoutEffect(() => {
+    applyLandingThemeAttr(theme);
     return () => {
       delete document.documentElement.dataset.landingTheme;
     };
-  }, [isLight]);
+  }, [theme]);
 
   return {
     isLight,
-    toggleTheme: () => setIsLight((v) => !v),
+    toggleTheme: () => setThemePreference(isLight ? 'dark' : 'light'),
   };
 }

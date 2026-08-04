@@ -1,4 +1,6 @@
 import { Sparkles, Database, Play } from 'lucide-react';
+import { useMemo } from 'react';
+import { shuffleArray } from '../../lib/shuffleArray';
 import './ChatWelcome.css';
 
 export interface EnterprisePromptCard {
@@ -31,6 +33,11 @@ const SAMPLE_FALLBACK_PROMPTS = [
   'What insights stand out in the sample data?',
 ];
 
+export function resolveDemoSuggestedPrompts(apiPrompts?: string[] | null): string[] {
+  const fromApi = (apiPrompts ?? []).map((p) => p.trim()).filter(Boolean);
+  return fromApi.length > 0 ? fromApi : [...SAMPLE_FALLBACK_PROMPTS];
+}
+
 interface ChatWelcomeProps {
   onPromptClick: (prompt: string) => void;
   schemaTableCount?: number;
@@ -47,6 +54,10 @@ interface ChatWelcomeProps {
   demoHeadline?: string | null;
   demoMessage?: string | null;
   demoPrompts?: string[] | null;
+  /** Force chip-style demo prompts when the selected source is the sample dataset. */
+  preferDemoPrompts?: boolean;
+  /** Prompts already sent — omit from welcome chips. */
+  usedPrompts?: readonly string[];
 }
 
 export function ChatWelcome({
@@ -62,7 +73,9 @@ export function ChatWelcome({
   demoHeadline,
   demoMessage,
   demoPrompts,
-}: ChatWelcomeProps) {
+  preferDemoPrompts = false,
+  usedPrompts = [],
+}: Readonly<ChatWelcomeProps>) {
   const showEmptyOnboarding =
     !sourcesLoading && !hasDatasources && (Boolean(onConnectDatasource) || showDemoCta);
   const showDualCta = showEmptyOnboarding && showDemoCta && Boolean(onStartDemo);
@@ -70,11 +83,19 @@ export function ChatWelcome({
 
   const apiPrompts = (demoPrompts ?? []).filter((p) => p.trim().length > 0);
   const demoBoundWelcome = Boolean(
-    demoHeadline?.trim() || demoMessage?.trim() || apiPrompts.length,
+    preferDemoPrompts || demoHeadline?.trim() || demoMessage?.trim() || apiPrompts.length,
   );
-  const chipPrompts = apiPrompts.length > 0 ? apiPrompts : SAMPLE_FALLBACK_PROMPTS;
+  const usedKey = usedPrompts.join('\0');
+  const demoPromptsKey = `${(demoPrompts ?? []).join('\0')}::${usedKey}`;
+  const chipPrompts = useMemo(() => {
+    const used = new Set(usedPrompts.map((p) => p.trim()).filter(Boolean));
+    const remaining = resolveDemoSuggestedPrompts(demoPrompts).filter((p) => !used.has(p.trim()));
+    return shuffleArray(remaining);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by demoPromptsKey
+  }, [demoPromptsKey]);
   const useDemoPrompts = hasDatasources && demoBoundWelcome;
-  const showPrompts = !sourcesLoading && hasDatasources;
+  const showPrompts =
+    !sourcesLoading && hasDatasources && (!useDemoPrompts || chipPrompts.length > 0);
 
   const title = showDualCta
     ? 'Try Beleh on sample data'

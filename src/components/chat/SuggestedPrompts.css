@@ -25,6 +25,28 @@
   width: 100%;
 }
 
+/* Large screens: sit side-by-side with dynamic widths that wrap by content. */
+@media (min-width: 640px) {
+  .suggested-prompts__list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .suggested-prompts__btn {
+    width: auto;
+    flex: 1 1 13.5rem;
+    max-width: calc(50% - 0.25rem);
+  }
+}
+
+@media (min-width: 960px) {
+  .suggested-prompts__btn {
+    flex-basis: 12rem;
+    max-width: calc(33.333% - 0.35rem);
+  }
+}
+
 .suggested-prompts__btn {
   display: flex;
   align-items: center;
@@ -87,6 +109,17 @@
   transform: translateX(2px);
 }
 
+.suggested-prompts__exhausted {
+  margin: 0;
+  padding: 0.85rem 1rem;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--text-secondary, var(--text-muted));
+  background: color-mix(in srgb, var(--ds-surface-muted) 92%, var(--primary-500) 4%);
+  border: 1px dashed color-mix(in srgb, var(--primary-500) 35%, var(--border-primary));
+  border-radius: var(--radius-md, 0.5rem);
+}
+
 html[data-theme='dark'] .suggested-prompts__btn {
   background: color-mix(in srgb, var(--bg-secondary) 90%, var(--primary-500) 6%);
   border-color: var(--border-primary);
@@ -96,4 +129,10 @@ html[data-theme='dark'] .suggested-prompts__btn {
 html[data-theme='dark'] .suggested-prompts__btn:hover:not(:disabled) {
   background: color-mix(in srgb, var(--bg-tertiary) 85%, var(--primary-500) 12%);
   border-color: var(--primary-400);
+}
+
+html[data-theme='dark'] .suggested-prompts__exhausted {
+  background: color-mix(in srgb, var(--bg-secondary) 92%, var(--primary-500) 6%);
+  border-color: color-mix(in srgb, var(--primary-400) 40%, var(--border-primary));
+  color: var(--text-secondary, var(--text-muted));
 }

@@ -123,10 +123,6 @@ export function LandingHero() {
 
       <div className="landing-wrap landing-hero-grid">
         <div>
-          <div className="landing-hero-badge">
-            <span className="pip">NEW</span>
-            <span className="txt">Ask your data a question. Get a real answer.</span>
-          </div>
           <h1>
             Your data has a lot to say about your business.
             <br />
