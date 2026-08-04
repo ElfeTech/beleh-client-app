@@ -9,10 +9,34 @@ interface ConnectorOption {
 }
 
 const CONNECTORS: ConnectorOption[] = [
-  { id: 'postgres', name: 'PostgreSQL', icon: Database, description: 'Connect to your RDS or local instance', type: 'db' },
-  { id: 'mysql', name: 'MySQL', icon: Database, description: 'Connect to your MySQL database', type: 'db' },
-  { id: 'excel', name: 'Excel / CSV', icon: FileUp, description: 'Upload spreadsheets or text files', type: 'file' },
-  { id: 'gsheets', name: 'Google Sheets', icon: Globe, description: 'Connect to a shared Google Sheet', type: 'saas' },
+  {
+    id: 'postgres',
+    name: 'PostgreSQL',
+    icon: Database,
+    description: 'Connect to your RDS or local instance',
+    type: 'db',
+  },
+  {
+    id: 'mysql',
+    name: 'MySQL',
+    icon: Database,
+    description: 'Connect to your MySQL database',
+    type: 'db',
+  },
+  {
+    id: 'excel',
+    name: 'Excel / CSV',
+    icon: FileUp,
+    description: 'Upload spreadsheets or text files',
+    type: 'file',
+  },
+  {
+    id: 'gsheets',
+    name: 'Google Sheets',
+    icon: Globe,
+    description: 'Connect to a shared Google Sheet',
+    type: 'saas',
+  },
 ];
 
 export function ConnectorWidget({ onSelect }: { onSelect: (id: string) => void }) {

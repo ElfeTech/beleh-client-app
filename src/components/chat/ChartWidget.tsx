@@ -26,9 +26,7 @@ export function ChartWidget({ title, summary, children }: ChartWidgetProps) {
           </button>
         </div>
       </div>
-      <div className="p-6 min-h-[300px] flex items-center justify-center">
-        {children}
-      </div>
+      <div className="p-6 min-h-[300px] flex items-center justify-center">{children}</div>
       <div className="px-6 py-3 bg-muted/10 border-t border-border flex items-center justify-between">
         <span className="text-[10px] text-muted-foreground font-medium uppercase">Live Data</span>
         <button className="text-[10px] font-bold text-primary hover:underline">

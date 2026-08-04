@@ -1,4 +1,4 @@
-import { useState, useContext, useMemo } from 'react';
+import { useState, useContext, useMemo, useEffect } from 'react';
 import {
   MessageSquare,
   Database,
@@ -6,38 +6,39 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
-  History,
-  Sun,
-  Moon,
-  Monitor,
+  Search,
   LogOut,
   RefreshCw,
   LayoutGrid,
-  ArrowLeft,
-  TrendingUp,
   MoreVertical,
   Pencil,
   Trash2,
 } from 'lucide-react';
 import { NavLink, useLocation, useParams, useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import logoImage from '../../assets/logo.webp';
-import { ChatSessionContext } from '../../context/ChatSessionContext';
-import { useTheme, type ThemePreference } from '../../context/ThemeContext';
+import { ChatSessionContext, useChatSession } from '../../context/ChatSessionContext';
 import { useAuth } from '../../context/useAuth';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useUsage } from '../../context/UsageContext';
 import { ContextMenu } from '../common/ContextMenu';
 import { ConfirmDialog } from '../common/ConfirmDialog';
+import { PromptDialog } from '../common/PromptDialog';
+import { workspaceChatPath } from '../../hooks/useSessionInUrl';
+import { WorkspaceRegionDropdown } from './WorkspaceRegionDropdown';
+import {
+  readActiveWorkspaceId,
+  readSidebarCollapsed,
+  writeSidebarCollapsed,
+} from '../../lib/uiMemory';
+import { SEARCH_VISIBILITY_THRESHOLD } from '../../constants/pagination';
 import './UnifiedSidebar.css';
 
-const THEME_OPTIONS: { value: ThemePreference; label: string; icon: typeof Sun }[] = [
-  { value: 'light', label: 'Light theme', icon: Sun },
-  { value: 'dark', label: 'Dark theme', icon: Moon },
-  { value: 'system', label: 'Match system', icon: Monitor },
-];
-
-function initialsFromUser(displayName: string | null | undefined, email: string | null | undefined): string {
+function initialsFromUser(
+  displayName: string | null | undefined,
+  email: string | null | undefined,
+): string {
   const name = (displayName || '').trim();
   if (name) {
     return name
@@ -52,29 +53,71 @@ function initialsFromUser(displayName: string | null | undefined, email: string 
   return '?';
 }
 
-export function UnifiedSidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+export type UnifiedSidebarVariant = 'rail' | 'drawer';
+
+interface UnifiedSidebarProps {
+  variant?: UnifiedSidebarVariant;
+}
+
+export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
+  const isDrawer = variant === 'drawer';
+  const { user, signOut } = useAuth();
+  const [isCollapsed, setIsCollapsed] = useState(() =>
+    user?.uid ? readSidebarCollapsed(user.uid) : false,
+  );
+  const sidebarUid = user?.uid ?? '';
+  const [sidebarIdentity, setSidebarIdentity] = useState(sidebarUid);
+  if (sidebarIdentity !== sidebarUid) {
+    setSidebarIdentity(sidebarUid);
+    setIsCollapsed(sidebarUid ? readSidebarCollapsed(sidebarUid) : false);
+  }
+
   const [refreshingChats, setRefreshingChats] = useState(false);
+  const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
   const { id: workspaceId } = useParams<{ id: string }>();
   const path = location.pathname;
-  const { user, signOut } = useAuth();
-  const { currentWorkspace } = useWorkspace();
+  const { currentWorkspace, workspaces, workspaceUsage } = useWorkspace();
   const { summary, currentUsage } = useUsage();
   const chatContext = useContext(ChatSessionContext);
-  const { themePreference, setThemePreference } = useTheme();
+  const {
+    loadWorkspaceSessions,
+    loadMoreSessions,
+    sessionsHasMore,
+    isLoadingMoreSessions,
+    invalidateWorkspaceSessions,
+    isLoading: sessionsLoading,
+  } = useChatSession();
+
+  useEffect(() => {
+    if (!user?.uid) return;
+    writeSidebarCollapsed(user.uid, isCollapsed);
+  }, [user?.uid, isCollapsed]);
 
   const sessions = chatContext?.sessions ?? [];
   const activeSessionId = chatContext?.activeSessionId ?? null;
-  const refreshSessions = chatContext?.refreshSessions;
-  const sessionsLoading = chatContext?.isLoading ?? false;
 
-  // Session Actions State
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
   const [actionSessionId, setActionSessionId] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [showRenamePrompt, setShowRenamePrompt] = useState(false);
+  const [renameDefaultTitle, setRenameDefaultTitle] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+
+  const collapsed = !isDrawer && isCollapsed;
+
+  const filteredSessions = useMemo(() => {
+    const q = sessionSearchQuery.trim().toLowerCase();
+    if (!q) return sessions;
+    return sessions.filter((session) => {
+      const title = (session.title || `Chat ${session.id.slice(0, 8)}`).toLowerCase();
+      return title.includes(q) || session.id.toLowerCase().includes(q);
+    });
+  }, [sessions, sessionSearchQuery]);
 
   const handleSessionMenuClick = (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
@@ -82,35 +125,60 @@ export function UnifiedSidebar() {
     setActionSessionId(sessionId);
   };
 
-  const handleRename = async () => {
+  const handleRenameRequest = () => {
     if (!actionSessionId) return;
-    const session = sessions.find(s => s.id === actionSessionId);
+    const session = sessions.find((s) => s.id === actionSessionId);
     if (!session) return;
-    
-    const newTitle = window.prompt('Rename chat session:', session.title || '');
-    if (newTitle !== null && newTitle.trim() !== '' && newTitle !== session.title) {
-        await chatContext?.renameSession(actionSessionId, newTitle.trim());
-    }
+    setRenameDefaultTitle(session.title || '');
+    setShowRenamePrompt(true);
     setMenuAnchorEl(null);
-    setActionSessionId(null);
+  };
+
+  const handleRenameConfirm = async (newTitle: string) => {
+    if (!actionSessionId) return;
+    const session = sessions.find((s) => s.id === actionSessionId);
+    if (!session || newTitle === session.title) {
+      setShowRenamePrompt(false);
+      setActionSessionId(null);
+      return;
+    }
+    setIsRenaming(true);
+    try {
+      await chatContext?.renameSession(actionSessionId, newTitle);
+      setShowRenamePrompt(false);
+      setActionSessionId(null);
+    } finally {
+      setIsRenaming(false);
+    }
   };
 
   const handleDelete = async () => {
-    if (!actionSessionId) return;
+    const sessionId = actionSessionId;
+    if (!sessionId) return;
     setIsDeleting(true);
     try {
-        await chatContext?.deleteSession(actionSessionId);
+      const ok = await chatContext?.deleteSession(sessionId);
+      if (ok) {
+        toast.success('Chat deleted');
         setShowDeleteConfirm(false);
+        if (activeSessionId === sessionId && effectiveWorkspaceId) {
+          navigate(workspaceChatPath(effectiveWorkspaceId), { replace: true });
+        }
+      } else {
+        toast.error('Could not delete this chat. Please try again.');
+      }
+    } catch {
+      toast.error('Could not delete this chat. Please try again.');
     } finally {
-        setIsDeleting(false);
-        setActionSessionId(null);
+      setIsDeleting(false);
+      setActionSessionId(null);
     }
   };
 
   const routeWorkspaceId = workspaceId && workspaceId !== 'undefined' ? workspaceId : null;
   let storedWorkspaceId: string | null = null;
   try {
-    const v = localStorage.getItem('activeWorkspaceId');
+    const v = readActiveWorkspaceId();
     if (v && v !== 'undefined') storedWorkspaceId = v;
   } catch {
     storedWorkspaceId = null;
@@ -118,45 +186,78 @@ export function UnifiedSidebar() {
 
   const effectiveWorkspaceId = routeWorkspaceId ?? currentWorkspace?.id ?? storedWorkspaceId;
   const workspaceBase = effectiveWorkspaceId ? `/workspace/${effectiveWorkspaceId}` : '';
-  const onSettingsRoute = path.startsWith('/settings');
 
   const planLabel = useMemo(() => {
-    return summary?.plan_name || currentUsage?.plan?.name || 'Free';
-  }, [summary?.plan_name, currentUsage?.plan?.name]);
+    const tier = workspaceUsage?.plan_tier;
+    const name = summary?.plan_name || currentUsage?.plan?.name || tier || 'Free';
+    return `${name} plan`.toUpperCase();
+  }, [summary?.plan_name, currentUsage?.plan?.name, workspaceUsage?.plan_tier]);
 
-  const workspaceLabel = currentWorkspace?.name || (effectiveWorkspaceId ? 'Workspace' : '');
+  const usageFooterLine = useMemo(() => {
+    if (!workspaceUsage) return null;
+    const parts: string[] = [];
+    const tUsed = workspaceUsage.llm_tokens_used;
+    const tLimit = workspaceUsage.llm_tokens_limit;
+    if (tUsed != null && tLimit != null && tLimit >= 0) {
+      const pct = Math.min(100, Math.round((tUsed / tLimit) * 100));
+      parts.push(`${pct}% AI tokens`);
+    }
+    const dUsed = workspaceUsage.daily_llm_tokens_used;
+    const dLimit = workspaceUsage.daily_llm_tokens_limit;
+    if (dUsed != null && dLimit != null && dLimit >= 0) {
+      const pct = Math.min(100, Math.round((dUsed / dLimit) * 100));
+      parts.push(`${pct}% daily`);
+    }
+    if (workspaceUsage.is_trial && workspaceUsage.trial_end) {
+      const end = new Date(workspaceUsage.trial_end).getTime();
+      if (!Number.isNaN(end)) {
+        const days = Math.max(0, Math.ceil((end - Date.now()) / (24 * 60 * 60 * 1000)));
+        parts.push(days === 0 ? 'trial ends today' : `${days}d left`);
+      }
+    }
+    return parts.length > 0 ? parts.join(' · ') : null;
+  }, [workspaceUsage]);
 
   const handleSessionClick = (sessionId: string) => {
     if (!effectiveWorkspaceId) return;
     chatContext?.setActiveSessionId(sessionId);
-    if (location.pathname !== workspaceBase) {
-      navigate(workspaceBase);
-    }
+    navigate(workspaceChatPath(effectiveWorkspaceId, sessionId));
   };
 
   const handleNewChat = () => {
     if (!effectiveWorkspaceId) return;
-    chatContext?.setActiveSessionId(null);
-    navigate(workspaceBase);
+    chatContext?.startNewChat();
+    navigate(`/workspace/${effectiveWorkspaceId}`, { replace: true });
   };
 
   const handleRefreshChats = async () => {
-    if (!refreshSessions) return;
+    if (!effectiveWorkspaceId) {
+      toast.error('Open a workspace to refresh chats');
+      return;
+    }
     setRefreshingChats(true);
     try {
-      await refreshSessions();
+      invalidateWorkspaceSessions(effectiveWorkspaceId);
+      await loadWorkspaceSessions(effectiveWorkspaceId, true);
+      toast.success('Chat list refreshed');
+    } catch (err) {
+      console.error('Failed to refresh chat sessions:', err);
+      toast.error('Could not refresh chats. Please try again.');
     } finally {
       setRefreshingChats(false);
     }
   };
 
-  const handleSignOut = async () => {
-    if (!window.confirm('Sign out of your account?')) return;
+  const handleSignOutConfirm = async () => {
+    setIsSigningOut(true);
     try {
       await signOut();
       navigate('/signin', { replace: true });
     } catch {
       navigate('/signin', { replace: true });
+    } finally {
+      setIsSigningOut(false);
+      setShowSignOutConfirm(false);
     }
   };
 
@@ -167,303 +268,349 @@ export function UnifiedSidebar() {
     path.startsWith('/settings') && !path.startsWith('/settings/workspaces');
 
   return (
-    <aside
-      className={cn(
-        'unified-sidebar flex flex-col transition-[width] duration-300 ease-out relative z-20 pointer-events-auto',
-        isCollapsed ? 'w-[4.25rem]' : 'w-64'
-      )}
-    >
-      <button
-        type="button"
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="unified-sidebar__collapse-btn absolute -right-3 top-12 z-10 rounded-full p-1 transition-colors"
-        aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-      >
-        {isCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
-      </button>
-
-      <div
+    <>
+      <aside
         className={cn(
-          'flex shrink-0 items-center gap-3 px-4 pb-2 pt-6',
-          isCollapsed && 'flex-col justify-center gap-2 px-2'
+          'unified-sidebar flex flex-col transition-[width] duration-300 ease-out relative z-20 pointer-events-auto',
+          isDrawer ? 'unified-sidebar--drawer w-full' : collapsed ? 'w-[3.75rem]' : 'w-[17.5rem]',
         )}
       >
-        <img
-          src={logoImage}
-          alt="Beleh"
-          className={cn(
-            'unified-sidebar__logo object-contain object-left',
-            isCollapsed ? 'mx-auto h-7 w-auto max-w-[2.75rem]' : 'h-9 w-auto max-w-[11rem] shrink-0'
-          )}
-        />
-        {!isCollapsed && effectiveWorkspaceId && workspaceLabel ? (
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-[color:var(--text-muted)]">
-              {workspaceLabel}
-            </p>
-          </div>
-        ) : null}
-      </div>
-
-      <nav className="flex min-h-0 flex-1 flex-col gap-1 px-2 pb-2">
-        {effectiveWorkspaceId ? (
-          <>
-            <NavLink to={workspaceBase} end className={navClass}>
-              {onSettingsRoute ? (
-                <ArrowLeft className="h-5 w-5 shrink-0" strokeWidth={2} />
-              ) : (
-                <MessageSquare className="h-5 w-5 shrink-0" strokeWidth={2} />
-              )}
-              {!isCollapsed && <span>{onSettingsRoute ? 'Back to chat' : 'Chat'}</span>}
-            </NavLink>
-            <NavLink to={`${workspaceBase}/datasets`} className={navClass}>
-              <Database className="h-5 w-5 shrink-0" strokeWidth={2} />
-              {!isCollapsed && <span>Data sources</span>}
-            </NavLink>
-            <NavLink to={`${workspaceBase}/sessions`} className={navClass}>
-              <History className="h-5 w-5 shrink-0" strokeWidth={2} />
-              {!isCollapsed && <span>Sessions</span>}
-            </NavLink>
-            <NavLink to={`${workspaceBase}/statistics`} className={navClass}>
-              <TrendingUp className="h-5 w-5 shrink-0" strokeWidth={2} />
-              {!isCollapsed && <span>Usage Analytics</span>}
-            </NavLink>
-          </>
-        ) : (
-          <NavLink to="/settings/workspaces" className={navClass} end>
-            <LayoutGrid className="h-5 w-5 shrink-0" strokeWidth={2} />
-            {!isCollapsed && <span>Workspaces</span>}
-          </NavLink>
+        {!isDrawer && (
+          <button
+            type="button"
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="unified-sidebar__collapse-btn absolute -right-3 top-12 z-10 rounded-full p-1 transition-colors"
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          >
+            {collapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
+          </button>
         )}
 
-        <NavLink
-          to="/settings/general"
-          className={() => cn('sidebar-nav-link', settingsAreaActive && 'sidebar-nav-link--active')}
+        <div
+          className={cn('unified-sidebar__header', collapsed && 'flex flex-col items-center px-2')}
         >
-          <Settings className="h-5 w-5 shrink-0" strokeWidth={2} />
-          {!isCollapsed && <span>Settings</span>}
-        </NavLink>
+          <div className={cn('unified-sidebar__brand-row', collapsed && 'justify-center')}>
+            <img
+              src={logoImage}
+              alt="Beleh"
+              className={cn(
+                'unified-sidebar__logo object-contain object-left',
+                collapsed
+                  ? 'mx-auto h-6 w-auto max-w-[2.5rem]'
+                  : 'h-7 w-auto max-w-[9.5rem] shrink-0',
+              )}
+            />
+            {!collapsed && <span className="unified-sidebar__workspace-pill">Workspace</span>}
+          </div>
+          {!collapsed && (
+            <p className="unified-sidebar__tagline font-display">Ask. Analyze. Decide.</p>
+          )}
+        </div>
 
-        {effectiveWorkspaceId && (
-          <>
-            <div className="unified-sidebar__divider mx-2 my-4 border-t" />
+        {!collapsed && workspaces.length > 0 ? <WorkspaceRegionDropdown /> : null}
 
-            {!isCollapsed ? (
-              <div className="flex min-h-0 flex-1 flex-col px-1">
-                <div className="mb-2 flex items-center justify-between gap-2 px-1">
-                  <span className="sidebar-section-label">Recent chats</span>
-                  <div className="flex items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => void handleRefreshChats()}
-                      disabled={sessionsLoading || refreshingChats}
-                      className="sidebar-icon-btn rounded-md p-1.5 disabled:opacity-40"
-                      title="Refresh list"
-                      aria-label="Refresh recent chats"
-                    >
-                      <RefreshCw
-                        className={cn('h-3.5 w-3.5', (sessionsLoading || refreshingChats) && 'animate-spin')}
-                      />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleNewChat}
-                      className="sidebar-icon-btn rounded-md p-1.5"
-                      title="New chat"
-                      aria-label="New chat"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
+        {!collapsed && workspaces.length === 0 ? (
+          <p className="unified-sidebar__empty-workspace">
+            Open Settings → Workspaces to get started.
+          </p>
+        ) : null}
+
+        <nav className="unified-sidebar__nav">
+          {effectiveWorkspaceId ? (
+            <>
+              <NavLink to={workspaceBase} end className={navClass}>
+                <MessageSquare className="h-4 w-4 shrink-0" strokeWidth={2} />
+                {!collapsed && <span>Chat</span>}
+              </NavLink>
+              <NavLink to={`${workspaceBase}/datasets`} className={navClass}>
+                <Database className="h-4 w-4 shrink-0" strokeWidth={2} />
+                {!collapsed && <span>Data sources</span>}
+              </NavLink>
+            </>
+          ) : (
+            <NavLink to="/settings/workspaces" className={navClass} end>
+              <LayoutGrid className="h-4 w-4 shrink-0" strokeWidth={2} />
+              {!collapsed && <span>Workspaces</span>}
+            </NavLink>
+          )}
+
+          {effectiveWorkspaceId && (
+            <>
+              {!collapsed ? <div className="unified-sidebar__divider border-t" /> : null}
+
+              {!collapsed ? (
+                <div className="unified-sidebar__sessions">
+                  <div className="unified-sidebar__sessions-header">
+                    <span className="sidebar-section-label">Recent chats</span>
+                    <div className="flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => void handleRefreshChats()}
+                        disabled={sessionsLoading || refreshingChats}
+                        className="sidebar-icon-btn rounded-md p-1.5 disabled:opacity-40"
+                        title="Refresh list"
+                        aria-label="Refresh recent chats"
+                      >
+                        <RefreshCw
+                          className={cn(
+                            'h-3.5 w-3.5',
+                            (sessionsLoading || refreshingChats) && 'animate-spin',
+                          )}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleNewChat}
+                        className="sidebar-icon-btn rounded-md p-1.5"
+                        title="New chat"
+                        aria-label="New chat"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div className="no-scrollbar max-h-[40vh] space-y-1 overflow-y-auto pr-0.5">
-                  {sessions.length > 0 ? (
-                    sessions.slice(0, 12).map((session) => (
-                      <div key={session.id} className="group relative flex items-center">
-                        <button
-                          type="button"
-                          onClick={() => handleSessionClick(session.id)}
-                          className={cn(
-                            'sidebar-session-btn flex-1',
-                            activeSessionId === session.id && 'sidebar-session-btn--active'
-                          )}
-                        >
-                          <span className="sidebar-session-title truncate">
-                            {session.title || `Chat ${session.id.slice(0, 8)}`}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleSessionMenuClick(e, session.id)}
-                          className={cn(
-                            "absolute right-2 p-1 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground opacity-0 group-hover:opacity-100 transition-all",
-                            (menuAnchorEl && actionSessionId === session.id) && "opacity-100 bg-muted"
-                          )}
-                        >
-                          <MoreVertical className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="rounded-lg border border-dashed border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)]/40 px-3 py-6 text-center">
-                      <p className="sidebar-empty-hint mb-1">No chats yet</p>
-                      <p className="text-[11px] text-[color:var(--text-muted)]">Open Chat and send a message to start.</p>
+                  {sessions.length > SEARCH_VISIBILITY_THRESHOLD && (
+                    <div className="unified-sidebar__sessions-search">
+                      <Search
+                        className="unified-sidebar__sessions-search-icon"
+                        size={16}
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                      <input
+                        type="search"
+                        className="unified-sidebar__sessions-search-input"
+                        placeholder="Search chats…"
+                        value={sessionSearchQuery}
+                        onChange={(e) => setSessionSearchQuery(e.target.value)}
+                        aria-label="Search recent chats"
+                      />
                     </div>
                   )}
-                </div>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-1 border-t border-[color:var(--border-primary)] pt-2">
-                <button
-                  type="button"
-                  onClick={() => void handleRefreshChats()}
-                  disabled={sessionsLoading || refreshingChats}
-                  className="sidebar-icon-btn rounded-md p-2 disabled:opacity-40"
-                  title="Refresh chats"
-                >
-                  <RefreshCw className={cn('h-4 w-4', (sessionsLoading || refreshingChats) && 'animate-spin')} />
-                </button>
-                <button type="button" onClick={handleNewChat} className="sidebar-icon-btn rounded-md p-2" title="New chat">
-                  <Plus className="h-4 w-4" />
-                </button>
-              </div>
-            )}
-          </>
-        )}
-      </nav>
-
-      <div className={cn('unified-sidebar__footer shrink-0 border-t border-[color:var(--border-primary)]', isCollapsed ? 'px-2 py-3' : 'px-3 py-3')}>
-        {!isCollapsed ? (
-          <>
-            <p className="sidebar-section-label mb-2 px-1">Appearance</p>
-            <div className="sidebar-theme-shell mb-3 flex p-1" role="group" aria-label="Color theme">
-              {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
-                const selected = themePreference === value;
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    title={label}
-                    aria-label={label}
-                    aria-pressed={selected}
-                    onClick={() => setThemePreference(value)}
-                    className={cn(
-                      'sidebar-theme-option flex flex-1 flex-col items-center justify-center gap-0.5 rounded-lg py-2 text-[10px] font-bold uppercase tracking-wide',
-                      selected && 'sidebar-theme-option--selected'
+                  <div className="unified-sidebar__sessions-list no-scrollbar">
+                    {filteredSessions.length > 0 ? (
+                      <>
+                        {filteredSessions.map((session) => (
+                          <div
+                            key={session.id}
+                            className="sidebar-session-row group relative flex items-center"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => handleSessionClick(session.id)}
+                              className={cn(
+                                'sidebar-session-btn flex-1',
+                                activeSessionId === session.id && 'sidebar-session-btn--active',
+                              )}
+                            >
+                              <span className="sidebar-session-title truncate">
+                                {session.title || `Chat ${session.id.slice(0, 8)}`}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => handleSessionMenuClick(e, session.id)}
+                              className={cn(
+                                'sidebar-session-menu-btn',
+                                menuAnchorEl &&
+                                  actionSessionId === session.id &&
+                                  'sidebar-session-menu-btn--open',
+                              )}
+                            >
+                              <MoreVertical className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {sessionsHasMore && !sessionSearchQuery.trim() && (
+                          <button
+                            type="button"
+                            className="unified-sidebar__load-more"
+                            disabled={isLoadingMoreSessions}
+                            onClick={() => void loadMoreSessions()}
+                          >
+                            {isLoadingMoreSessions ? 'Loading…' : 'Load more chats'}
+                          </button>
+                        )}
+                      </>
+                    ) : sessions.length > 0 ? (
+                      <div className="rounded-lg border border-dashed border-[color:var(--sidebar-border)] px-3 py-5 text-center">
+                        <p className="sidebar-empty-hint mb-1">No matching chats</p>
+                        <p className="text-[11px] text-[color:var(--sidebar-text-muted)]">
+                          Try another search term.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-[color:var(--sidebar-border)] px-3 py-6 text-center">
+                        <p className="sidebar-empty-hint mb-1">No chats yet</p>
+                        <p className="text-[11px] text-[color:var(--sidebar-text-muted)]">
+                          Open Chat and send a message to start.
+                        </p>
+                      </div>
                     )}
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center gap-1 border-t border-[color:var(--sidebar-border)] pt-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleRefreshChats()}
+                    disabled={sessionsLoading || refreshingChats}
+                    className="sidebar-icon-btn rounded-md p-2 disabled:opacity-40"
+                    title="Refresh chats"
                   >
-                    <Icon className="h-4 w-4 shrink-0" strokeWidth={2} />
-                    <span>{value === 'system' ? 'Auto' : value}</span>
+                    <RefreshCw
+                      className={cn(
+                        'h-4 w-4',
+                        (sessionsLoading || refreshingChats) && 'animate-spin',
+                      )}
+                    />
                   </button>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <div className="mb-2 flex flex-col items-center gap-1" role="group" aria-label="Color theme">
-            {THEME_OPTIONS.map(({ value, label, icon: Icon }) => {
-              const selected = themePreference === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  title={label}
-                  aria-label={label}
-                  aria-pressed={selected}
-                  onClick={() => setThemePreference(value)}
-                  className={cn(
-                    'sidebar-theme-option flex h-9 w-9 items-center justify-center rounded-lg',
-                    selected && 'sidebar-theme-option--selected'
-                  )}
-                >
-                  <Icon className="h-4 w-4" strokeWidth={2} />
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={() => void handleSignOut()}
-          className={cn(
-            'flex w-full items-center justify-center gap-2 rounded-xl border-2 border-[color:var(--error)] px-3 py-2.5 text-sm font-semibold text-[color:var(--error)] transition-colors hover:bg-[color:var(--error-light)]',
-            isCollapsed && 'px-0 py-2'
+                  <button
+                    type="button"
+                    onClick={handleNewChat}
+                    className="sidebar-icon-btn rounded-md p-2"
+                    title="New chat"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </>
           )}
-        >
-          <LogOut className="h-4 w-4 shrink-0" />
-          {!isCollapsed && <span>Sign out</span>}
-        </button>
+        </nav>
 
-        {user && (
-          <div
-            className={cn(
-              'unified-sidebar__footer-profile mt-3 flex cursor-default items-center gap-3 rounded-xl p-2',
-              isCollapsed && 'justify-center p-1'
-            )}
+        <footer className={cn('unified-sidebar__footer', collapsed && 'px-2')}>
+          <NavLink
+            to="/settings/general"
+            title="Settings"
+            className={() =>
+              cn(
+                'sidebar-settings-link',
+                settingsAreaActive && 'sidebar-settings-link--active',
+                collapsed && 'sidebar-settings-link--collapsed',
+              )
+            }
           >
-            {user.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt=""
-                className="h-9 w-9 shrink-0 rounded-full object-cover ring-2 ring-[color:var(--border-primary)]"
-              />
-            ) : (
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-bold text-primary ring-2 ring-[color:var(--border-primary)]">
-                {initialsFromUser(user.displayName, user.email)}
-              </div>
+            <span className="sidebar-settings-link__icon" aria-hidden>
+              <Settings className="h-4 w-4 shrink-0" strokeWidth={2} />
+            </span>
+            {!collapsed && (
+              <>
+                <span className="sidebar-settings-link__text">
+                  <span className="sidebar-settings-link__label">Settings</span>
+                  <span className="sidebar-settings-link__sub">Account, billing &amp; more</span>
+                </span>
+                <ChevronRight
+                  className="sidebar-settings-link__chevron h-4 w-4 shrink-0"
+                  strokeWidth={2}
+                />
+              </>
             )}
-            {!isCollapsed && (
-              <div className="min-w-0 flex-1">
-                <p className="unified-sidebar__footer-name truncate">{user.displayName || 'Account'}</p>
-                <p className="unified-sidebar__footer-plan truncate">{planLabel}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+          </NavLink>
 
-      <ContextMenu
-        isOpen={Boolean(menuAnchorEl)}
-        anchorEl={menuAnchorEl}
-        onClose={() => {
-            setMenuAnchorEl(null);
-            setActionSessionId(null);
-        }}
-        items={[
-          {
-            id: 'rename',
-            label: 'Rename',
-            icon: <Pencil className="h-4 w-4" strokeWidth={2} />,
-            onClick: handleRename,
-          },
-          {
-            id: 'delete',
-            label: 'Delete',
-            icon: <Trash2 className="h-4 w-4" strokeWidth={2} />,
-            variant: 'danger',
-            onClick: () => {
-              setMenuAnchorEl(null);
-              setShowDeleteConfirm(true);
+          {user && (
+            <div
+              className={cn(
+                'unified-sidebar__profile-row',
+                collapsed && 'flex-col justify-center p-2',
+              )}
+            >
+              <div className="unified-sidebar__avatar">
+                {user.photoURL ? (
+                  <img src={user.photoURL} alt="" />
+                ) : (
+                  initialsFromUser(user.displayName, user.email)
+                )}
+              </div>
+              {!collapsed && (
+                <div className="unified-sidebar__profile-text">
+                  <p className="unified-sidebar__footer-name">{user.displayName || 'Account'}</p>
+                  {user.email ? (
+                    <p className="unified-sidebar__footer-email">{user.email}</p>
+                  ) : null}
+                  <p className="unified-sidebar__footer-plan">{planLabel}</p>
+                  {usageFooterLine ? (
+                    <p className="unified-sidebar__footer-usage">{usageFooterLine}</p>
+                  ) : null}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowSignOutConfirm(true)}
+                className="unified-sidebar__sign-out-btn"
+                title="Sign out"
+                aria-label="Sign out"
+              >
+                <LogOut className="h-4 w-4" strokeWidth={2} />
+              </button>
+            </div>
+          )}
+        </footer>
+
+        <ContextMenu
+          isOpen={Boolean(menuAnchorEl)}
+          anchorEl={menuAnchorEl}
+          onClose={() => setMenuAnchorEl(null)}
+          items={[
+            {
+              id: 'rename',
+              label: 'Rename',
+              icon: <Pencil className="h-4 w-4" strokeWidth={2} />,
+              onClick: handleRenameRequest,
             },
-          },
-        ]}
-      />
+            {
+              id: 'delete',
+              label: 'Delete',
+              icon: <Trash2 className="h-4 w-4" strokeWidth={2} />,
+              variant: 'danger',
+              onClick: () => setShowDeleteConfirm(true),
+            },
+          ]}
+        />
 
-      <ConfirmDialog
-        isOpen={showDeleteConfirm}
-        title="Delete chat session?"
-        message="This will permanently delete this chat session and all its messages. This action cannot be undone."
-        confirmText="Delete"
-        cancelText="Cancel"
-        variant="danger"
-        isLoading={isDeleting}
-        onConfirm={handleDelete}
-        onCancel={() => {
+        <ConfirmDialog
+          isOpen={showDeleteConfirm}
+          title="Delete chat session?"
+          message="This will permanently delete this chat session and all its messages. This action cannot be undone."
+          confirmText="Delete"
+          cancelText="Cancel"
+          variant="danger"
+          isLoading={isDeleting}
+          onConfirm={handleDelete}
+          onCancel={() => {
             setShowDeleteConfirm(false);
             setActionSessionId(null);
-        }}
-      />
-    </aside>
+          }}
+        />
+
+        <ConfirmDialog
+          isOpen={showSignOutConfirm}
+          title="Sign out?"
+          message="You will need to sign in again to access your workspaces and chats."
+          confirmText="Sign out"
+          cancelText="Cancel"
+          variant="brand"
+          isLoading={isSigningOut}
+          onConfirm={handleSignOutConfirm}
+          onCancel={() => setShowSignOutConfirm(false)}
+        />
+
+        <PromptDialog
+          isOpen={showRenamePrompt}
+          title="Rename chat"
+          message="Choose a name that helps you find this conversation later."
+          label="Session name"
+          defaultValue={renameDefaultTitle}
+          placeholder="e.g. Q4 revenue analysis"
+          confirmText="Save"
+          isLoading={isRenaming}
+          onConfirm={handleRenameConfirm}
+          onCancel={() => {
+            setShowRenamePrompt(false);
+            setActionSessionId(null);
+          }}
+        />
+      </aside>
+    </>
   );
 }

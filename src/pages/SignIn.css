@@ -15,6 +15,33 @@
   transition: background-color 0.3s ease;
 }
 
+/* Post-login redirect: full viewport, no auth-form-panel (that panel uses ::before/::after decorations meant for the split layout). */
+.auth-redirect-screen {
+  min-height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+  background: var(--bg-primary);
+  transition: background-color 0.3s ease;
+}
+
+.auth-redirect-screen__card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  max-width: 360px;
+  width: 100%;
+}
+
+.auth-redirect-screen__card .btn-spinner {
+  margin-bottom: 1rem;
+}
+
 /* ===============================================
    LEFT PANEL - BRANDED SECTION
    =============================================== */
@@ -22,7 +49,7 @@
   position: relative;
   width: 45%;
   min-height: 100vh;
-  background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 50%, #1E3A8A 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -74,7 +101,7 @@
 /* Alpha Badge */
 .auth-alpha-badge {
   display: inline-block;
-  background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
+  background: linear-gradient(135deg, #10b981 0%, #34d399 100%);
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
@@ -96,7 +123,6 @@
 }
 
 @keyframes pulse-alpha-auth {
-
   0%,
   100% {
     box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
@@ -164,7 +190,7 @@
 
 .brand-divider span {
   position: relative;
-  background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 50%, #1E3A8A 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
   padding: 0 1rem;
   color: rgba(255, 255, 255, 0.9);
   font-size: 0.8125rem;
@@ -187,7 +213,7 @@
 
 .brand-btn:hover {
   background: #ffffff;
-  color: #3B82F6;
+  color: #3b82f6;
 }
 
 /* Background decoration circles */
@@ -235,7 +261,7 @@
   right: 0;
   width: 340px;
   height: 440px;
-  background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 50%, #1E3A8A 100%);
+  background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
 }
 
 .auth-form-panel::after {
@@ -276,7 +302,7 @@
 }
 
 .title-dot {
-  color: #3B82F6;
+  color: #3b82f6;
   font-weight: 700;
 }
 
@@ -511,7 +537,7 @@
     left: 0;
     width: 250px;
     height: 250px;
-    background: linear-gradient(135deg, #3B82F6 0%, #1E40AF 50%, #1E3A8A 100%);
+    background: linear-gradient(135deg, #3b82f6 0%, #1e40af 50%, #1e3a8a 100%);
     z-index: 0;
     border-top: none;
   }
@@ -576,5 +602,390 @@
   .auth-google-btn {
     padding: 0.875rem 1.25rem;
     font-size: 0.875rem;
+  }
+}
+
+/* ===============================================
+   SIGN-IN LEFT PANEL , dark charcoal + teal benchmark
+   Matches landing trust aesthetic + flowing wave vector
+   Border radii unchanged on .auth-brand-panel
+   =============================================== */
+.auth-split-page:has(.auth-brand-panel--signin) .auth-form-panel::before {
+  background: radial-gradient(ellipse 130% 90% at 20% 15%, #1a2332 0%, #111827 48%, #0b0f19 100%);
+}
+
+.auth-brand-panel--signin {
+  --signin-brand-bg: #0b0f19;
+  --signin-brand-surface: #161b26;
+  --signin-brand-surface-raised: #1c2433;
+  --signin-brand-border: rgba(148, 163, 184, 0.14);
+  --signin-brand-accent: #2dd4bf;
+  --signin-brand-accent-soft: #5eead4;
+  --signin-brand-muted: #94a3b8;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 70% 55% at 88% 92%, rgba(20, 184, 166, 0.18), transparent 58%),
+    radial-gradient(ellipse 55% 40% at 12% 8%, rgba(45, 212, 191, 0.08), transparent 55%),
+    var(--signin-brand-bg);
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.75rem, 4vw, 3rem);
+}
+
+.signin-brand-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.signin-brand-atmosphere__glow {
+  position: absolute;
+  right: -18%;
+  bottom: -22%;
+  width: min(72%, 420px);
+  height: min(72%, 420px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.28) 0%, transparent 68%);
+  filter: blur(28px);
+  opacity: 0.9;
+}
+
+/* Landing hero animated vector lines (same SVG + motion as LandingHero) */
+.auth-brand-panel--signin .landing-hero-bg-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.95;
+}
+
+.auth-brand-panel--signin .landing-hero-bg-svg .drift {
+  animation: landing-driftX 46s linear infinite;
+}
+
+.auth-brand-panel--signin .landing-hero-bg-svg .drift.slow {
+  animation-duration: 70s;
+  animation-direction: reverse;
+}
+
+.auth-brand-panel--signin .landing-hero-bg-svg .dot {
+  animation: landing-floaty 7s ease-in-out infinite;
+}
+
+@keyframes landing-driftX {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-720px);
+  }
+}
+
+@keyframes landing-floaty {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-brand-panel--signin .landing-hero-bg-svg .drift,
+  .auth-brand-panel--signin .landing-hero-bg-svg .dot {
+    animation: none;
+  }
+}
+
+.brand-content--signin {
+  position: relative;
+  z-index: 1;
+  max-width: 440px;
+  width: 100%;
+  text-align: left;
+  margin: 0 auto;
+}
+
+.signin-brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.signin-brand-eyebrow {
+  margin: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+/* Sign-in form column , logo on white canvas */
+.signin-back-home {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--text-muted, #64748b);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.signin-back-home:hover {
+  color: var(--accent-teal-600, #0d9488);
+}
+
+.signin-form-brand {
+  display: flex;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.signin-form-brand a {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.signin-form-logo {
+  width: auto;
+  height: 3.5rem;
+  display: block;
+}
+
+.signin-brand-alpha-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+  padding: 0.35rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--signin-brand-accent-soft);
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.signin-brand-alpha-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--signin-brand-accent);
+  box-shadow: 0 0 8px var(--signin-brand-accent);
+}
+
+.signin-brand-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 1.25rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--signin-brand-accent);
+  line-height: 1.4;
+}
+
+.signin-brand-kicker__icon {
+  flex-shrink: 0;
+  color: var(--signin-brand-accent);
+}
+
+.signin-brand-title {
+  margin: 0 0 1.25rem;
+  font-family: var(--font-display, 'Plus Jakarta Sans', system-ui, sans-serif);
+  font-size: clamp(2rem, 4.5vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.12;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+}
+
+.signin-brand-title__accent {
+  background: linear-gradient(
+    100deg,
+    #3b82f6 0%,
+    var(--signin-brand-accent) 55%,
+    var(--signin-brand-accent-soft) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.signin-brand-description {
+  margin: 0 0 1.75rem;
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--signin-brand-muted);
+  max-width: 38rem;
+}
+
+.signin-brand-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.signin-brand-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.95rem 1.05rem;
+  border-radius: 16px;
+  border: 1px solid var(--signin-brand-border);
+  background: color-mix(in srgb, var(--signin-brand-surface) 92%, #000);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(10px);
+}
+
+.signin-brand-card__icon {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 10px;
+  border: 1px solid rgba(45, 212, 191, 0.18);
+  background: var(--signin-brand-surface-raised);
+  color: var(--signin-brand-accent);
+}
+
+.signin-brand-card__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 800;
+  line-height: 1.35;
+  color: #f1f5f9;
+  letter-spacing: -0.01em;
+}
+
+.signin-brand-card__text {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--signin-brand-muted);
+}
+
+.signin-brand-trust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.35rem;
+}
+
+.signin-brand-trust__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 212, 191, 0.32);
+  background: rgba(15, 23, 42, 0.35);
+  color: var(--signin-brand-accent-soft);
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 0.625rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+}
+
+.signin-brand-trust__badge svg {
+  flex-shrink: 0;
+  color: var(--signin-brand-accent);
+}
+
+.signin-brand-footnote {
+  margin: 1.25rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: #64748b;
+  max-width: 36rem;
+}
+
+@media (max-width: 900px) {
+  .auth-brand-panel--signin {
+    align-items: center;
+  }
+
+  .brand-content--signin {
+    max-width: 320px;
+    text-align: center;
+  }
+
+  .signin-brand-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+  }
+
+  .signin-back-home {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .signin-form-brand {
+    justify-content: center;
+  }
+
+  .signin-brand-kicker {
+    justify-content: center;
+    text-align: center;
+  }
+
+  .signin-brand-title {
+    text-align: center;
+  }
+
+  .signin-brand-description {
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .signin-brand-trust {
+    justify-content: center;
+  }
+
+  .signin-brand-footnote {
+    text-align: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .signin-brand-card {
+    text-align: left;
+  }
+}
+
+@media (max-width: 480px) {
+  .signin-brand-title {
+    font-size: 1.65rem;
+  }
+
+  .signin-form-logo {
+    height: 3rem;
+  }
+
+  .signin-brand-card__title {
+    font-size: 0.75rem;
   }
 }

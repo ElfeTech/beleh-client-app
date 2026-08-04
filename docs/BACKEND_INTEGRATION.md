@@ -5,6 +5,7 @@ This document explains how the frontend integrates with your backend API for aut
 ## Overview
 
 The application uses a **dual authentication system**:
+
 1. **Firebase Authentication**: Handles Google OAuth and provides secure ID tokens
 2. **Backend API**: Registers/logs in users in your database using Firebase tokens
 
@@ -35,6 +36,7 @@ Navigate to Workspace
 Registers a new user or updates an existing user.
 
 **Request:**
+
 ```json
 {
   "token": "firebase-id-token-here"
@@ -42,6 +44,7 @@ Registers a new user or updates an existing user.
 ```
 
 **Response (200):**
+
 ```json
 {
   "uid": "firebase-user-id",
@@ -58,6 +61,7 @@ Registers a new user or updates an existing user.
 Logs in an existing user. Creates user if doesn't exist.
 
 **Request:**
+
 ```json
 {
   "token": "firebase-id-token-here"
@@ -65,6 +69,7 @@ Logs in an existing user. Creates user if doesn't exist.
 ```
 
 **Response (200):**
+
 ```json
 {
   "uid": "firebase-user-id",
@@ -87,6 +92,7 @@ VITE_API_BASE_URL=http://localhost:8000
 ```
 
 For production:
+
 ```env
 VITE_API_BASE_URL=https://your-backend-api.com
 ```
@@ -135,6 +141,7 @@ The application stores three items in localStorage:
    - Sent to backend for validation
 
 2. **`firebase_user`** - Firebase user data
+
    ```json
    {
      "uid": "...",
@@ -172,6 +179,7 @@ try {
 ```
 
 **Key points:**
+
 - If backend API is unavailable, user can still authenticate with Firebase
 - Backend errors are logged but don't block the login flow
 - You can make backend required by throwing the error instead
@@ -279,16 +287,19 @@ Auth service logs with `[Auth]` prefix:
 ### Common Issues
 
 **Backend API not called:**
+
 - Check `VITE_API_BASE_URL` in `.env`
 - Restart dev server after changing `.env`
 - Check browser console for CORS errors
 
 **401 Unauthorized from backend:**
+
 - Backend is not validating Firebase token correctly
 - Check Firebase Admin SDK is initialized
 - Verify token is being sent correctly
 
 **Network errors:**
+
 - Backend not running
 - Wrong URL in `VITE_API_BASE_URL`
 - CORS not configured on backend

@@ -1,46 +1,37 @@
 /**
  * Persist last-selected datasource per Firebase user + workspace so refresh keeps the dropdown
  * even if the server state save has not flushed yet.
+ *
+ * Delegates to the typed UI memory layer; keeps the legacy key in sync for older readers.
  */
-const PREFIX = 'beleh:selectedDataset:';
+import { readSelectedDataset, writeSelectedDataset, selectedDatasetLegacyKey } from './uiMemory';
 
 export function selectedDatasetStorageKey(uid: string, workspaceId: string): string {
-  return `${PREFIX}${uid}:${workspaceId}`;
+  return selectedDatasetLegacyKey(uid, workspaceId);
 }
 
-export function readSelectedDatasetId(uid: string | undefined, workspaceId: string | undefined): string | null {
-  if (!uid || !workspaceId || typeof localStorage === 'undefined') return null;
-  try {
-    const v = localStorage.getItem(selectedDatasetStorageKey(uid, workspaceId));
-    if (!v || v === 'undefined') return null;
-    return v;
-  } catch {
-    return null;
-  }
+export function readSelectedDatasetId(
+  uid: string | undefined,
+  workspaceId: string | undefined,
+): string | null {
+  if (!uid || !workspaceId) return null;
+  return readSelectedDataset(uid, workspaceId);
 }
 
 export function writeSelectedDatasetId(
   uid: string | undefined,
   workspaceId: string | undefined,
-  datasetId: string | null
+  datasetId: string | null,
 ): void {
-  if (!uid || !workspaceId || typeof localStorage === 'undefined') return;
-  try {
-    const key = selectedDatasetStorageKey(uid, workspaceId);
-    if (datasetId === null || datasetId === '') {
-      localStorage.removeItem(key);
-    } else {
-      localStorage.setItem(key, datasetId);
-    }
-  } catch {
-    // ignore quota / private mode
-  }
+  if (!uid || !workspaceId) return;
+  writeSelectedDataset(uid, workspaceId, datasetId);
 }
 
 /** Remove all persisted selections (call on sign-out / account switch). */
 export function clearAllSelectedDatasetStorage(): void {
   if (typeof localStorage === 'undefined') return;
   try {
+    const PREFIX = 'beleh:selectedDataset:';
     const keys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
