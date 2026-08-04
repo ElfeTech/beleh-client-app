@@ -1,0 +1,49 @@
+.billing-cycle-segment {
+  display: inline-flex;
+  padding: var(--space-1);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-primary);
+  background: var(--bg-secondary);
+  gap: 2px;
+}
+
+.billing-cycle-segment__option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.75rem;
+  border: none;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--text-2xs);
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.billing-cycle-segment__option:hover:not(:disabled):not(.billing-cycle-segment__option--selected) {
+  background: var(--panel-bg);
+  color: var(--text-secondary);
+}
+
+.billing-cycle-segment__option--selected {
+  background: var(--accent-teal-500);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.billing-cycle-segment__option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.billing-cycle-segment__save {
+  font-size: 0.6rem;
+  opacity: 0.9;
+}

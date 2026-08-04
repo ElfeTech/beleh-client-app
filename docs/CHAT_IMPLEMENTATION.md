@@ -13,6 +13,7 @@ User Input → API Chat Endpoint → AI Processing → Visualization Response �
 ```
 
 ### Flow:
+
 1. **User asks a question** about their selected datasource
 2. **Backend processes** the question through:
    - Intent Detection (LLM - Gemini 2.5 Flash)
@@ -31,7 +32,9 @@ User Input → API Chat Endpoint → AI Processing → Visualization Response �
 ### Core Components
 
 #### 1. **Workspace Component** ([src/pages/Workspace.tsx](src/pages/Workspace.tsx))
+
 Main chat interface with:
+
 - Message list display
 - Datasource selector
 - Input field with send functionality
@@ -39,6 +42,7 @@ Main chat interface with:
 - Loading states and error handling
 
 **Key Features:**
+
 ```typescript
 - Loads datasources from workspace
 - Auto-selects first datasource
@@ -48,13 +52,17 @@ Main chat interface with:
 ```
 
 #### 2. **ChatMessage Component** ([src/components/chat/ChatMessage.tsx](src/components/chat/ChatMessage.tsx))
+
 Renders individual messages:
+
 - User messages with avatar
 - AI messages with response visualization
 - Timestamp and metadata
 
 #### 3. **ChartVisualization Component** ([src/components/chat/ChartVisualization.tsx](src/components/chat/ChartVisualization.tsx))
+
 Main visualization router:
+
 - Determines chart type from API response
 - Renders appropriate chart component
 - Displays insights and explanations
@@ -63,7 +71,9 @@ Main visualization router:
 ### Chart Components
 
 #### 4. **BarChart** ([src/components/chat/charts/BarChart.tsx](src/components/chat/charts/BarChart.tsx))
+
 Horizontal bar chart with:
+
 - Color-coded bars with gradients
 - Responsive width based on values
 - Labels and values display
@@ -71,7 +81,9 @@ Horizontal bar chart with:
 - Limits to top 10 items for readability
 
 #### 5. **LineChart** ([src/components/chat/charts/LineChart.tsx](src/components/chat/charts/LineChart.tsx))
+
 Line chart with:
+
 - SVG-based rendering
 - Interactive hover states
 - Grid lines for reference
@@ -79,7 +91,9 @@ Line chart with:
 - Limits to 20 data points
 
 #### 6. **PieChart** ([src/components/chat/charts/PieChart.tsx](src/components/chat/charts/PieChart.tsx))
+
 Pie chart with:
+
 - SVG path rendering
 - Color-coded slices
 - Interactive legend
@@ -87,7 +101,9 @@ Pie chart with:
 - Limits to top 8 slices
 
 #### 7. **DataTable** ([src/components/chat/charts/DataTable.tsx](src/components/chat/charts/DataTable.tsx))
+
 Paginated data table with:
+
 - 10 rows per page
 - Previous/Next pagination
 - Formatted cell values (numbers, booleans)
@@ -96,6 +112,7 @@ Paginated data table with:
 ### API Integration
 
 #### 8. **API Types** ([src/types/api.ts](src/types/api.ts))
+
 TypeScript interfaces matching backend schema:
 
 ```typescript
@@ -129,6 +146,7 @@ interface VisualizationRecommendation {
 ```
 
 #### 9. **API Client** ([src/services/apiClient.ts](src/services/apiClient.ts))
+
 Chat API method:
 
 ```typescript
@@ -142,6 +160,7 @@ async sendChatMessage(
 **Endpoint:** `POST /api/chat/`
 **Headers:** `Authorization: Bearer {token}`
 **Body:**
+
 ```json
 {
   "question": "What are the top products?",
@@ -152,12 +171,14 @@ async sendChatMessage(
 ## User Flow
 
 ### 1. Initial State
+
 - User lands on workspace page
 - Datasources are loaded automatically
 - First datasource is auto-selected
 - Empty chat state with welcome message
 
 ### 2. Asking a Question
+
 1. User types question in input field
 2. Presses Enter or clicks Send button
 3. User message appears immediately
@@ -165,6 +186,7 @@ async sendChatMessage(
 5. API call is made with Bearer token auth
 
 ### 3. Receiving Response
+
 1. API returns structured response
 2. AI message is added to chat
 3. Explanation text is displayed
@@ -175,21 +197,25 @@ async sendChatMessage(
 ### 4. Chart Rendering Logic
 
 **Bar Chart** - Used for:
+
 - Comparing values across categories
 - Top N items by value
 - Sales by product, etc.
 
 **Line Chart** - Used for:
+
 - Trends over time
 - Sequential data
 - Time series analysis
 
 **Pie Chart** - Used for:
+
 - Percentage distribution
 - Part-to-whole relationships
 - Market share, etc.
 
 **Data Table** - Used for:
+
 - Raw data display
 - When no specific chart type recommended
 - Fallback visualization
@@ -197,12 +223,14 @@ async sendChatMessage(
 ### 5. Error Handling
 
 **No Datasource Selected:**
+
 ```
 Error banner: "Please select a datasource first"
 Input disabled until datasource selected
 ```
 
 **API Error:**
+
 ```typescript
 {
   type: 'ai',
@@ -214,6 +242,7 @@ Input disabled until datasource selected
 ```
 
 **Network Error:**
+
 ```
 Caught in try-catch
 Error message added to chat
@@ -243,6 +272,7 @@ User can retry
 ## Example API Responses
 
 ### Bar Chart Example
+
 ```json
 {
   "intent": "comparison",
@@ -250,9 +280,9 @@ User can retry
   "result": {
     "columns": ["product", "total_sales"],
     "data": [
-      {"product": "Product A", "total_sales": 12300},
-      {"product": "Product B", "total_sales": 9800},
-      {"product": "Product C", "total_sales": 7500}
+      { "product": "Product A", "total_sales": 12300 },
+      { "product": "Product B", "total_sales": 9800 },
+      { "product": "Product C", "total_sales": 7500 }
     ],
     "row_count": 3
   },
@@ -268,6 +298,7 @@ User can retry
 ```
 
 ### Line Chart Example
+
 ```json
 {
   "intent": "trend_analysis",
@@ -275,9 +306,9 @@ User can retry
   "result": {
     "columns": ["date", "revenue"],
     "data": [
-      {"date": "2024-01", "revenue": 45000},
-      {"date": "2024-02", "revenue": 52000},
-      {"date": "2024-03", "revenue": 48000}
+      { "date": "2024-01", "revenue": 45000 },
+      { "date": "2024-02", "revenue": 52000 },
+      { "date": "2024-03", "revenue": 48000 }
     ],
     "row_count": 3
   },
@@ -293,6 +324,7 @@ User can retry
 ```
 
 ### Table Example
+
 ```json
 {
   "intent": "data_retrieval",
@@ -300,8 +332,8 @@ User can retry
   "result": {
     "columns": ["id", "name", "email", "total_purchases"],
     "data": [
-      {"id": 1, "name": "John Doe", "email": "john@example.com", "total_purchases": 5},
-      {"id": 2, "name": "Jane Smith", "email": "jane@example.com", "total_purchases": 8}
+      { "id": 1, "name": "John Doe", "email": "john@example.com", "total_purchases": 5 },
+      { "id": 2, "name": "Jane Smith", "email": "jane@example.com", "total_purchases": 8 }
     ],
     "row_count": 2
   },
@@ -397,6 +429,7 @@ User can retry
 ### Styling Modifications
 
 All colors use CSS variables from root:
+
 - `--primary-*` for main brand colors
 - `--gray-*` for neutral colors
 - `--radius-*` for border radius
@@ -433,22 +466,26 @@ All colors use CSS variables from root:
 ## Troubleshooting
 
 **Charts not rendering:**
+
 - Check browser console for errors
 - Verify API response format
 - Ensure visualization type is supported
 
 **API calls failing:**
+
 - Check backend is running
 - Verify `VITE_API_BASE_URL` in `.env`
 - Confirm Bearer token is valid
 - Check CORS configuration
 
 **Datasources not loading:**
+
 - Verify workspace ID in URL
 - Check datasource API endpoint
 - Confirm user has access to workspace
 
 **Styling issues:**
+
 - Clear browser cache
 - Check CSS file imports
 - Verify CSS variable definitions
@@ -456,6 +493,7 @@ All colors use CSS variables from root:
 ## Support
 
 For issues or questions:
+
 1. Check browser console for errors
 2. Review API response in Network tab
 3. Verify environment variables

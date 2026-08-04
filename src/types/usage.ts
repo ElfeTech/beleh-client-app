@@ -23,6 +23,12 @@ export interface Plan {
   description: string;
   price_monthly: number;
   price_yearly: number;
+  /** Display-only list prices (cents) used for strikethrough pricing. */
+  compare_at_price_monthly?: number | null;
+  compare_at_price_yearly?: number | null;
+  discount_label?: string | null;
+  discount_percent_monthly?: number | null;
+  discount_percent_yearly?: number | null;
   limits: PlanLimits;
   features: PlanFeatures;
   is_active: boolean;
@@ -47,6 +53,9 @@ export interface UsageMetrics {
   llm_tokens_used: number;
   llm_tokens_limit: number;
   llm_tokens_remaining: number;
+  daily_llm_tokens_used?: number;
+  daily_llm_tokens_limit?: number;
+  daily_llm_tokens_remaining?: number;
   rows_scanned_used: number;
   rows_scanned_limit: number;
   rows_scanned_remaining: number;
@@ -58,6 +67,16 @@ export interface UsageMetrics {
   datasets_remaining: number;
 }
 
+/** Included plan price prorated by remaining quota (from GET /api/usage/). Display as-is. */
+export interface PlanValueBlock {
+  included_value_usd: number | null;
+  used_value_usd: number | null;
+  remaining_value_usd: number | null;
+  value_used_pct: number | null;
+  currency: string;
+  basis?: string;
+}
+
 // Current Usage Response from /api/usage/
 export interface CurrentUsageResponse {
   user_id: string;
@@ -67,9 +86,18 @@ export interface CurrentUsageResponse {
   billing_cycle_start: string;
   billing_cycle_end: string;
   reset_at: string;
+  daily_reset_at?: string | null;
   last_updated: string;
+  value?: PlanValueBlock | null;
+  is_trial?: boolean;
+  trial_end?: string | null;
+  plan_status?: string | null;
 }
 
+/**
+ * Remaining quota , includes API $ fields plus client-derived query counters
+ * used by existing UI (sidebar, banners).
+ */
 export interface RemainingQuotaResponse {
   queries_remaining: number;
   queries_used: number;
@@ -77,6 +105,12 @@ export interface RemainingQuotaResponse {
   percentage_used: number;
   can_execute_query: boolean;
   reset_date: string;
+  included_value_usd?: number | null;
+  used_value_usd?: number | null;
+  remaining_value_usd?: number | null;
+  value_used_pct?: number | null;
+  currency?: string;
+  is_unlimited?: boolean;
 }
 
 export interface UsageSummary {
@@ -86,12 +120,25 @@ export interface UsageSummary {
   plan_name: string;
   reset_date: string;
   warnings: UsageWarning[];
+  remaining_value_usd?: number | null;
+  value_used_pct?: number | null;
+  included_value_usd?: number | null;
+  used_value_usd?: number | null;
+  currency?: string;
 }
 
 export interface UsageWarning {
   level: 'info' | 'warning' | 'critical';
   message: string;
-  metric: 'queries' | 'datasources' | 'members' | 'tokens' | 'rows' | 'charts';
+  metric:
+    | 'queries'
+    | 'datasources'
+    | 'members'
+    | 'tokens'
+    | 'llm_tokens'
+    | 'daily_llm_tokens'
+    | 'rows'
+    | 'charts';
   percentage: number;
 }
 
@@ -149,7 +196,10 @@ export interface UsageContextValue extends UsageState {
   refreshUsage: () => Promise<void>;
   checkQuota: (operation: 'query' | 'datasource' | 'member') => Promise<QuotaCheckResponse>;
   hasWarning: (level: 'warning' | 'critical') => boolean;
-  getHistoricalUsage: (days?: number, workspaceId?: string) => Promise<HistoricalUsageResponse | null>;
+  getHistoricalUsage: (
+    days?: number,
+    workspaceId?: string,
+  ) => Promise<HistoricalUsageResponse | null>;
   canExecuteQuery: boolean;
   decrementQueryCount: () => void;
   refreshUsageAfterAction: () => Promise<void>;

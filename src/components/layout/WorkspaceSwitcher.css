@@ -214,6 +214,28 @@
   color: var(--gray-600);
 }
 
+.workspace-list-item .ownership-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.workspace-list-item .ownership-badge--owned {
+  border: 1px solid color-mix(in srgb, var(--primary-600, #0d9488) 35%, transparent);
+  background: color-mix(in srgb, var(--primary-600, #0d9488) 12%, transparent);
+  color: var(--primary-600, #0d9488);
+}
+
+.workspace-list-item .ownership-badge--shared {
+  border: 1px solid var(--gray-300);
+  background: var(--gray-100);
+  color: var(--gray-600);
+}
+
 .check-icon {
   width: 24px;
   height: 24px;

@@ -128,7 +128,10 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
           <p>
             Too many categories to display ({xValues.length} x {yValues.length} cells).
           </p>
-          <p>Please narrow down your data to 30 or fewer categories per axis for optimal visualization.</p>
+          <p>
+            Please narrow down your data to 30 or fewer categories per axis for optimal
+            visualization.
+          </p>
         </div>
       );
     }
@@ -137,7 +140,10 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
 
     return (
       <div className="heatmap-container">
-        <div className="heatmap-wrapper" style={{ overflowX: xValues.length > 10 ? 'auto' : 'visible' }}>
+        <div
+          className="heatmap-wrapper"
+          style={{ overflowX: xValues.length > 10 ? 'auto' : 'visible' }}
+        >
           <table className="heatmap-table" style={{ fontSize: isExpanded ? '13px' : '12px' }}>
             <thead>
               <tr>
@@ -152,7 +158,9 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
                       title={displayLabel}
                     >
                       <div className="heatmap-cell-content heatmap-cell-content--header">
-                        {displayLabel.length > 10 ? displayLabel.substring(0, 10) + '...' : displayLabel}
+                        {displayLabel.length > 10
+                          ? displayLabel.substring(0, 10) + '...'
+                          : displayLabel}
                       </div>
                     </th>
                   );
@@ -163,36 +171,41 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
               {yValues.map((yVal) => {
                 const yDisplayLabel = formatAxisLabel(yVal);
                 return (
-                <tr key={String(yVal)}>
-                  <th className="heatmap-cell heatmap-cell--header heatmap-cell--row-header" title={yDisplayLabel}>
-                    <div className="heatmap-cell-content heatmap-cell-content--header">{yDisplayLabel}</div>
-                  </th>
-                  {xValues.map((xVal) => {
-                    const key = `${xVal}-${yVal}`;
-                    const value = dataMap.get(key);
-                    const bgColor = getColor(value);
-                    const textColor = getTextColor(bgColor);
-                    const xDisplayLabel = formatAxisLabel(xVal);
+                  <tr key={String(yVal)}>
+                    <th
+                      className="heatmap-cell heatmap-cell--header heatmap-cell--row-header"
+                      title={yDisplayLabel}
+                    >
+                      <div className="heatmap-cell-content heatmap-cell-content--header">
+                        {yDisplayLabel}
+                      </div>
+                    </th>
+                    {xValues.map((xVal) => {
+                      const key = `${xVal}-${yVal}`;
+                      const value = dataMap.get(key);
+                      const bgColor = getColor(value);
+                      const textColor = getTextColor(bgColor);
+                      const xDisplayLabel = formatAxisLabel(xVal);
 
-                    return (
-                      <td
-                        key={key}
-                        className="heatmap-cell heatmap-cell--data"
-                        style={{
-                          backgroundColor: bgColor,
-                          color: textColor,
-                          minWidth: cellSize,
-                          maxWidth: cellSize,
-                          height: cellSize,
-                        }}
-                        title={`${xLabel}: ${xDisplayLabel}\n${yLabel}: ${yDisplayLabel}\n${colorLabel}: ${formatValue(value)}`}
-                      >
-                        <div className="heatmap-cell-content">{formatValue(value)}</div>
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
+                      return (
+                        <td
+                          key={key}
+                          className="heatmap-cell heatmap-cell--data"
+                          style={{
+                            backgroundColor: bgColor,
+                            color: textColor,
+                            minWidth: cellSize,
+                            maxWidth: cellSize,
+                            height: cellSize,
+                          }}
+                          title={`${xLabel}: ${xDisplayLabel}\n${yLabel}: ${yDisplayLabel}\n${colorLabel}: ${formatValue(value)}`}
+                        >
+                          <div className="heatmap-cell-content">{formatValue(value)}</div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
               })}
             </tbody>
           </table>

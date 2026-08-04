@@ -24,7 +24,7 @@ export function usePaginatedFetch<T>({
   fetchFn,
   pageSize = DEFAULT_PAGE_SIZE,
   enabled = true,
-  resetDeps = []
+  resetDeps = [],
 }: UsePaginatedFetchOptions<T>): UsePaginatedFetchResult<T> {
   const [items, setItems] = useState<T[]>([]);
   const [page, setPage] = useState(INITIAL_PAGE);
@@ -63,58 +63,61 @@ export function usePaginatedFetch<T>({
   }, []);
 
   // Fetch data function
-  const fetchData = useCallback(async (currentPage: number, isFirstLoad: boolean) => {
-    if (!enabled || isFetchingRef.current) {
-      return;
-    }
-
-    // Prevent duplicate requests
-    isFetchingRef.current = true;
-
-    // Create new abort controller
-    abortControllerRef.current = new AbortController();
-
-    try {
-      if (isFirstLoad) {
-        setIsLoading(true);
-      } else {
-        setIsFetchingMore(true);
+  const fetchData = useCallback(
+    async (currentPage: number, isFirstLoad: boolean) => {
+      if (!enabled || isFetchingRef.current) {
+        return;
       }
 
-      setError(null);
+      // Prevent duplicate requests
+      isFetchingRef.current = true;
 
-      const response = await fetchFn(currentPage, pageSize);
+      // Create new abort controller
+      abortControllerRef.current = new AbortController();
 
-      // Check if component is still mounted and request wasn't aborted
-      if (!isMountedRef.current) return;
+      try {
+        if (isFirstLoad) {
+          setIsLoading(true);
+        } else {
+          setIsFetchingMore(true);
+        }
 
-      if (currentPage === INITIAL_PAGE) {
-        // First page - replace items
-        setItems(response.items);
-      } else {
-        // Subsequent pages - append items
-        setItems(prev => [...prev, ...response.items]);
+        setError(null);
+
+        const response = await fetchFn(currentPage, pageSize);
+
+        // Check if component is still mounted and request wasn't aborted
+        if (!isMountedRef.current) return;
+
+        if (currentPage === INITIAL_PAGE) {
+          // First page - replace items
+          setItems(response.items);
+        } else {
+          // Subsequent pages - append items
+          setItems((prev) => [...prev, ...response.items]);
+        }
+
+        setHasMore(response.has_next);
+        setPage(currentPage);
+      } catch (err) {
+        if (!isMountedRef.current) return;
+
+        // Don't set error for aborted requests
+        if (err instanceof Error && err.name !== 'AbortError') {
+          console.error('[usePaginatedFetch] Error fetching data:', err);
+          setError(err instanceof Error ? err : new Error('Failed to fetch data'));
+        }
+      } finally {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsFetchingMore(false);
+        }
+        isFetchingRef.current = false;
+        abortControllerRef.current = null;
       }
-
-      setHasMore(response.has_next);
-      setPage(currentPage);
-    } catch (err) {
-      if (!isMountedRef.current) return;
-
-      // Don't set error for aborted requests
-      if (err instanceof Error && err.name !== 'AbortError') {
-        console.error('[usePaginatedFetch] Error fetching data:', err);
-        setError(err instanceof Error ? err : new Error('Failed to fetch data'));
-      }
-    } finally {
-      if (isMountedRef.current) {
-        setIsLoading(false);
-        setIsFetchingMore(false);
-      }
-      isFetchingRef.current = false;
-      abortControllerRef.current = null;
-    }
-  }, [enabled, fetchFn, pageSize]);
+    },
+    [enabled, fetchFn, pageSize],
+  );
 
   // Load more handler
   const loadMore = useCallback(() => {
@@ -123,32 +126,35 @@ export function usePaginatedFetch<T>({
   }, [hasMore, page, enabled, fetchData]);
 
   // Intersection observer callback
-  const observerCallback = useCallback((node: HTMLElement | null) => {
-    // Disconnect previous observer
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
-
-    // Don't observe if we're loading, have no more items, or not enabled
-    if (!node || !hasMore || isFetchingRef.current || !enabled) return;
-
-    // Create new observer
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        // When the sentinel element is visible and we have more items
-        if (entries[0].isIntersecting && hasMore && !isFetchingRef.current) {
-          loadMore();
-        }
-      },
-      {
-        // Trigger when element is 200px before entering viewport
-        rootMargin: '200px',
-        threshold: 0.1
+  const observerCallback = useCallback(
+    (node: HTMLElement | null) => {
+      // Disconnect previous observer
+      if (observerRef.current) {
+        observerRef.current.disconnect();
       }
-    );
 
-    observerRef.current.observe(node);
-  }, [hasMore, enabled, loadMore]);
+      // Don't observe if we're loading, have no more items, or not enabled
+      if (!node || !hasMore || isFetchingRef.current || !enabled) return;
+
+      // Create new observer
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          // When the sentinel element is visible and we have more items
+          if (entries[0].isIntersecting && hasMore && !isFetchingRef.current) {
+            loadMore();
+          }
+        },
+        {
+          // Trigger when element is 200px before entering viewport
+          rootMargin: '200px',
+          threshold: 0.1,
+        },
+      );
+
+      observerRef.current.observe(node);
+    },
+    [hasMore, enabled, loadMore],
+  );
 
   // Reset when dependencies change
   useEffect(() => {
@@ -191,6 +197,6 @@ export function usePaginatedFetch<T>({
     hasMore,
     loadMore,
     reset,
-    observerRef: observerCallback
+    observerRef: observerCallback,
   };
 }

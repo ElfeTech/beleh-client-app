@@ -27,7 +27,7 @@ function loadFirebaseOptions(): FirebaseOptions {
   if (missing.length > 0) {
     throw new Error(
       `[Firebase] Missing or empty environment variables: ${missing.join(', ')}. ` +
-        'See frontend-client/.env.example and set all VITE_FIREBASE_* values.'
+        'See frontend-client/.env.example and set all VITE_FIREBASE_* values.',
     );
   }
   return {
@@ -60,14 +60,13 @@ function warnIfFirebaseEnvMisaligned(): void {
   const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID as string | undefined;
   if (!domain || !projectId) return;
   const normalized = domain.toLowerCase();
-  const looksCustom =
-    !normalized.endsWith('.firebaseapp.com') && !normalized.endsWith('.web.app');
+  const looksCustom = !normalized.endsWith('.firebaseapp.com') && !normalized.endsWith('.web.app');
   if (looksCustom) return;
   if (!normalized.includes(projectId.toLowerCase())) {
     console.warn(
       '[Firebase] VITE_FIREBASE_AUTH_DOMAIN does not include VITE_FIREBASE_PROJECT_ID. ' +
         'Confirm Firebase Console → Authentication → Authorized domains and Google Cloud OAuth redirect URIs match this project.',
-      { domain, projectId }
+      { domain, projectId },
     );
   }
 }

@@ -1,0 +1,107 @@
+.thinking-shimmer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-height: 2.5rem;
+}
+
+.thinking-shimmer__text {
+  display: inline-block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  background: linear-gradient(
+    100deg,
+    var(--text-muted, #64748b) 0%,
+    var(--text-primary, #0f172a) 40%,
+    var(--accent-teal-600, #0d9488) 55%,
+    var(--text-muted, #64748b) 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation:
+    thinking-shimmer-sweep 2.2s ease-in-out infinite,
+    thinking-shimmer-fade 0.45s ease-out;
+}
+
+.thinking-shimmer__bars {
+  display: flex;
+  gap: 0.35rem;
+  width: min(100%, 14rem);
+}
+
+.thinking-shimmer__bars span {
+  display: block;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    var(--ds-surface-muted, #e2e8f0) 0%,
+    color-mix(in srgb, var(--accent-teal-400, #2dd4bf) 35%, var(--ds-surface-muted, #e2e8f0)) 50%,
+    var(--ds-surface-muted, #e2e8f0) 100%
+  );
+  background-size: 200% 100%;
+  animation: thinking-shimmer-bar 1.4s ease-in-out infinite;
+}
+
+.thinking-shimmer__bars span:nth-child(1) {
+  flex: 1.2;
+}
+
+.thinking-shimmer__bars span:nth-child(2) {
+  flex: 0.9;
+  animation-delay: 0.15s;
+}
+
+.thinking-shimmer__bars span:nth-child(3) {
+  flex: 0.55;
+  animation-delay: 0.3s;
+}
+
+@keyframes thinking-shimmer-sweep {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+@keyframes thinking-shimmer-fade {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes thinking-shimmer-bar {
+  0%,
+  100% {
+    background-position: 100% 0;
+    opacity: 0.55;
+  }
+  50% {
+    background-position: 0 0;
+    opacity: 1;
+  }
+}
+
+html[data-theme='dark'] .thinking-shimmer__text {
+  background: linear-gradient(
+    100deg,
+    #94a3b8 0%,
+    #f8fafc 40%,
+    var(--accent-teal-400, #2dd4bf) 55%,
+    #94a3b8 100%
+  );
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+}

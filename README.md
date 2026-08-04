@@ -115,12 +115,14 @@ src/
 ### Installation
 
 1. **Clone the repository**
+
    ```bash
    git clone <repository-url>
    cd frontend-client
    ```
 
 2. **Install dependencies**
+
    ```bash
    bun install
    # or
@@ -128,8 +130,9 @@ src/
    ```
 
 3. **Configure environment variables**
-   
+
    Create a `.env` file in the root directory:
+
    ```env
    VITE_FIREBASE_API_KEY=your_api_key
    VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
@@ -141,6 +144,7 @@ src/
    ```
 
 4. **Start the development server**
+
    ```bash
    bun run dev
    # or
@@ -148,17 +152,17 @@ src/
    ```
 
 5. **Open in browser**
-   
+
    Navigate to `http://localhost:5173`
 
 ## Available Scripts
 
-| Command | Description |
-|---------|-------------|
-| `bun run dev` | Start development server with HMR |
-| `bun run build` | Build for production |
-| `bun run preview` | Preview production build locally |
-| `bun run lint` | Run ESLint for code quality |
+| Command           | Description                       |
+| ----------------- | --------------------------------- |
+| `bun run dev`     | Start development server with HMR |
+| `bun run build`   | Build for production              |
+| `bun run preview` | Preview production build locally  |
+| `bun run lint`    | Run ESLint for code quality       |
 
 ## Docker Deployment
 
@@ -204,11 +208,12 @@ services:
         VITE_FIREBASE_APP_ID: ${VITE_FIREBASE_APP_ID}
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
     ports:
-      - "3000:80"
+      - '3000:80'
     restart: unless-stopped
 ```
 
 Then run:
+
 ```bash
 docker-compose up -d
 ```
@@ -216,23 +221,28 @@ docker-compose up -d
 ## Key Features Explained
 
 ### AI Chat Interface
+
 The main workspace provides a conversational interface where users can:
+
 - Ask natural language questions about their data
 - Receive AI-generated insights and visualizations
 - View data in interactive charts or tables
 - Export visualizations as images
 
 ### Workspace Management
+
 - Create multiple workspaces to organize different projects
 - Each workspace can contain multiple datasets
 - Switch between workspaces seamlessly
 
 ### Dataset Management
+
 - Upload CSV, Excel, or JSON files
 - Connect to external data sources
 - Preview and manage dataset schemas
 
 ### Settings & Security
+
 - Two-Factor Authentication (2FA) setup
 - Notification preferences
 - Usage monitoring and billing
@@ -241,6 +251,7 @@ The main workspace provides a conversational interface where users can:
 ## API Integration
 
 The frontend communicates with a FastAPI backend through a custom API client that handles:
+
 - Automatic token refresh
 - Request/response interceptors
 - Error handling and retries
@@ -316,19 +327,18 @@ flowchart TB
 
 ### Architecture Components
 
-| Component | Technology | Purpose |
-|-----------|------------|---------|
-| **Frontend** | React + TypeScript | User interface and client-side logic |
-| **Authentication** | Firebase Auth | Secure user authentication with Google SSO |
-| **Backend API** | FastAPI (Python) | REST API, business logic, and data processing |
-| **Cache** | Redis | Session caching and rate limiting |
-| **Analytics DB** | DuckDB | Fast analytical queries on uploaded datasets |
-| **Main Database** | PostgreSQL | User data, workspaces, and metadata storage |
-| **Object Storage** | S3-Compatible | Dataset file storage |
-| **AI/LLM** | Google Gemini | Natural language processing and query generation |
+| Component          | Technology         | Purpose                                          |
+| ------------------ | ------------------ | ------------------------------------------------ |
+| **Frontend**       | React + TypeScript | User interface and client-side logic             |
+| **Authentication** | Firebase Auth      | Secure user authentication with Google SSO       |
+| **Backend API**    | FastAPI (Python)   | REST API, business logic, and data processing    |
+| **Cache**          | Redis              | Session caching and rate limiting                |
+| **Analytics DB**   | DuckDB             | Fast analytical queries on uploaded datasets     |
+| **Main Database**  | PostgreSQL         | User data, workspaces, and metadata storage      |
+| **Object Storage** | S3-Compatible      | Dataset file storage                             |
+| **AI/LLM**         | Google Gemini      | Natural language processing and query generation |
 
-
-# Deployment Architecture 
+# Deployment Architecture
 
 ```mermaid
 flowchart TB

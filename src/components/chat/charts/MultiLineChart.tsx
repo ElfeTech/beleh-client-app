@@ -121,7 +121,10 @@ export const MultiLineChart: React.FC<MultiLineChartProps> = ({
 
       // Get the raw value from payload for proper formatting
       const dataPoint = payload[0]?.payload;
-      const formattedTimeLabel = formatTimeLabelTooltip(dataPoint?.rawValue || dataPoint?.name, timeGrain);
+      const formattedTimeLabel = formatTimeLabelTooltip(
+        dataPoint?.rawValue || dataPoint?.name,
+        timeGrain,
+      );
 
       return (
         <div
@@ -134,11 +137,14 @@ export const MultiLineChart: React.FC<MultiLineChartProps> = ({
             fontSize: '13px',
           }}
         >
-          <div style={{ marginBottom: '8px', fontWeight: '600' }}>
-            {formattedTimeLabel}
-          </div>
+          <div style={{ marginBottom: '8px', fontWeight: '600' }}>{formattedTimeLabel}</div>
           {payload
-            .filter((p: any) => !hiddenSeries.has(p.dataKey) && p.dataKey !== 'displayLabel' && p.dataKey !== 'rawValue')
+            .filter(
+              (p: any) =>
+                !hiddenSeries.has(p.dataKey) &&
+                p.dataKey !== 'displayLabel' &&
+                p.dataKey !== 'rawValue',
+            )
             .map((p: any, idx: number) => (
               <div
                 key={idx}
@@ -186,10 +192,7 @@ export const MultiLineChart: React.FC<MultiLineChartProps> = ({
           interactive={true}
         />
         <ResponsiveContainer width="100%" height={height}>
-          <LineChart
-            data={chartData}
-            margin={{ top: 20, right: 30, left: 20, bottom: 60 }}
-          >
+          <LineChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
             <defs>
               {seriesKeys.map((key, index) => (
                 <linearGradient
@@ -258,7 +261,10 @@ export const MultiLineChart: React.FC<MultiLineChartProps> = ({
     console.error('MultiLineChart rendering error:', error, { data, seriesField, xField, yField });
     return (
       <div className="chart-error">
-        <p>Unable to render multi-line chart: {error instanceof Error ? error.message : 'Unknown error'}</p>
+        <p>
+          Unable to render multi-line chart:{' '}
+          {error instanceof Error ? error.message : 'Unknown error'}
+        </p>
       </div>
     );
   }

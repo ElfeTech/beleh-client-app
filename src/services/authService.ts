@@ -8,7 +8,10 @@ import { auth, getGoogleProvider } from '../lib/firebase';
 import { apiClient } from './apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
 import { clearAllSelectedDatasetStorage } from '../lib/selectedDatasourceStorage';
+import { clearUserNamespace } from '../lib/uiMemory';
 import { SESSION_CLEAR_LOCALSTORAGE_KEYS } from '../constants/clientStorageKeys';
+import { peekInviteToken } from '../lib/inviteToken';
+import { patchWindowOpenCentered } from '../lib/centeredPopup';
 
 const TOKEN_KEY = 'firebase_auth_token';
 const USER_KEY = 'firebase_user';
@@ -28,7 +31,7 @@ export type GoogleAuthIntent = 'signin' | 'register';
 
 export async function establishSession(
   user: User,
-  options?: { forceRefreshToken?: boolean; backendIntent?: GoogleAuthIntent }
+  options?: { forceRefreshToken?: boolean; backendIntent?: GoogleAuthIntent },
 ): Promise<void> {
   const force = options?.forceRefreshToken ?? false;
   const token = await user.getIdToken(force);
@@ -39,12 +42,14 @@ export async function establishSession(
     return;
   }
 
+  const inviteToken = peekInviteToken();
+
   try {
     if (options.backendIntent === 'register') {
-      const backendUser = await apiClient.registerUser(token);
+      const backendUser = await apiClient.registerUser(token, inviteToken);
       persistBackendUser(backendUser);
     } else {
-      const backendUser = await apiClient.loginUser(token);
+      const backendUser = await apiClient.loginUser(token, inviteToken);
       persistBackendUser(backendUser);
     }
   } catch (backendError) {
@@ -61,8 +66,15 @@ export async function establishSession(
 
 export async function completeGoogleSignIn(intent: GoogleAuthIntent): Promise<void> {
   const provider = getGoogleProvider();
-  const cred = await signInWithPopup(auth, provider);
-  await establishSession(cred.user, { forceRefreshToken: false, backendIntent: intent });
+  // Firebase signInWithPopup does not accept window features; patch window.open
+  // briefly so the Google auth window opens centered on the current browser.
+  const restoreOpen = patchWindowOpenCentered(500, 600);
+  try {
+    const cred = await signInWithPopup(auth, provider);
+    await establishSession(cred.user, { forceRefreshToken: false, backendIntent: intent });
+  } finally {
+    restoreOpen();
+  }
 }
 
 function persistAuthToken(token: string): void {
@@ -84,12 +96,23 @@ function persistBackendUser(user: unknown): void {
 }
 
 export function clearSessionLocal(): void {
+  let uid: string | null = null;
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as { uid?: string };
+      uid = parsed?.uid ?? null;
+    }
+  } catch {
+    /* ignore */
+  }
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
   localStorage.removeItem(BACKEND_USER_KEY);
   localStorage.removeItem(GOOGLE_SIGNUP_FLOW_KEY);
   SESSION_CLEAR_LOCALSTORAGE_KEYS.forEach((key) => localStorage.removeItem(key));
   clearAllSelectedDatasetStorage();
+  clearUserNamespace(uid);
   apiCacheManager.clearAll();
 }
 

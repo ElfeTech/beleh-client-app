@@ -1,4 +1,12 @@
-import { createContext, useState, useContext, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useCallback,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { useAuth } from './useAuth';
 import { apiClient } from '../services/apiClient';
 import type {
@@ -39,121 +47,209 @@ export function UsageProvider({ children }: { children: ReactNode }) {
   }, [lastFetched]);
 
   // Fetch all usage data
-  const refreshUsage = useCallback(async (force = false) => {
-    if (!user) {
-      setCurrentUsage(null);
-      setSummary(null);
-      setRemaining(null);
-      setError(null);
-      setLastFetched(null);
-      return;
-    }
-
-    // Prevent duplicate fetches
-    if (isFetchingRef.current) {
-      return;
-    }
-
-    // Use cache if valid (unless force refresh)
-    if (!force && isCacheValid()) {
-      return;
-    }
-
-    try {
-      isFetchingRef.current = true;
-      setIsLoading(true);
-      setError(null);
-
-      const token = await user.getIdToken();
-
-      // Fetch usage data from /api/usage/ endpoint
-      const usageData = await apiClient.getCurrentUsage(token);
-
-      setCurrentUsage(usageData);
-
-      // Derive remaining quota from usage data
-      const derivedRemaining: RemainingQuotaResponse = {
-        queries_remaining: usageData.metrics.queries_remaining,
-        queries_used: usageData.metrics.queries_used,
-        queries_limit: usageData.metrics.queries_limit,
-        percentage_used: (usageData.metrics.queries_used / usageData.metrics.queries_limit) * 100,
-        can_execute_query: usageData.metrics.queries_remaining > 0,
-        reset_date: usageData.reset_at,
-      };
-      setRemaining(derivedRemaining);
-
-      // Derive summary with warnings
-      const queriesPercentage = (usageData.metrics.queries_used / usageData.metrics.queries_limit) * 100;
-      const datasetsPercentage = (usageData.metrics.datasets_used / usageData.metrics.datasets_limit) * 100;
-
-      const warnings: UsageWarning[] = [];
-
-      // Query warnings
-      if (queriesPercentage >= 100) {
-        warnings.push({
-          level: 'critical',
-          message: `You've used all ${usageData.metrics.queries_limit} queries this month. Upgrade to continue.`,
-          metric: 'queries',
-          percentage: queriesPercentage,
-        });
-      } else if (queriesPercentage >= 90) {
-        warnings.push({
-          level: 'critical',
-          message: `You've used ${usageData.metrics.queries_used} of ${usageData.metrics.queries_limit} queries (${queriesPercentage.toFixed(0)}%). Only ${usageData.metrics.queries_remaining} remaining.`,
-          metric: 'queries',
-          percentage: queriesPercentage,
-        });
-      } else if (queriesPercentage >= 70) {
-        warnings.push({
-          level: 'warning',
-          message: `You've used ${queriesPercentage.toFixed(0)}% of your monthly queries. Consider upgrading for more capacity.`,
-          metric: 'queries',
-          percentage: queriesPercentage,
-        });
+  const refreshUsage = useCallback(
+    async (force = false) => {
+      if (!user) {
+        setCurrentUsage(null);
+        setSummary(null);
+        setRemaining(null);
+        setError(null);
+        setLastFetched(null);
+        return;
       }
 
-      // Dataset warnings
-      if (datasetsPercentage >= 100) {
-        warnings.push({
-          level: 'critical',
-          message: `You've reached your dataset limit of ${usageData.metrics.datasets_limit}. Upgrade to add more.`,
-          metric: 'datasources',
-          percentage: datasetsPercentage,
-        });
-      } else if (datasetsPercentage >= 80) {
-        warnings.push({
-          level: 'warning',
-          message: `You've used ${usageData.metrics.datasets_used} of ${usageData.metrics.datasets_limit} datasets.`,
-          metric: 'datasources',
-          percentage: datasetsPercentage,
-        });
+      // Prevent duplicate fetches
+      if (isFetchingRef.current) {
+        return;
       }
 
-      const derivedSummary: UsageSummary = {
-        queries_percentage: queriesPercentage,
-        datasources_percentage: datasetsPercentage,
-        members_percentage: 0, // Not tracked in current API
-        plan_name: usageData.plan.name,
-        reset_date: usageData.reset_at,
-        warnings,
-      };
-      setSummary(derivedSummary);
+      // Use cache if valid (unless force refresh)
+      if (!force && isCacheValid()) {
+        return;
+      }
 
-      setLastFetched(Date.now());
+      try {
+        isFetchingRef.current = true;
+        setIsLoading(true);
+        setError(null);
 
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch usage data';
-      console.error('[Usage] Error fetching usage data:', err);
-      setError(errorMessage);
-    } finally {
-      setIsLoading(false);
-      isFetchingRef.current = false;
-    }
-  }, [user, isCacheValid]);
+        const token = await user.getIdToken();
+
+        // Fetch usage data from /api/usage/ endpoint
+        const usageData = await apiClient.getCurrentUsage(token);
+
+        setCurrentUsage(usageData);
+
+        // Derive remaining quota from usage data (+ pass through API $ value fields)
+        const value = usageData.value;
+        const qLimit = usageData.metrics.queries_limit;
+        const qUsed = usageData.metrics.queries_used;
+        const dLimit = usageData.metrics.datasets_limit;
+        const dUsed = usageData.metrics.datasets_used;
+        const queriesUnlimited = qLimit < 0;
+        const datasetsUnlimited = dLimit < 0;
+        const queriesPercentage = queriesUnlimited
+          ? 0
+          : qLimit > 0
+            ? (qUsed / qLimit) * 100
+            : qUsed > 0
+              ? 100
+              : 0;
+        const datasetsPercentage = datasetsUnlimited
+          ? 0
+          : dLimit > 0
+            ? (dUsed / dLimit) * 100
+            : dUsed > 0
+              ? 100
+              : 0;
+
+        const tLimit = usageData.metrics.llm_tokens_limit;
+        const tUsed = usageData.metrics.llm_tokens_used;
+        const tokensUnlimited = tLimit < 0;
+        const tokensPercentage = tokensUnlimited
+          ? 0
+          : tLimit > 0
+            ? (tUsed / tLimit) * 100
+            : tUsed > 0
+              ? 100
+              : 0;
+        const dailyLimit = usageData.metrics.daily_llm_tokens_limit;
+        const dailyUsed = usageData.metrics.daily_llm_tokens_used ?? 0;
+        const dailyUnlimited = dailyLimit == null || dailyLimit < 0;
+        const dailyPercentage = dailyUnlimited
+          ? 0
+          : dailyLimit > 0
+            ? (dailyUsed / dailyLimit) * 100
+            : dailyUsed > 0
+              ? 100
+              : 0;
+        // AI gate uses tokens (not queries when unlimited).
+        const tokenMeterPct = Math.max(tokensPercentage, dailyPercentage);
+        const canExecuteAi =
+          (tokensUnlimited || usageData.metrics.llm_tokens_remaining > 0) &&
+          (dailyUnlimited || (usageData.metrics.daily_llm_tokens_remaining ?? 1) > 0);
+
+        const derivedRemaining: RemainingQuotaResponse = {
+          queries_remaining: usageData.metrics.queries_remaining,
+          queries_used: qUsed,
+          queries_limit: qLimit,
+          percentage_used: queriesUnlimited ? tokenMeterPct : queriesPercentage,
+          can_execute_query: queriesUnlimited
+            ? canExecuteAi
+            : usageData.metrics.queries_remaining > 0,
+          reset_date: usageData.reset_at,
+          included_value_usd: value?.included_value_usd ?? null,
+          used_value_usd: value?.used_value_usd ?? null,
+          remaining_value_usd: value?.remaining_value_usd ?? null,
+          value_used_pct: value?.value_used_pct ?? null,
+          currency: value?.currency ?? 'usd',
+          is_unlimited: queriesUnlimited && tokensUnlimited,
+        };
+        setRemaining(derivedRemaining);
+
+        const warnings: UsageWarning[] = [];
+
+        // Query warnings only when queries are capped (not -1).
+        if (!queriesUnlimited && queriesPercentage >= 100) {
+          warnings.push({
+            level: 'critical',
+            message: `You've used all ${qLimit} queries this month. Upgrade to continue.`,
+            metric: 'queries',
+            percentage: queriesPercentage,
+          });
+        } else if (!queriesUnlimited && queriesPercentage >= 80) {
+          warnings.push({
+            level: 'warning',
+            message: `You've used ${qUsed} of ${qLimit} queries (${queriesPercentage.toFixed(0)}%).`,
+            metric: 'queries',
+            percentage: queriesPercentage,
+          });
+        }
+
+        // Period AI token warnings
+        if (!tokensUnlimited && tokensPercentage >= 100) {
+          warnings.push({
+            level: 'critical',
+            message: `You've used all AI tokens for this period. Upgrade to continue.`,
+            metric: 'llm_tokens',
+            percentage: tokensPercentage,
+          });
+        } else if (!tokensUnlimited && tokensPercentage >= 80) {
+          warnings.push({
+            level: 'warning',
+            message: `You've used ${tokensPercentage.toFixed(0)}% of your AI token quota.`,
+            metric: 'llm_tokens',
+            percentage: tokensPercentage,
+          });
+        }
+
+        // Daily AI token warnings (Free trial)
+        if (!dailyUnlimited && dailyPercentage >= 100) {
+          warnings.push({
+            level: 'critical',
+            message: `You've reached today's AI token limit. It resets at midnight UTC.`,
+            metric: 'daily_llm_tokens',
+            percentage: dailyPercentage,
+          });
+        } else if (!dailyUnlimited && dailyPercentage >= 80) {
+          warnings.push({
+            level: 'warning',
+            message: `You've used ${dailyPercentage.toFixed(0)}% of today's AI token allowance.`,
+            metric: 'daily_llm_tokens',
+            percentage: dailyPercentage,
+          });
+        }
+
+        // Dataset warnings
+        if (!datasetsUnlimited && datasetsPercentage >= 100) {
+          warnings.push({
+            level: 'critical',
+            message: `You've reached your dataset limit of ${dLimit}. Upgrade to add more.`,
+            metric: 'datasources',
+            percentage: datasetsPercentage,
+          });
+        } else if (!datasetsUnlimited && datasetsPercentage >= 80) {
+          warnings.push({
+            level: 'warning',
+            message: `You've used ${dUsed} of ${dLimit} datasets.`,
+            metric: 'datasources',
+            percentage: datasetsPercentage,
+          });
+        }
+
+        const derivedSummary: UsageSummary = {
+          queries_percentage: queriesPercentage,
+          datasources_percentage: datasetsPercentage,
+          members_percentage: 0, // Seat usage is on GET /workspaces/{id}/usage
+          plan_name: usageData.plan.name,
+          reset_date: usageData.reset_at,
+          warnings,
+          remaining_value_usd: value?.remaining_value_usd ?? null,
+          value_used_pct: value?.value_used_pct ?? null,
+          included_value_usd: value?.included_value_usd ?? null,
+          used_value_usd: value?.used_value_usd ?? null,
+          currency: value?.currency ?? 'usd',
+        };
+        setSummary(derivedSummary);
+
+        setLastFetched(Date.now());
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : 'Failed to fetch usage data';
+        console.error('[Usage] Error fetching usage data:', err);
+        setError(errorMessage);
+      } finally {
+        setIsLoading(false);
+        isFetchingRef.current = false;
+      }
+    },
+    [user, isCacheValid],
+  );
 
   // Optimistic update - immediately decrement query count for instant UI feedback
   const decrementQueryCount = useCallback(() => {
     if (currentUsage) {
+      const qLimit = currentUsage.metrics.queries_limit;
+      const queriesUnlimited = qLimit < 0;
       const updatedUsage = {
         ...currentUsage,
         metrics: {
@@ -164,15 +260,18 @@ export function UsageProvider({ children }: { children: ReactNode }) {
       };
       setCurrentUsage(updatedUsage);
 
-      // Update remaining
       const queriesRemaining = updatedUsage.metrics.queries_remaining;
       if (remaining) {
         setRemaining({
           ...remaining,
           queries_remaining: queriesRemaining,
           queries_used: updatedUsage.metrics.queries_used,
-          percentage_used: (updatedUsage.metrics.queries_used / updatedUsage.metrics.queries_limit) * 100,
-          can_execute_query: queriesRemaining > 0,
+          percentage_used: queriesUnlimited
+            ? remaining.percentage_used
+            : qLimit > 0
+              ? (updatedUsage.metrics.queries_used / qLimit) * 100
+              : 100,
+          can_execute_query: queriesUnlimited ? remaining.can_execute_query : queriesRemaining > 0,
         });
       }
     }
@@ -218,16 +317,18 @@ export function UsageProvider({ children }: { children: ReactNode }) {
         };
       }
     },
-    [user, refreshUsage]
+    [user, refreshUsage],
   );
 
   // Check if there's a warning at specific level
   const hasWarning = useCallback(
     (level: 'warning' | 'critical'): boolean => {
       if (!summary?.warnings) return false;
-      return summary.warnings.some((w) => w.level === level || (level === 'warning' && w.level === 'critical'));
+      return summary.warnings.some(
+        (w) => w.level === level || (level === 'warning' && w.level === 'critical'),
+      );
     },
-    [summary]
+    [summary],
   );
 
   // Derived value: can execute query
@@ -245,7 +346,7 @@ export function UsageProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [user]
+    [user],
   );
 
   // Initial fetch when user authenticates

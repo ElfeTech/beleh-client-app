@@ -1,14 +1,21 @@
-import { createContext, useState, useContext, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  useRef,
+  useCallback,
+  type ReactNode,
+} from 'react';
 import { useAuth } from './useAuth';
 import { useWorkspace } from './WorkspaceContext';
-import {
-    readSelectedDatasetId,
-    writeSelectedDatasetId,
-} from '../lib/selectedDatasourceStorage';
+import { readSelectedDatasetId, writeSelectedDatasetId } from '../lib/selectedDatasourceStorage';
+import { isSourceInWorkspace } from '../lib/workspaceStateValidation';
+import { findDemoDatasource } from '../lib/workspaceDemo';
 
 interface DatasourceContextType {
-    selectedDatasourceId: string | null;
-    setSelectedDatasourceId: (id: string | null) => void;
+  selectedDatasourceId: string | null;
+  setSelectedDatasourceId: (id: string | null) => void;
 }
 
 const DatasourceContext = createContext<DatasourceContextType | undefined>(undefined);
@@ -16,120 +23,116 @@ const DatasourceContext = createContext<DatasourceContextType | undefined>(undef
 export { DatasourceContext };
 
 export function DatasourceProvider({ children }: { children: ReactNode }) {
-    const { user } = useAuth();
-    const { currentWorkspace, workspaceContext, datasources, connectors, loading } = useWorkspace();
-    const [selectedDatasourceId, setSelectedDatasourceIdState] = useState<string | null>(null);
-    const datasetHydratedForWorkspaceRef = useRef<string | null>(null);
+  const { user } = useAuth();
+  const { currentWorkspace, workspaceContext, datasources, connectors, loading } = useWorkspace();
+  const [selectedDatasourceId, setSelectedDatasourceIdState] = useState<string | null>(null);
+  const datasetHydratedForWorkspaceRef = useRef<string | null>(null);
 
-    const setSelectedDatasourceId = useCallback(
-        (id: string | null) => {
-            setSelectedDatasourceIdState(id);
-            const wid = currentWorkspace?.id;
-            const uid = user?.uid;
-            writeSelectedDatasetId(uid, wid, id);
-        },
-        [user?.uid, currentWorkspace?.id]
-    );
+  const setSelectedDatasourceId = useCallback(
+    (id: string | null) => {
+      setSelectedDatasourceIdState(id);
+      const wid = currentWorkspace?.id;
+      const uid = user?.uid;
+      writeSelectedDatasetId(uid, wid, id);
+    },
+    [user?.uid, currentWorkspace?.id],
+  );
 
-    useEffect(() => {
-        if (!user) {
-            setSelectedDatasourceIdState(null);
-            datasetHydratedForWorkspaceRef.current = null;
-            return;
-        }
+  // Hydrate selection for the current workspace once source lists are ready.
+  // Prefer the user's explicit local choice over server state (connectors cannot be stored
+  // in last_active_dataset_id, and server state may lag behind a fresh pick).
+  useEffect(() => {
+    if (!user) {
+      setSelectedDatasourceIdState(null);
+      datasetHydratedForWorkspaceRef.current = null;
+      return;
+    }
 
-        const wid = currentWorkspace?.id;
-        if (!wid) {
-            return;
-        }
+    const wid = currentWorkspace?.id;
+    if (!wid) return;
 
-        if (!workspaceContext || workspaceContext.workspace.id !== wid) {
-            return;
-        }
+    if (datasetHydratedForWorkspaceRef.current === wid) {
+      return;
+    }
 
-        if (datasetHydratedForWorkspaceRef.current === wid) {
-            return;
-        }
+    // Wait until workspace bootstrap finished so we do not treat an empty list as "missing"
+    // and wipe a valid persisted selection.
+    if (loading) return;
+    if (!workspaceContext || workspaceContext.workspace.id !== wid) return;
 
-        if (loading) {
-            return;
-        }
+    const uid = user.uid;
+    const stored = readSelectedDatasetId(uid, wid);
+    const serverDatasetId = workspaceContext.state.last_active_dataset_id ?? null;
 
-        const uid = user.uid;
-        const serverDatasetId = workspaceContext.state.last_active_dataset_id ?? null;
+    let chosen: string | null = null;
+    if (isSourceInWorkspace(stored, datasources, connectors)) {
+      chosen = stored;
+    } else if (isSourceInWorkspace(serverDatasetId, datasources, connectors)) {
+      chosen = serverDatasetId as string;
+      // Mirror server choice into local memory so refresh stays consistent
+      writeSelectedDatasetId(uid, wid, chosen);
+    } else {
+      // Lists may still be empty (no sources yet) , keep any stored id until lists arrive,
+      // then clear only once we know the id is stale.
+      const listsReady = datasources.length > 0 || connectors.length > 0;
+      if (listsReady) {
+        if (stored) writeSelectedDatasetId(uid, wid, null);
+        // Free-trial sample: auto-bind READY demo when nothing else is selected.
+        chosen = findDemoDatasource(datasources)?.id ?? null;
+        if (chosen) writeSelectedDatasetId(uid, wid, chosen);
+      } else if (stored) {
+        // No sources in workspace yet; still surface the stored id so the composer
+        // does not flash GENERAL , validation effect will clear if it never appears.
+        chosen = stored;
+      } else {
+        chosen = null;
+      }
+    }
 
-        const validInWorkspace = (id: string | null | undefined) =>
-            !!id &&
-            (datasources.some((d) => d.id === id) || connectors.some((c) => c.id === id));
+    setSelectedDatasourceIdState(chosen);
+    datasetHydratedForWorkspaceRef.current = wid;
+  }, [user, currentWorkspace?.id, workspaceContext, datasources, connectors, loading]);
 
-        let chosen: string | null = null;
-        if (validInWorkspace(serverDatasetId)) {
-            chosen = serverDatasetId as string;
-        } else {
-            const stored = readSelectedDatasetId(uid, wid);
-            if (validInWorkspace(stored)) {
-                chosen = stored;
-            }
-        }
+  // Early restore from localStorage while waiting for workspaceContext (feels instant on refresh)
+  useEffect(() => {
+    if (!user?.uid || !currentWorkspace?.id || loading) return;
+    const wid = currentWorkspace.id;
+    if (datasetHydratedForWorkspaceRef.current === wid) return;
 
-        setSelectedDatasourceId(chosen);
-        datasetHydratedForWorkspaceRef.current = wid;
-    }, [
-        user,
-        currentWorkspace?.id,
-        workspaceContext,
-        datasources,
-        connectors,
-        loading,
-        setSelectedDatasourceId,
-    ]);
+    const stored = readSelectedDatasetId(user.uid, wid);
+    if (!stored) return;
 
-    // Apply localStorage as soon as datasource lists exist, even if workspace-context API is still loading.
-    useEffect(() => {
-        if (!user?.uid || !currentWorkspace?.id || loading) return;
-        const wid = currentWorkspace.id;
-        if (datasetHydratedForWorkspaceRef.current === wid) return;
-        if (workspaceContext && workspaceContext.workspace.id === wid) return;
+    // Apply immediately if already valid, or if lists have not loaded yet (optimistic)
+    if (
+      isSourceInWorkspace(stored, datasources, connectors) ||
+      (datasources.length === 0 && connectors.length === 0)
+    ) {
+      setSelectedDatasourceIdState(stored);
+    }
+  }, [user?.uid, currentWorkspace?.id, loading, datasources, connectors]);
 
-        const stored = readSelectedDatasetId(user.uid, wid);
-        if (!stored) return;
-        const valid =
-            datasources.some((d) => d.id === stored) || connectors.some((c) => c.id === stored);
-        if (valid) {
-            setSelectedDatasourceId(stored);
-        }
-    }, [
-        user?.uid,
-        currentWorkspace?.id,
-        loading,
-        datasources,
-        connectors,
-        workspaceContext,
-        setSelectedDatasourceId,
-    ]);
+  useEffect(() => {
+    const wid = currentWorkspace?.id;
+    if (!wid) {
+      datasetHydratedForWorkspaceRef.current = null;
+      return;
+    }
+    if (datasetHydratedForWorkspaceRef.current && datasetHydratedForWorkspaceRef.current !== wid) {
+      datasetHydratedForWorkspaceRef.current = null;
+    }
+  }, [currentWorkspace?.id]);
 
-    useEffect(() => {
-        const wid = currentWorkspace?.id;
-        if (!wid) {
-            datasetHydratedForWorkspaceRef.current = null;
-            return;
-        }
-        if (datasetHydratedForWorkspaceRef.current && datasetHydratedForWorkspaceRef.current !== wid) {
-            datasetHydratedForWorkspaceRef.current = null;
-        }
-    }, [currentWorkspace?.id]);
-
-    return (
-        <DatasourceContext.Provider value={{ selectedDatasourceId, setSelectedDatasourceId }}>
-            {children}
-        </DatasourceContext.Provider>
-    );
+  return (
+    <DatasourceContext.Provider value={{ selectedDatasourceId, setSelectedDatasourceId }}>
+      {children}
+    </DatasourceContext.Provider>
+  );
 }
 
 export function useDatasource() {
-    const context = useContext(DatasourceContext);
-    if (context === undefined) {
-        throw new Error('useDatasource must be used within a DatasourceProvider');
-    }
-    return context;
+  const context = useContext(DatasourceContext);
+  if (context === undefined) {
+    throw new Error('useDatasource must be used within a DatasourceProvider');
+  }
+  return context;
 }

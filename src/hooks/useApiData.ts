@@ -11,33 +11,33 @@ import { apiCacheManager, type CacheConfig } from '../utils/apiCacheManager';
 import { useAuth } from '../context/useAuth';
 
 export interface UseApiDataOptions<T> extends CacheConfig {
-    /**
-     * If true, data will be fetched immediately when the hook is mounted
-     */
-    immediate?: boolean;
+  /**
+   * If true, data will be fetched immediately when the hook is mounted
+   */
+  immediate?: boolean;
 
-    /**
-     * Callback when data is successfully fetched
-     */
-    onSuccess?: (data: T) => void;
+  /**
+   * Callback when data is successfully fetched
+   */
+  onSuccess?: (data: T) => void;
 
-    /**
-     * Callback when an error occurs
-     */
-    onError?: (error: Error) => void;
+  /**
+   * Callback when an error occurs
+   */
+  onError?: (error: Error) => void;
 
-    /**
-     * If provided, the hook will automatically refetch when these dependencies change
-     */
-    dependencies?: any[];
+  /**
+   * If provided, the hook will automatically refetch when these dependencies change
+   */
+  dependencies?: any[];
 }
 
 export interface UseApiDataResult<T> {
-    data: T | null;
-    loading: boolean;
-    error: Error | null;
-    refetch: () => Promise<T | null>;
-    invalidate: () => void;
+  data: T | null;
+  loading: boolean;
+  error: Error | null;
+  refetch: () => Promise<T | null>;
+  invalidate: () => void;
 }
 
 /**
@@ -54,88 +54,77 @@ export interface UseApiDataResult<T> {
  * ```
  */
 export function useApiData<T>(
-    endpoint: string,
-    fetchFn: (...args: any[]) => Promise<T>,
-    args: any[] = [],
-    options: UseApiDataOptions<T> = {}
+  endpoint: string,
+  fetchFn: (...args: any[]) => Promise<T>,
+  args: any[] = [],
+  options: UseApiDataOptions<T> = {},
 ): UseApiDataResult<T> {
-    const {
-        immediate = false,
-        onSuccess,
-        onError,
-        dependencies = [],
-        ...cacheConfig
-    } = options;
+  const { immediate = false, onSuccess, onError, dependencies = [], ...cacheConfig } = options;
 
-    const [data, setData] = useState<T | null>(null);
-    const [loading, setLoading] = useState(immediate);
-    const [error, setError] = useState<Error | null>(null);
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(immediate);
+  const [error, setError] = useState<Error | null>(null);
 
-    // Use ref to track if component is mounted (prevent state updates after unmount)
-    const isMountedRef = useRef(true);
+  // Use ref to track if component is mounted (prevent state updates after unmount)
+  const isMountedRef = useRef(true);
 
-    // Use ref to track the latest args to avoid stale closures
-    const argsRef = useRef(args);
-    argsRef.current = args;
+  // Use ref to track the latest args to avoid stale closures
+  const argsRef = useRef(args);
+  argsRef.current = args;
 
-    const fetchData = useCallback(async (): Promise<T | null> => {
-        setLoading(true);
-        setError(null);
+  const fetchData = useCallback(async (): Promise<T | null> => {
+    setLoading(true);
+    setError(null);
 
-        try {
-            const result = await apiCacheManager.fetch(
-                endpoint,
-                fetchFn,
-                argsRef.current,
-                cacheConfig
-            );
+    try {
+      const result = await apiCacheManager.fetch(endpoint, fetchFn, argsRef.current, cacheConfig);
 
-            if (isMountedRef.current) {
-                setData(result);
-                setLoading(false);
-                onSuccess?.(result);
-            }
+      if (isMountedRef.current) {
+        setData(result);
+        setLoading(false);
+        onSuccess?.(result);
+      }
 
-            return result;
-        } catch (err) {
-            const error = err instanceof Error ? err : new Error(String(err));
+      return result;
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error(String(err));
 
-            if (isMountedRef.current) {
-                setError(error);
-                setLoading(false);
-                onError?.(error);
-            }
+      if (isMountedRef.current) {
+        setError(error);
+        setLoading(false);
+        onError?.(error);
+      }
 
-            return null;
-        }
-    }, [endpoint, fetchFn, cacheConfig, onSuccess, onError]);
+      return null;
+    }
+  }, [endpoint, fetchFn, cacheConfig, onSuccess, onError]);
 
-    const invalidate = useCallback(() => {
-        apiCacheManager.invalidate(endpoint, argsRef.current);
-    }, [endpoint]);
+  const invalidate = useCallback(() => {
+    apiCacheManager.invalidate(endpoint, argsRef.current);
+  }, [endpoint]);
 
-    // Fetch on mount if immediate is true
-    useEffect(() => {
-        if (immediate) {
-            fetchData();
-        }
-    }, [immediate, ...dependencies]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Fetch on mount if immediate is true
+  useEffect(() => {
+    if (immediate) {
+      fetchData();
+    }
+  }, [immediate, ...dependencies]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Track mount so StrictMode remounts can receive fetch results (ref must be true after remount).
-    useEffect(() => {
-        isMountedRef.current = true;
-        return () => {
-            isMountedRef.current = false;
-        };
-    }, []);
-
-    return {
-        data,
-        loading,
-        error,
-        refetch: fetchData,
-        invalidate,
+  // Track mount so StrictMode remounts can receive fetch results (ref must be true after remount).
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
     };
+  }, []);
+
+  return {
+    data,
+    loading,
+    error,
+    refetch: fetchData,
+    invalidate,
+  };
 }
 
 /**
@@ -147,27 +136,27 @@ export function useApiData<T>(
  * ```
  */
 export function useSessions(datasourceId: string | null) {
-    const { data, loading, error, refetch, invalidate } = useApiData(
-        'sessions',
-        async (token: string, dsId: string) => {
-            const { apiClient } = await import('../services/apiClient');
-            const response = await apiClient.listChatSessions(token, dsId);
-            return response.items;
-        },
-        datasourceId ? [datasourceId] : [],
-        {
-            immediate: !!datasourceId,
-            dependencies: [datasourceId],
-        }
-    );
+  const { data, loading, error, refetch, invalidate } = useApiData(
+    'sessions',
+    async (token: string, dsId: string) => {
+      const { apiClient } = await import('../services/apiClient');
+      const response = await apiClient.listChatSessions(token, dsId);
+      return response.items;
+    },
+    datasourceId ? [datasourceId] : [],
+    {
+      immediate: !!datasourceId,
+      dependencies: [datasourceId],
+    },
+  );
 
-    return {
-        sessions: data || [],
-        loading,
-        error,
-        refresh: refetch,
-        invalidate,
-    };
+  return {
+    sessions: data || [],
+    loading,
+    error,
+    refresh: refetch,
+    invalidate,
+  };
 }
 
 /**
@@ -179,83 +168,82 @@ export function useSessions(datasourceId: string | null) {
  * ```
  */
 export function useMessages(sessionId: string | null, initialPage: number = 1) {
-    const { user } = useAuth();
-    const [page, setPage] = useState(initialPage);
-    const [allMessages, setAllMessages] = useState<any[]>([]);
-    const [hasMore, setHasMore] = useState(false);
-    const pageRef = useRef(page);
-    pageRef.current = page;
+  const { user } = useAuth();
+  const [page, setPage] = useState(initialPage);
+  const [allMessages, setAllMessages] = useState<any[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const pageRef = useRef(page);
+  pageRef.current = page;
 
-    const canFetchMessages =
-        !!sessionId && sessionId !== 'undefined' && sessionId !== '1';
+  const canFetchMessages = !!sessionId && sessionId !== 'undefined' && sessionId !== '1';
 
-    // Reset pagination when switching sessions; clear rows only when leaving or changing chat
-    useEffect(() => {
-        setPage(1);
-        setAllMessages([]);
-        setHasMore(false);
-    }, [sessionId]);
+  // Reset pagination when switching sessions; clear rows only when leaving or changing chat
+  useEffect(() => {
+    setPage(1);
+    setAllMessages([]);
+    setHasMore(false);
+  }, [sessionId]);
 
-    const fetchMessages = useCallback(
-        async (sId: string, p: number) => {
-            if (!user) {
-                throw new Error('Not authenticated');
-            }
-            const token = await user.getIdToken();
-            const { apiClient } = await import('../services/apiClient');
-            return apiClient.getSessionMessagesPaginated(token, sId, {
-                page: p,
-                page_size: 20,
-            });
-        },
-        [user]
-    );
+  const fetchMessages = useCallback(
+    async (sId: string, p: number) => {
+      if (!user) {
+        throw new Error('Not authenticated');
+      }
+      const token = await user.getIdToken();
+      const { apiClient } = await import('../services/apiClient');
+      return apiClient.getSessionMessagesPaginated(token, sId, {
+        page: p,
+        page_size: 20,
+      });
+    },
+    [user],
+  );
 
-    const { loading, error, refetch, invalidate } = useApiData(
-        'messages',
-        fetchMessages,
-        canFetchMessages ? [sessionId, page] : [],
-        {
-            immediate: canFetchMessages && !!user,
-            dependencies: [sessionId, page, user],
-            onSuccess: (response) => {
-                setHasMore(response.has_next);
-                if (pageRef.current === 1) {
-                    setAllMessages(response.items);
-                } else {
-                    setAllMessages((prev) => [...response.items, ...prev]);
-                }
-            },
+  const { loading, error, refetch, invalidate } = useApiData(
+    'messages',
+    fetchMessages,
+    canFetchMessages ? [sessionId, page] : [],
+    {
+      immediate: canFetchMessages && !!user,
+      dependencies: [sessionId, page, user],
+      onSuccess: (response) => {
+        setHasMore(response.has_next);
+        if (pageRef.current === 1) {
+          setAllMessages(response.items);
+        } else {
+          setAllMessages((prev) => [...response.items, ...prev]);
         }
-    );
+      },
+    },
+  );
 
-    /** Bypass stale cache (e.g. after POST) so history matches the server. */
-    const refetchFresh = useCallback(async () => {
-        invalidate();
-        return refetch();
-    }, [invalidate, refetch]);
+  /** Bypass stale cache (e.g. after POST) so history matches the server. */
+  const refetchFresh = useCallback(async () => {
+    invalidate();
+    return refetch();
+  }, [invalidate, refetch]);
 
-    const loadMore = useCallback(() => {
-        if (hasMore && !loading) {
-            setPage(prev => prev + 1);
-        }
-    }, [hasMore, loading]);
+  const loadMore = useCallback(() => {
+    if (hasMore && !loading) {
+      setPage((prev) => prev + 1);
+    }
+  }, [hasMore, loading]);
 
-    const reset = useCallback(() => {
-        setPage(1);
-        setAllMessages([]);
-        setHasMore(false);
-    }, []);
+  const reset = useCallback(() => {
+    setPage(1);
+    setAllMessages([]);
+    setHasMore(false);
+  }, []);
 
-    return {
-        messages: allMessages,
-        loading,
-        error,
-        hasMore,
-        loadMore,
-        reset,
-        refetch: refetchFresh,
-    };
+  return {
+    messages: allMessages,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    reset,
+    refetch: refetchFresh,
+  };
 }
 
 /**
@@ -267,27 +255,27 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
  * ```
  */
 export function useDatasources(workspaceId: string | null) {
-    const { data, loading, error, refetch, invalidate } = useApiData(
-        'datasources',
-        async (token: string, wId: string) => {
-            const { apiClient } = await import('../services/apiClient');
-            const response = await apiClient.listWorkspaceDatasources(token, wId);
-            return response.items;
-        },
-        workspaceId && workspaceId !== 'undefined' ? [workspaceId] : [],
-        {
-            immediate: !!workspaceId && workspaceId !== 'undefined',
-            dependencies: [workspaceId],
-        }
-    );
+  const { data, loading, error, refetch, invalidate } = useApiData(
+    'datasources',
+    async (token: string, wId: string) => {
+      const { apiClient } = await import('../services/apiClient');
+      const response = await apiClient.listWorkspaceDatasources(token, wId);
+      return response.items;
+    },
+    workspaceId && workspaceId !== 'undefined' ? [workspaceId] : [],
+    {
+      immediate: !!workspaceId && workspaceId !== 'undefined',
+      dependencies: [workspaceId],
+    },
+  );
 
-    return {
-        datasources: data || [],
-        loading,
-        error,
-        refresh: refetch,
-        invalidate,
-    };
+  return {
+    datasources: data || [],
+    loading,
+    error,
+    refresh: refetch,
+    invalidate,
+  };
 }
 
 /**
@@ -299,26 +287,26 @@ export function useDatasources(workspaceId: string | null) {
  * ```
  */
 export function useWorkspaceContext(workspaceId: string | null) {
-    const { data, loading, error, refetch, invalidate } = useApiData(
-        'workspace-context',
-        async (token: string, wId: string) => {
-            const { apiClient } = await import('../services/apiClient');
-            return apiClient.getWorkspaceContext(token, wId);
-        },
-        workspaceId && workspaceId !== 'undefined' ? [workspaceId] : [],
-        {
-            immediate: !!workspaceId && workspaceId !== 'undefined',
-            dependencies: [workspaceId],
-        }
-    );
+  const { data, loading, error, refetch, invalidate } = useApiData(
+    'workspace-context',
+    async (token: string, wId: string) => {
+      const { apiClient } = await import('../services/apiClient');
+      return apiClient.getWorkspaceContext(token, wId);
+    },
+    workspaceId && workspaceId !== 'undefined' ? [workspaceId] : [],
+    {
+      immediate: !!workspaceId && workspaceId !== 'undefined',
+      dependencies: [workspaceId],
+    },
+  );
 
-    return {
-        context: data,
-        loading,
-        error,
-        refresh: refetch,
-        invalidate,
-    };
+  return {
+    context: data,
+    loading,
+    error,
+    refresh: refetch,
+    invalidate,
+  };
 }
 
 /**
@@ -330,26 +318,26 @@ export function useWorkspaceContext(workspaceId: string | null) {
  * ```
  */
 export function useWorkspaces() {
-    const { data, loading, error, refetch, invalidate } = useApiData(
-        'workspaces',
-        async (token: string) => {
-            const { apiClient } = await import('../services/apiClient');
-            const response = await apiClient.listWorkspaces(token);
-            return response.items;
-        },
-        [],
-        {
-            immediate: false, // Will be triggered manually with token
-        }
-    );
+  const { data, loading, error, refetch, invalidate } = useApiData(
+    'workspaces',
+    async (token: string) => {
+      const { apiClient } = await import('../services/apiClient');
+      const response = await apiClient.listWorkspaces(token);
+      return response.items;
+    },
+    [],
+    {
+      immediate: false, // Will be triggered manually with token
+    },
+  );
 
-    return {
-        workspaces: data || [],
-        loading,
-        error,
-        refresh: refetch,
-        invalidate,
-    };
+  return {
+    workspaces: data || [],
+    loading,
+    error,
+    refresh: refetch,
+    invalidate,
+  };
 }
 
 /**
@@ -361,23 +349,23 @@ export function useWorkspaces() {
  * ```
  */
 export function useUsageData() {
-    const { data, loading, error, refetch, invalidate } = useApiData(
-        'usage',
-        async (token: string) => {
-            const { apiClient } = await import('../services/apiClient');
-            return apiClient.getCurrentUsage(token);
-        },
-        [],
-        {
-            immediate: false, // Will be triggered manually with token
-        }
-    );
+  const { data, loading, error, refetch, invalidate } = useApiData(
+    'usage',
+    async (token: string) => {
+      const { apiClient } = await import('../services/apiClient');
+      return apiClient.getCurrentUsage(token);
+    },
+    [],
+    {
+      immediate: false, // Will be triggered manually with token
+    },
+  );
 
-    return {
-        usage: data,
-        loading,
-        error,
-        refresh: refetch,
-        invalidate,
-    };
+  return {
+    usage: data,
+    loading,
+    error,
+    refresh: refetch,
+    invalidate,
+  };
 }

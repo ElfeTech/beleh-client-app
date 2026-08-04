@@ -1,8 +1,13 @@
 // API Types based on backend schema
 
-export interface UserCreate {
+/** POST `/api/auth/register` | `/login` , Firebase ID token + optional invite auto-accept. */
+export interface AuthTokenRequest {
   token: string;
+  invite_token?: string;
 }
+
+/** @deprecated Prefer AuthTokenRequest */
+export type UserCreate = AuthTokenRequest;
 
 export interface UserResponse {
   uid: string;
@@ -13,7 +18,7 @@ export interface UserResponse {
   updated_at: string;
 }
 
-/** GET/PATCH `/api/users/me` — profile + merged UI preferences (JSON). */
+/** GET/PATCH `/api/users/me` , profile + merged UI preferences (JSON). */
 export interface UserMeResponse {
   uid: string;
   email: string;
@@ -37,17 +42,121 @@ export interface ValidationError {
   type: string;
 }
 
+export type WorkspaceRole = 'owner' | 'member';
+
 export interface WorkspaceResponse {
   id: string;
   name: string;
-  user_id: string;
+  /** @deprecated Prefer owner_id , legacy alias some payloads may still use. */
+  user_id?: string;
+  /** Workspace creator / billing boundary owner (backend user UUID). */
+  owner_id?: string;
+  tenant_id?: string;
   is_default: boolean;
+  /** Caller's role in this workspace when returned by list/context. */
+  role?: WorkspaceRole;
+  /** Memberships when included on workspace payloads. */
+  members?: WorkspaceMember[];
   created_at: string;
   updated_at: string;
 }
 
 export interface WorkspaceCreate {
   name: string;
+}
+
+export type WorkspaceInvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
+
+export interface WorkspaceMemberUser {
+  id: string;
+  uid: string;
+  email: string;
+  display_name?: string | null;
+  photo_url?: string | null;
+  is_active?: boolean;
+}
+
+export interface WorkspaceMember {
+  id?: string;
+  /** Backend user UUID (used for DELETE /members/{userId}). */
+  user_id: string;
+  role: WorkspaceRole;
+  status: 'active' | string;
+  joined_at?: string;
+  /** Nested profile when returned by list/accept APIs. */
+  user?: WorkspaceMemberUser | null;
+  /** Flattened convenience fields (normalized client-side when nested). */
+  email?: string | null;
+  display_name?: string | null;
+  photo_url?: string | null;
+}
+
+export interface WorkspaceInvitation {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: WorkspaceRole;
+  status: WorkspaceInvitationStatus;
+  expires_at: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface WorkspaceInvitationCreate {
+  email: string;
+  role?: 'member';
+}
+
+export type WorkspacePlanStatus = 'trial' | 'active' | 'expired' | (string & {});
+
+export interface WorkspaceUsageResponse {
+  seats_used: number;
+  seats_limit: number;
+  datasources_used: number;
+  datasources_limit: number;
+  workspaces_used: number;
+  workspaces_limit: number;
+  queries_used?: number;
+  queries_limit?: number;
+  llm_tokens_used?: number;
+  llm_tokens_limit?: number;
+  /** Remaining period AI tokens when provided by the API. */
+  llm_tokens_remaining?: number;
+  daily_llm_tokens_used?: number;
+  daily_llm_tokens_limit?: number;
+  daily_llm_tokens_remaining?: number;
+  daily_reset_at?: string | null;
+  reset_at?: string | null;
+  is_trial?: boolean;
+  trial_end?: string | null;
+  plan_status?: WorkspacePlanStatus | null;
+  plan_tier?: string | null;
+  upgrade_url?: string | null;
+}
+
+export type QuotaLimitType =
+  | 'queries'
+  | 'llm_tokens'
+  | 'daily_llm_tokens'
+  | 'datasets'
+  | 'members_per_workspace'
+  | 'workspaces';
+
+export interface QuotaExceededDetail {
+  error: 'quota_exceeded';
+  limit_type: QuotaLimitType;
+  current_usage: number;
+  limit: number;
+  remaining: number;
+  reset_at?: string | null;
+  message?: string;
+  upgrade_url?: string | null;
+}
+
+export interface AcceptInvitationResponse {
+  /** Present when API includes it; otherwise resolved client-side after accept. */
+  workspace_id?: string;
+  member?: WorkspaceMember;
 }
 
 export interface DataSourceColumn {
@@ -147,6 +256,28 @@ export interface DataSourceResponse {
   updated_at: string;
   workspace?: WorkspaceInfo;
   owner?: OwnerInfo;
+  /** True when this is the Free-trial sample dataset. */
+  is_demo?: boolean;
+}
+
+/** GET /api/workspaces/{id}/demo */
+export interface WorkspaceDemoStatus {
+  connected: boolean;
+  is_demo?: boolean;
+  datasource?: DataSourceResponse | null;
+  suggested_prompts?: string[];
+  headline?: string | null;
+  message?: string | null;
+}
+
+/** POST /api/workspaces/{id}/demo/connect */
+export interface WorkspaceDemoConnectResponse {
+  already_connected: boolean;
+  is_demo: boolean;
+  datasource: DataSourceResponse;
+  suggested_prompts: string[];
+  headline: string;
+  message: string;
 }
 
 export interface SheetRecoveryConfig {
@@ -187,13 +318,139 @@ export interface IntentRequest {
   dataset_id: string | null;
 }
 
-export interface ChatWorkflowResponse {
-  intent?: IntentMetadata;
-  execution?: ExecutionMetadata;
-  visualization?: VisualizationRecommendation | null;
-  insight?: InsightResponse | null;
-  session_id?: string;
-  message_id?: string;
+export type ArtifactType =
+  | 'kpi'
+  | 'table'
+  | 'column'
+  | 'bar'
+  | 'line'
+  | 'area'
+  | 'doughnut'
+  | 'pie'
+  | 'scatter'
+  | 'insight'
+  | 'action_group'
+  | 'filter_bar'
+  | 'empty_state'
+  | 'error';
+
+/** Category + part-to-whole + correlation charts in the generative-UI registry. */
+export type ChartArtifactType = 'column' | 'bar' | 'line' | 'area' | 'doughnut' | 'pie' | 'scatter';
+
+export type ActionStyle = 'primary' | 'secondary' | 'ghost';
+export type ActionKind = 'ask' | 'run_tool' | 'navigate';
+
+export interface KpiMetric {
+  label: string;
+  value: string;
+  sub?: string | null;
+  delta_pct?: number | null;
+}
+
+export interface KpiData {
+  metrics: KpiMetric[];
+}
+
+export interface TableData {
+  columns: string[];
+  rows: unknown[][];
+  page_size?: number;
+}
+
+export interface ChartDataset {
+  label: string;
+  data: number[];
+}
+
+export interface ChartData {
+  labels: string[];
+  datasets: ChartDataset[];
+  source_tool_call_id?: string | null;
+}
+
+export interface ScatterPoint {
+  x: number;
+  y: number;
+  label?: string;
+}
+
+export interface ScatterDataset {
+  label: string;
+  points: ScatterPoint[];
+}
+
+/** Scatter-only payload (not ChartData). */
+export interface ScatterData {
+  datasets: ScatterDataset[];
+  x_label?: string;
+  y_label?: string;
+  source_tool_call_id?: string | null;
+}
+
+export interface InsightData {
+  bullets: string[];
+  limitations?: string | null;
+  confidence?: number | null;
+}
+
+export interface ActionItem {
+  id: string;
+  label: string;
+  style?: ActionStyle;
+  kind?: ActionKind;
+  payload?: Record<string, unknown>;
+}
+
+export interface ActionGroupData {
+  actions: ActionItem[];
+}
+
+export interface FilterOption {
+  id: string;
+  label: string;
+  value: string;
+}
+
+export interface FilterBarData {
+  filters: FilterOption[];
+}
+
+export interface EmptyStateData {
+  message: string;
+}
+
+export interface ErrorData {
+  message: string;
+  code?: string | null;
+}
+
+export interface UiArtifact {
+  id: string;
+  type: ArtifactType;
+  title: string;
+  version: number;
+  data: Record<string, unknown>;
+}
+
+export interface AssistantTurnMeta {
+  model?: string | null;
+  tools_used?: string[];
+  latency_ms?: number | null;
+  row_count?: number | null;
+  /** SQL panels finalized; missing → treat as 1 for older messages */
+  panel_count?: number | null;
+  validation_warnings?: string[];
+  /** Optional viz remaps / notes; usually also covered in narrative text */
+  viz_notes?: string[];
+}
+
+export interface AssistantTurnResponse {
+  message_id?: string | null;
+  role: 'assistant';
+  text: string;
+  artifacts: UiArtifact[];
+  meta: AssistantTurnMeta;
+  session_id?: string | null;
 }
 
 export interface QueryResult {
@@ -214,19 +471,40 @@ export interface SortingConfig {
   order: 'ascending' | 'descending';
 }
 
+/** Legacy chart encoding shape used by older chart components */
 export interface VisualizationRecommendation {
-  // New backend format uses 'type', old format uses 'visualization_type'
   type?:
-  | 'line' | 'multiline' | 'bar' | 'stacked_bar' | 'heatmap' | 'scatter' | 'pie' | 'table' | 'auto';
+    | 'line'
+    | 'multiline'
+    | 'bar'
+    | 'stacked_bar'
+    | 'heatmap'
+    | 'scatter'
+    | 'pie'
+    | 'table'
+    | 'auto';
   visualization_type?:
-  // Backend format (lowercase with underscores)
-  | 'line' | 'multiline' | 'bar' | 'stacked_bar' | 'heatmap' | 'scatter' | 'pie' | 'table' | 'auto'
-  // Legacy frontend format (uppercase with underscores) - for backward compatibility
-  | 'BAR_CHART' | 'LINE_CHART' | 'PIE_CHART' | 'SCATTER_PLOT' | 'TABLE' | 'HEATMAP'
-  | 'MULTI_LINE_CHART' | 'GROUPED_BAR_CHART' | 'STACKED_BAR_CHART' | 'NONE';
+    | 'line'
+    | 'multiline'
+    | 'bar'
+    | 'stacked_bar'
+    | 'heatmap'
+    | 'scatter'
+    | 'pie'
+    | 'table'
+    | 'auto'
+    | 'BAR_CHART'
+    | 'LINE_CHART'
+    | 'PIE_CHART'
+    | 'SCATTER_PLOT'
+    | 'TABLE'
+    | 'HEATMAP'
+    | 'MULTI_LINE_CHART'
+    | 'GROUPED_BAR_CHART'
+    | 'STACKED_BAR_CHART'
+    | 'NONE';
   title: string;
   description: string;
-  // New backend format uses 'dimensions', old format uses 'encoding'
   dimensions?: {
     x?: string;
     y?: string;
@@ -254,18 +532,6 @@ export interface VisualizationRecommendation {
   confidence?: number;
 }
 
-export interface SupportingFact {
-  [key: string]: any;
-}
-
-export interface InsightResponse {
-  summary: string;
-  key_insights: string[];
-  supporting_facts: SupportingFact[];
-  limitations: string;
-  confidence: number;
-}
-
 // Chat Session Types
 export interface ChatSessionCreate {
   title?: string;
@@ -282,35 +548,10 @@ export interface ChatSessionRead {
   is_deleted: boolean;
 }
 
-// Message metadata from API
-export interface IntentMetadata {
-  intent: string;
-  confidence: number;
-  entities: any;
-  visualization: string;
-  clarification_needed: boolean;
-  clarification_message?: string;
-}
-
-export interface ExecutionMetadata {
-  status: string;
-  execution_time_ms: number;
-  row_count: number;
-  columns: Array<{ name: string; type: string }>;
-  rows: Record<string, any>[];
-  cache_hit: boolean;
-  visualization_hint: string | null;
-  error_type: string | null;
-  message: string | null;
-}
-
+/** Persisted assistant turn metadata (history rehydrate) */
 export interface ChatMessageMetadata {
-  intent?: IntentMetadata;
-  execution?: ExecutionMetadata;
-  visualization?: VisualizationRecommendation;
-  insight?: InsightResponse;
-  session_id?: string;
-  message_id?: string;
+  artifacts?: UiArtifact[];
+  meta?: AssistantTurnMeta;
 }
 
 export interface ChatMessageRead {
@@ -335,6 +576,9 @@ export interface WorkspaceContextResponse {
   state: WorkspaceState;
   active_session_title: string | null;
   active_dataset_name: string | null;
+  /** Caller's role when returned by resolve_workspace_context. */
+  role?: WorkspaceRole;
+  current_user_role?: WorkspaceRole;
 }
 
 export interface UpdateWorkspaceStateRequest {
@@ -366,6 +610,8 @@ export interface DatasetTableColumn {
 
 export interface DatasetTable {
   table_name: string;
+  /** Present on some connector payloads; otherwise inferred from `schema.table` names. */
+  schema_name?: string | null;
   row_count: number;
   column_count: number;
   columns: DatasetTableColumn[];
@@ -374,6 +620,12 @@ export interface DatasetTable {
 export interface DatasetTablesResponse {
   dataset_id: string;
   tables: DatasetTable[];
+  page?: number;
+  page_size?: number;
+  total_items?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_previous?: boolean;
 }
 
 export interface DatasetTablePreviewResponse {
@@ -413,14 +665,28 @@ export interface ConnectorResponse {
   metadata_status: MetadataStatus;
   last_sync_at: string | null;
   workspace_id: string;
+  /** Creator; used for member edit/delete gating when present. */
+  user_id?: string;
   created_at: string;
   updated_at: string | null;
 }
 
-export interface ConnectionTestRequest extends PostgreSQLConfig { }
+export interface ConnectionTestRequest extends PostgreSQLConfig {}
 
 export interface ConnectionTestResponse {
   success: boolean;
   message: string;
   db_info?: Record<string, any>;
+}
+
+export interface ConnectorTablesResponse {
+  connector_id: string;
+  metadata_status: MetadataStatus;
+  tables: DatasetTable[];
+  page?: number;
+  page_size?: number;
+  total_items?: number;
+  total_pages?: number;
+  has_next?: boolean;
+  has_previous?: boolean;
 }

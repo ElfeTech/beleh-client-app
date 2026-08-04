@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Database, Globe, Lock, Link2 } from 'lucide-react';
+import { X, Database, Globe, Lock, Link2, ShieldCheck } from 'lucide-react';
 import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../context/useAuth';
 import { parsePostgresConnectionString } from '../../lib/parsePostgresConnectionString';
 import type { ParsedPostgresFields } from '../../lib/parsePostgresConnectionString';
+import '../settings/SettingsShared.css';
 import './UploadModal.css';
 import './ConnectorModals.css';
 
@@ -24,7 +25,7 @@ function mergeFormFromPartial(
     password: string;
     ssl: boolean;
   },
-  partial: Partial<ParsedPostgresFields>
+  partial: Partial<ParsedPostgresFields>,
 ) {
   const next = { ...prev };
   if (partial.host !== undefined && partial.host.trim() !== '') {
@@ -51,7 +52,11 @@ function mergeFormFromPartial(
   return next;
 }
 
-export function PostgresConnectorModal({ workspaceId, onClose, onSuccess }: PostgresConnectorModalProps) {
+export function PostgresConnectorModal({
+  workspaceId,
+  onClose,
+  onSuccess,
+}: PostgresConnectorModalProps) {
   const { user } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [testStatus, setTestStatus] = useState<{ success: boolean; message: string } | null>(null);
@@ -194,7 +199,7 @@ export function PostgresConnectorModal({ workspaceId, onClose, onSuccess }: Post
   };
 
   const modalContent = (
-    <div className="modal-backdrop" role="presentation">
+    <div className="modal-backdrop" role="presentation" onClick={isLoading ? undefined : onClose}>
       <div
         className="modal-container enterprise-pg-modal"
         onClick={(e) => e.stopPropagation()}
@@ -202,38 +207,54 @@ export function PostgresConnectorModal({ workspaceId, onClose, onSuccess }: Post
         aria-modal="true"
         aria-labelledby="pg-modal-title"
       >
-        <div className="enterprise-pg-head">
-          <div className="enterprise-pg-head-main">
+        <header className="enterprise-pg-header">
+          <div className="enterprise-pg-header-main">
             <div className="enterprise-pg-icon" aria-hidden>
               <Database size={22} strokeWidth={1.75} />
             </div>
-            <div>
-              <h2 id="pg-modal-title">Connect Postgres</h2>
-              <p className="enterprise-pg-sub">Configure your data pipeline.</p>
+            <div className="enterprise-pg-header-text">
+              <p className="enterprise-pg-eyebrow">Enterprise connection</p>
+              <h2 id="pg-modal-title">Connect PostgreSQL</h2>
+              <p className="enterprise-pg-sub">
+                Register a secure encrypted pipeline for schema catalog sync and governed AI
+                analytics.
+              </p>
             </div>
           </div>
-          {!isLoading && (
-            <button type="button" className="close-btn" onClick={onClose} aria-label="Close">
-              <X size={20} strokeWidth={2} />
-            </button>
-          )}
-        </div>
+          <div className="enterprise-pg-header-actions">
+            <span className="enterprise-pg-badge">
+              <ShieldCheck size={14} strokeWidth={2} aria-hidden />
+              Encrypted
+            </span>
+            {!isLoading && (
+              <button
+                type="button"
+                className="close-btn enterprise-pg-close"
+                onClick={onClose}
+                aria-label="Close"
+              >
+                <X size={20} strokeWidth={2} />
+              </button>
+            )}
+          </div>
+        </header>
 
-        <form onSubmit={handleSubmit} className="modal-body enterprise-pg-form">
-          <div className="connector-form enterprise-form-stack">
-            <div className="form-group">
-              <label htmlFor="pg-conn-string" className="enterprise-label">
-                <span className="enterprise-pg-connstring-label">
-                  <Link2 size={14} strokeWidth={2} aria-hidden className="enterprise-pg-connstring-label-icon" />
-                  Connection string
-                </span>
-              </label>
+        <form onSubmit={handleSubmit} className="enterprise-pg-form">
+          <div className="enterprise-pg-body">
+            <section className="enterprise-pg-section">
+              <div className="enterprise-pg-section-head">
+                <h3 className="enterprise-pg-section-label">Quick connect</h3>
+                <span className="enterprise-pg-section-hint">Optional</span>
+              </div>
               <p className="enterprise-pg-connstring-hint">
-                Paste a <code className="enterprise-pg-code">postgresql://</code> or <code className="enterprise-pg-code">postgres://</code> URI,{' '}
-                <code className="enterprise-pg-code">jdbc:postgresql://…</code>, <code className="enterprise-pg-code">export DATABASE_URL=…</code>, or libpq{' '}
-                <code className="enterprise-pg-code">host=… port=…</code> form. The form fills automatically on paste or when you leave this field; you can still edit
-                every value below.
+                Paste a <code className="enterprise-pg-code">postgresql://</code> or{' '}
+                <code className="enterprise-pg-code">postgres://</code> URI, JDBC URL, shell export,
+                or libpq <code className="enterprise-pg-code">host=…</code> form. Fields below
+                update on paste or blur.
               </p>
+              <label htmlFor="pg-conn-string" className="sr-only">
+                Connection string
+              </label>
               <textarea
                 id="pg-conn-string"
                 className="enterprise-textarea"
@@ -250,14 +271,17 @@ export function PostgresConnectorModal({ workspaceId, onClose, onSuccess }: Post
               <div className="enterprise-pg-connstring-actions">
                 <button
                   type="button"
-                  className="secondary-btn enterprise-outline-btn"
+                  className="enterprise-teal-outline-btn"
                   onClick={() => applyFromConnectionString()}
                   disabled={isLoading || !connectionStringInput.trim()}
                 >
+                  <Link2 size={16} strokeWidth={2} aria-hidden />
                   Parse &amp; fill form
                 </button>
               </div>
-              {parseError && <p className="enterprise-parse-hint enterprise-parse-hint--error">{parseError}</p>}
+              {parseError && (
+                <p className="enterprise-parse-hint enterprise-parse-hint--error">{parseError}</p>
+              )}
               {!parseError && parseWarnings.length > 0 && (
                 <ul className="enterprise-parse-warning-list">
                   {parseWarnings.map((w) => (
@@ -265,164 +289,177 @@ export function PostgresConnectorModal({ workspaceId, onClose, onSuccess }: Post
                   ))}
                 </ul>
               )}
-            </div>
+            </section>
 
-            <div className="enterprise-pg-divider" aria-hidden />
+            <section className="enterprise-pg-section">
+              <h3 className="enterprise-pg-section-label">Connection details</h3>
 
-            <div className="form-group">
-              <label htmlFor="conn-name" className="enterprise-label">
-                Display name
-              </label>
-              <input
-                id="conn-name"
-                name="name"
-                type="text"
-                className="enterprise-input"
-                value={formData.name}
-                onChange={handleChange}
-                placeholder="e.g. Production Sales DB"
-                required
-                disabled={isLoading}
-              />
-            </div>
-
-            <div className="form-row enterprise-host-row">
-              <div className="form-group enterprise-grow">
-                <label htmlFor="conn-host" className="enterprise-label">
-                  Host
-                </label>
-                <div className="enterprise-input-affix">
-                  <Globe className="enterprise-input-affix-icon" size={18} strokeWidth={1.75} aria-hidden />
+              <div className="enterprise-pg-fields">
+                <div className="form-group">
+                  <label htmlFor="conn-name" className="enterprise-label">
+                    Display name
+                  </label>
                   <input
-                    id="conn-host"
-                    name="host"
+                    id="conn-name"
+                    name="name"
                     type="text"
-                    className="enterprise-input enterprise-input--indent"
-                    value={formData.host}
+                    className="enterprise-input"
+                    value={formData.name}
                     onChange={handleChange}
-                    placeholder="localhost"
+                    placeholder="e.g. Global Production VPC"
                     required
                     disabled={isLoading}
                   />
                 </div>
-              </div>
-              <div className="form-group enterprise-port">
-                <label htmlFor="conn-port" className="enterprise-label">
-                  Port
-                </label>
-                <input
-                  id="conn-port"
-                  name="port"
-                  type="number"
-                  className="enterprise-input"
-                  value={formData.port}
-                  onChange={handleChange}
-                  placeholder="5432"
-                  required
-                  disabled={isLoading}
-                />
-              </div>
-            </div>
 
-            <div className="form-group">
-              <label htmlFor="conn-db" className="enterprise-label">
-                Database name
-              </label>
-              <input
-                id="conn-db"
-                name="database"
-                type="text"
-                className="enterprise-input"
-                value={formData.database}
-                onChange={handleChange}
-                placeholder="my_analytics_db"
-                required
-                disabled={isLoading}
-              />
-            </div>
+                <div className="form-row enterprise-host-row">
+                  <div className="form-group enterprise-grow">
+                    <label htmlFor="conn-host" className="enterprise-label">
+                      Host
+                    </label>
+                    <div className="enterprise-input-affix">
+                      <Globe
+                        className="enterprise-input-affix-icon"
+                        size={18}
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                      <input
+                        id="conn-host"
+                        name="host"
+                        type="text"
+                        className="enterprise-input enterprise-input--indent"
+                        value={formData.host}
+                        onChange={handleChange}
+                        placeholder="db.example.com"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+                  <div className="form-group enterprise-port">
+                    <label htmlFor="conn-port" className="enterprise-label">
+                      Port
+                    </label>
+                    <input
+                      id="conn-port"
+                      name="port"
+                      type="number"
+                      className="enterprise-input"
+                      value={formData.port}
+                      onChange={handleChange}
+                      placeholder="5432"
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+                </div>
 
-            <div className="form-row">
-              <div className="form-group">
-                <label htmlFor="conn-user" className="enterprise-label">
-                  Username
-                </label>
-                <input
-                  id="conn-user"
-                  name="username"
-                  type="text"
-                  className="enterprise-input"
-                  value={formData.username}
-                  onChange={handleChange}
-                  placeholder="postgres"
-                  required
-                  disabled={isLoading}
-                />
-              </div>
-              <div className="form-group">
-                <label htmlFor="conn-pass" className="enterprise-label">
-                  Password
-                </label>
-                <div className="enterprise-input-affix">
-                  <Lock className="enterprise-input-affix-icon" size={18} strokeWidth={1.75} aria-hidden />
+                <div className="form-group">
+                  <label htmlFor="conn-db" className="enterprise-label">
+                    Database name
+                  </label>
                   <input
-                    id="conn-pass"
-                    name="password"
-                    type="password"
-                    className="enterprise-input enterprise-input--indent"
-                    value={formData.password}
+                    id="conn-db"
+                    name="database"
+                    type="text"
+                    className="enterprise-input"
+                    value={formData.database}
                     onChange={handleChange}
-                    placeholder="••••••••"
-                    required={!isLoading}
+                    placeholder="analytics_prod"
+                    required
                     disabled={isLoading}
                   />
                 </div>
-              </div>
-            </div>
 
-            <div className="ssl-toggle-group">
-              <div className="ssl-info">
-                <span className="ssl-label">SSL connection</span>
-                <span className="ssl-desc">Encrypt traffic to the database</span>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label htmlFor="conn-user" className="enterprise-label">
+                      Username
+                    </label>
+                    <input
+                      id="conn-user"
+                      name="username"
+                      type="text"
+                      className="enterprise-input"
+                      value={formData.username}
+                      onChange={handleChange}
+                      placeholder="postgres"
+                      required
+                      disabled={isLoading}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label htmlFor="conn-pass" className="enterprise-label">
+                      Password
+                    </label>
+                    <div className="enterprise-input-affix">
+                      <Lock
+                        className="enterprise-input-affix-icon"
+                        size={18}
+                        strokeWidth={1.75}
+                        aria-hidden
+                      />
+                      <input
+                        id="conn-pass"
+                        name="password"
+                        type="password"
+                        className="enterprise-input enterprise-input--indent"
+                        value={formData.password}
+                        onChange={handleChange}
+                        placeholder="••••••••"
+                        required={!isLoading}
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="enterprise-pg-ssl-card">
+                  <div className="enterprise-pg-ssl-copy">
+                    <span className="enterprise-pg-ssl-title">SSL connection</span>
+                    <span className="enterprise-pg-ssl-desc">
+                      Encrypt traffic between Beleh and your database
+                    </span>
+                  </div>
+                  <label className="settings-toggle" title="Use SSL">
+                    <input
+                      type="checkbox"
+                      name="ssl"
+                      checked={formData.ssl}
+                      onChange={handleChange}
+                      disabled={isLoading}
+                    />
+                    <span className="settings-toggle__slider" />
+                  </label>
+                </div>
               </div>
-              <label className="switch">
-                <input type="checkbox" name="ssl" checked={formData.ssl} onChange={handleChange} disabled={isLoading} />
-                <span className="slider" />
-              </label>
-            </div>
+            </section>
 
             {testStatus && (
-              <div className={`test-result ${testStatus.success ? 'success' : 'error'}`}>
-                {testStatus.success ? (
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-                  </svg>
-                ) : (
-                  <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-                  </svg>
-                )}
+              <div
+                className={`enterprise-test-result ${testStatus.success ? 'enterprise-test-result--ok' : 'enterprise-test-result--err'}`}
+              >
                 <span>{testStatus.message}</span>
               </div>
             )}
 
-            {error && (
-              <div className="form-error enterprise-inline-error">
-                <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
-                </svg>
-                {error}
-              </div>
-            )}
+            {error && <div className="form-error enterprise-inline-error">{error}</div>}
           </div>
 
-          <div className="enterprise-pg-footer">
-            <button type="button" className="enterprise-text-btn" onClick={onClose} disabled={isLoading}>
+          <footer className="enterprise-pg-footer">
+            <button
+              type="button"
+              className="enterprise-text-btn"
+              onClick={onClose}
+              disabled={isLoading}
+            >
               Cancel
             </button>
             <div className="enterprise-pg-footer-actions">
               <button
                 type="button"
-                className="secondary-btn enterprise-outline-btn"
+                className="enterprise-teal-outline-btn"
                 onClick={handleTestConnection}
                 disabled={isLoading || !formData.host || !formData.database}
               >
@@ -430,13 +467,14 @@ export function PostgresConnectorModal({ workspaceId, onClose, onSuccess }: Post
               </button>
               <button
                 type="submit"
-                className="primary-btn enterprise-submit-btn"
+                className="btn-gradient-primary enterprise-pg-submit"
                 disabled={isLoading || !formData.name || !testStatus?.success}
+                title={!testStatus?.success ? 'Run a successful connection test first' : undefined}
               >
                 {isLoading ? 'Saving…' : 'Initialize connection'}
               </button>
             </div>
-          </div>
+          </footer>
         </form>
       </div>
     </div>

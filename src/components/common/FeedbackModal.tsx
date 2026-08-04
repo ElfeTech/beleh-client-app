@@ -4,7 +4,8 @@ import { useFeedback } from '../../context/FeedbackContext';
 import './FeedbackModal.css';
 
 const FeedbackModal = () => {
-  const { currentTrigger, isVisible, isSubmitting, dismissFeedback, submitFeedback } = useFeedback();
+  const { currentTrigger, isVisible, isSubmitting, dismissFeedback, submitFeedback } =
+    useFeedback();
   const [rating, setRating] = useState<number | undefined>(undefined);
   const [comment, setComment] = useState('');
   const [hoveredStar, setHoveredStar] = useState<number | null>(null);
@@ -98,9 +99,7 @@ const FeedbackModal = () => {
                 rows={4}
               />
 
-              <div className="feedback-char-count">
-                {comment.length}/500
-              </div>
+              <div className="feedback-char-count">{comment.length}/500</div>
             </div>
 
             <div className="feedback-footer">
