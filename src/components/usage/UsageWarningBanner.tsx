@@ -32,7 +32,7 @@ export function UsageWarningBanner() {
 
   const isCritical = warning.level === 'critical';
   const isWarning = warning.level === 'warning';
-  const isDailyCap = warning.metric === 'daily_llm_tokens';
+  const isDailyCap = warning.metric === 'daily_credits';
   const message =
     showUpgrade || isDailyCap
       ? warning.message

@@ -199,11 +199,17 @@ export const authService = {
   onAuthStateChange(callback: (user: User | null) => void): () => void {
     return onAuthStateChanged(auth, async (user) => {
       if (user) {
-        await establishSession(user, { forceRefreshToken: true });
-        apiCacheManager.clearAll();
+        try {
+          // Prefer cached token on restore; AuthSessionGate / 401 refresh force-refresh when needed.
+          await establishSession(user, { forceRefreshToken: false });
+          apiCacheManager.clearAll();
+        } catch (error) {
+          console.error('[Auth] Failed to establish session on auth change:', error);
+        }
       } else {
         clearSessionLocal();
       }
+      // Always release AuthContext loading, even if token mirror persistence fails.
       callback(user);
     });
   },

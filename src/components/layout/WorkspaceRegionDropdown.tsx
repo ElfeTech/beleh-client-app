@@ -8,11 +8,14 @@ import { apiClient } from '../../services/apiClient';
 import { writeActiveWorkspaceId } from '../../lib/uiMemory';
 import type { WorkspaceResponse } from '../../types/api';
 import {
+  canShowWorkspaceUpgradeCta,
   createWorkspaceOwnershipHelper,
   isWorkspacesAtLimit,
-  PLAN_LIMIT_REACHED_TOOLTIP,
+  PLAN_MANAGED_BY_OWNER_COPY,
+  BILLING_UPGRADE_HREF,
   workspaceLimitUpgradeMessage,
   workspaceOwnershipLabel,
+  UPGRADE_TO_ADD_WORKSPACES_LABEL,
 } from '../../utils/workspaceAccess';
 import { SEARCH_VISIBILITY_THRESHOLD } from '../../constants/pagination';
 import './WorkspaceRegionDropdown.css';
@@ -41,6 +44,7 @@ export function WorkspaceRegionDropdown() {
   const searchRef = useRef<HTMLInputElement>(null);
 
   const atLimit = isWorkspacesAtLimit(workspaceUsage);
+  const canUpgrade = canShowWorkspaceUpgradeCta(currentRole);
   const showSearch = workspaces.length > SEARCH_VISIBILITY_THRESHOLD;
   const ownership = createWorkspaceOwnershipHelper(workspaces, user?.uid, user?.email);
 
@@ -297,6 +301,18 @@ export function WorkspaceRegionDropdown() {
                   </button>
                 </div>
               </form>
+            ) : atLimit && canUpgrade ? (
+              <button
+                type="button"
+                className="ws-region__add-btn ws-region__add-btn--upgrade"
+                onClick={() => {
+                  setIsOpen(false);
+                  navigate(BILLING_UPGRADE_HREF);
+                }}
+                title={UPGRADE_TO_ADD_WORKSPACES_LABEL}
+              >
+                {UPGRADE_TO_ADD_WORKSPACES_LABEL}
+              </button>
             ) : (
               <button
                 type="button"
@@ -309,7 +325,13 @@ export function WorkspaceRegionDropdown() {
                   setShowAddForm(true);
                 }}
                 disabled={atLimit}
-                title={atLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
+                title={
+                  atLimit
+                    ? canUpgrade
+                      ? UPGRADE_TO_ADD_WORKSPACES_LABEL
+                      : PLAN_MANAGED_BY_OWNER_COPY
+                    : undefined
+                }
               >
                 + Add workspace
               </button>

@@ -192,10 +192,13 @@ export function LandingHelpChat() {
           onKeyDown={handleKeyDown}
           aria-label="Message"
         />
+        <span className="landing-demo-char-count" aria-live="polite">
+          {input.length}/{HELP_CHAT_MAX_CHARS}
+        </span>
         <button
           type="submit"
           className="send"
-          disabled={disabled || !input.trim()}
+          disabled={disabled || !input.trim() || input.length > HELP_CHAT_MAX_CHARS}
           aria-label="Send"
         >
           <SendIcon />

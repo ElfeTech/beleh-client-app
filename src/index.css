@@ -476,6 +476,10 @@
     background: transparent;
   }
 
+  .chat-container--welcome-center .chat-empty-stage {
+    width: 100%;
+  }
+
   .chat-composer-float__card {
     background: var(--panel-bg);
     color: var(--text-primary);
@@ -495,6 +499,7 @@
     scrollbar-gutter: stable;
     font-size: var(--chat-response-font-size, 15px);
     line-height: var(--chat-response-line-height, 26px);
+    min-height: calc(2 * var(--chat-response-line-height, 26px));
   }
 
   .composer-textarea::-webkit-scrollbar {

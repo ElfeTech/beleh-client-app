@@ -12,7 +12,10 @@ import { ensureDemoRemovedAfterLiveSource, findDemoDatasource } from '../../lib/
 import {
   isDatasourcesAtLimit,
   PLAN_LIMIT_REACHED_TOOLTIP,
+  PLAN_MANAGED_BY_OWNER_COPY,
+  canShowWorkspaceUpgradeCta,
   workspaceLimitUpgradeMessage,
+  BILLING_UPGRADE_HREF,
 } from '../../utils/workspaceAccess';
 
 interface SideMenuProps {
@@ -35,6 +38,7 @@ export function SideMenu({ isCollapsed = false, onToggleCollapse }: SideMenuProp
   const isLoadingWorkspaces = workspaceContext.loading && workspaces.length === 0;
   const isLoadingDataSources = workspaceContext.loading;
   const datasourcesAtLimit = isDatasourcesAtLimit(workspaceContext.workspaceUsage);
+  const canUpgrade = canShowWorkspaceUpgradeCta(workspaceContext.currentRole);
 
   const handleUploadSuccess = async () => {
     const wid = currentWorkspace?.id;
@@ -58,6 +62,7 @@ export function SideMenu({ isCollapsed = false, onToggleCollapse }: SideMenuProp
 
   const handleAddClick = () => {
     if (datasourcesAtLimit) {
+      if (canUpgrade) return;
       toast.error(workspaceLimitUpgradeMessage(workspaceContext.currentRole, 'datasources'));
       return;
     }
@@ -108,9 +113,20 @@ export function SideMenu({ isCollapsed = false, onToggleCollapse }: SideMenuProp
             <WorkspaceMenu
               dataSources={dataSources}
               onAddClick={handleAddClick}
-              onRefresh={() => workspaceContext.refreshDatasources()}
-              addDisabled={datasourcesAtLimit}
-              addDisabledReason={datasourcesAtLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
+              onRefresh={async () => {
+                await workspaceContext.refreshDatasources();
+                await workspaceContext.refreshWorkspaceUsage();
+              }}
+              addAtLimit={datasourcesAtLimit}
+              canUpgrade={canUpgrade}
+              upgradeHref={BILLING_UPGRADE_HREF}
+              addDisabledReason={
+                datasourcesAtLimit
+                  ? canUpgrade
+                    ? PLAN_LIMIT_REACHED_TOOLTIP
+                    : PLAN_MANAGED_BY_OWNER_COPY
+                  : undefined
+              }
             />
           ))}
       </div>

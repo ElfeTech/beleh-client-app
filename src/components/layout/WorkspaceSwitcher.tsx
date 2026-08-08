@@ -8,10 +8,13 @@ import { ContextMenu, type ContextMenuItem } from '../common/ContextMenu';
 import { ActionSheet, type ActionSheetItem } from '../common/ActionSheet';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import {
+  canShowWorkspaceUpgradeCta,
   createWorkspaceOwnershipHelper,
   isWorkspacesAtLimit,
-  PLAN_LIMIT_REACHED_TOOLTIP,
+  PLAN_MANAGED_BY_OWNER_COPY,
+  BILLING_UPGRADE_HREF,
   workspaceOwnershipLabel,
+  UPGRADE_TO_ADD_WORKSPACES_LABEL,
 } from '../../utils/workspaceAccess';
 import './WorkspaceSwitcher.css';
 
@@ -67,7 +70,10 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
     return null;
   }
 
-  const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces } = context;
+  const { workspaces, currentWorkspace, setCurrentWorkspace, refreshWorkspaces, currentRole } =
+    context;
+  const workspacesAtLimit = isWorkspacesAtLimit(context.workspaceUsage);
+  const canUpgrade = canShowWorkspaceUpgradeCta(currentRole);
   const ownership = createWorkspaceOwnershipHelper(workspaces, user?.uid, user?.email);
   const hasMixedOwnership =
     workspaces.some((w) => ownership.isShared(w)) && workspaces.some((w) => !ownership.isShared(w));
@@ -85,7 +91,11 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
   };
 
   const handleCreateWorkspace = () => {
-    if (isWorkspacesAtLimit(context?.workspaceUsage ?? null)) {
+    if (workspacesAtLimit) {
+      if (canUpgrade) {
+        onClose();
+        navigate(BILLING_UPGRADE_HREF);
+      }
       return;
     }
     // Close the workspace switcher first to clear the UI
@@ -221,27 +231,35 @@ const WorkspaceSwitcher: React.FC<WorkspaceSwitcherProps> = ({
           <div className="workspace-list">
             {/* Create New Workspace Button */}
             <button
-              className="workspace-list-item create-workspace-btn"
+              className={`workspace-list-item create-workspace-btn${workspacesAtLimit && canUpgrade ? ' create-workspace-btn--upgrade' : ''}`}
               onClick={handleCreateWorkspace}
-              disabled={isWorkspacesAtLimit(context?.workspaceUsage ?? null)}
+              disabled={workspacesAtLimit && !canUpgrade}
               title={
-                isWorkspacesAtLimit(context?.workspaceUsage ?? null)
-                  ? PLAN_LIMIT_REACHED_TOOLTIP
+                workspacesAtLimit
+                  ? canUpgrade
+                    ? UPGRADE_TO_ADD_WORKSPACES_LABEL
+                    : PLAN_MANAGED_BY_OWNER_COPY
                   : 'Create a new workspace'
               }
             >
               <div className="workspace-icon create-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 4v16m8-8H4"
-                  />
-                </svg>
+                {workspacesAtLimit && canUpgrade ? null : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M12 4v16m8-8H4"
+                    />
+                  </svg>
+                )}
               </div>
               <div className="workspace-info">
-                <span className="workspace-name">Create New Workspace</span>
+                <span className="workspace-name">
+                  {workspacesAtLimit && canUpgrade
+                    ? UPGRADE_TO_ADD_WORKSPACES_LABEL
+                    : 'Create New Workspace'}
+                </span>
               </div>
             </button>
 

@@ -48,7 +48,8 @@ export function PlanValueCard() {
               : 'Usage value'}
           </h4>
           <p className="billing-value-card__hint">
-            Included plan price prorated by unused quota (queries, tokens, rows, charts).
+            Included allowance for this billing cycle. Usage consumes this value at retail credit
+            rates.
           </p>
         </div>
         {usedPct != null && (

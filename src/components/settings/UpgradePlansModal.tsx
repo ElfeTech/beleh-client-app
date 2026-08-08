@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
 import type { Plan } from '../../types/usage';
+import { formatCreditCostUsd } from '../../utils/formatters';
 import './UpgradePlansModal.css';
 
 export interface UpgradePlansModalProps {
@@ -140,6 +141,7 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
               {plans.map((plan) => {
                 const badge = getPlanBadge(plan.tier);
                 const isCurrent = isCurrentPlan(plan.id);
+                const creditCostLine = formatCreditCostUsd(plan.credit_cost_usd);
 
                 return (
                   <div key={plan.id} className={`plan-card ${isCurrent ? 'current-plan' : ''}`}>
@@ -193,11 +195,24 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                         <span>
-                          {plan.limits.monthly_llm_token_limit <= 0
-                            ? 'Unlimited AI tokens'
-                            : `${(plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K AI tokens/month`}
+                          {plan.limits.monthly_credit_limit <= 0
+                            ? 'Unlimited AI credits'
+                            : `${plan.limits.monthly_credit_limit.toLocaleString()} AI credits/month`}
                         </span>
                       </div>
+                      {creditCostLine ? (
+                        <div className="feature-item">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          <span>{creditCostLine}</span>
+                        </div>
+                      ) : null}
                       <div className="feature-item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="20 6 9 17 4 12" />

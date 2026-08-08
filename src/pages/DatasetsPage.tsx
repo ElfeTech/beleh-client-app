@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useMemo } from 'react';
+import React, { useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
@@ -6,6 +6,7 @@ import {
   Search,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Database,
   FileSpreadsheet,
   FileJson,
@@ -56,7 +57,16 @@ import {
   writeDatasetsView,
   type DatasetsPageViewState,
 } from '../lib/uiMemory';
-import { canEditOrDeleteResource } from '../utils/workspaceAccess';
+import {
+  BILLING_UPGRADE_HREF,
+  canEditOrDeleteResource,
+  canShowWorkspaceUpgradeCta,
+  isDatasourcesAtLimit,
+  PLAN_MANAGED_BY_OWNER_COPY,
+  workspaceLimitUpgradeMessage,
+  UPGRADE_TO_ADD_DATASOURCES_LABEL,
+} from '../utils/workspaceAccess';
+import { formatResourceDeleteError } from '../utils/apiErrorMessage';
 import { ensureDemoRemovedAfterLiveSource, findDemoDatasource } from '../lib/workspaceDemo';
 import {
   INITIAL_PAGE,
@@ -115,7 +125,7 @@ function getConnectorPill(status: ConnectorResponse['status']): {
     case 'ACTIVE':
       return { label: 'Connected', className: 'ds-pill ds-pill--success' };
     case 'FAILED':
-      return { label: 'Error', className: 'ds-pill ds-pill--error' };
+      return { label: 'Failed', className: 'ds-pill ds-pill--error' };
     case 'SYNCING':
       return { label: 'Syncing', className: 'ds-pill ds-pill--sync' };
     default:
@@ -131,13 +141,20 @@ function getDatasourcePill(status: DataSourceResponse['status']): {
     case 'READY':
       return { label: 'Connected', className: 'ds-pill ds-pill--success' };
     case 'FAILED':
-      return { label: 'Error', className: 'ds-pill ds-pill--error' };
+      return { label: 'Failed', className: 'ds-pill ds-pill--error' };
     case 'PROCESSING':
     case 'PENDING':
       return { label: 'Syncing', className: 'ds-pill ds-pill--sync' };
     default:
       return { label: status.replace(/_/g, ' '), className: 'ds-pill ds-pill--muted' };
   }
+}
+
+function statusDotClass(pillClassName: string): string {
+  if (pillClassName.includes('success')) return 'sc-status-dot--success';
+  if (pillClassName.includes('error')) return 'sc-status-dot--error';
+  if (pillClassName.includes('sync')) return 'sc-status-dot--sync';
+  return 'sc-status-dot--muted';
 }
 
 const DatasetsPage: React.FC = () => {
@@ -189,12 +206,19 @@ const DatasetsPage: React.FC = () => {
   const [previewPage, setPreviewPage] = useState(1);
   const [previewPageSize, setPreviewPageSize] = useState(10);
   const [datasetsViewHydrated, setDatasetsViewHydrated] = useState(false);
+  /** Stashed drill-down prefs from uiMemory; applied once tables load for the restored source. */
+  const pendingDrillRef = useRef<DatasetsPageViewState | null>(null);
+  const appliedDrillKeyRef = useRef<string | null>(null);
 
-  // Restore catalog filter / search / selection from UI memory
+  // Phase A: restore filter / search / source + stash drill prefs
   useEffect(() => {
     if (!user?.uid || !workspaceId) return;
+    pendingDrillRef.current = null;
+    appliedDrillKeyRef.current = null;
+
     const stored = readDatasetsView(user.uid, workspaceId);
     if (stored) {
+      pendingDrillRef.current = stored;
       if (stored.searchQuery != null) setSearchQuery(stored.searchQuery);
       if (
         stored.sourceFilter === 'all' ||
@@ -211,6 +235,25 @@ const DatasetsPage: React.FC = () => {
       ) {
         setSelectedCatalogSource(stored.selectedCatalog as CatalogSourceRef);
       }
+      if (stored.tableSearchQuery != null) setTableSearchQuery(stored.tableSearchQuery);
+      if (stored.connectorDetailTab === 'columns' || stored.connectorDetailTab === 'data') {
+        setConnectorDetailTab(stored.connectorDetailTab);
+      }
+      if (
+        typeof stored.previewPageSize === 'number' &&
+        stored.previewPageSize > 0 &&
+        stored.previewPageSize <= 200
+      ) {
+        setPreviewPageSize(stored.previewPageSize);
+      }
+      if (
+        stored.mobileCatalogPane === 'sources' ||
+        stored.mobileCatalogPane === 'schemas' ||
+        stored.mobileCatalogPane === 'tables' ||
+        stored.mobileCatalogPane === 'preview'
+      ) {
+        setMobileCatalogPane(stored.mobileCatalogPane);
+      }
     }
     setDatasetsViewHydrated(true);
   }, [user?.uid, workspaceId]);
@@ -221,6 +264,13 @@ const DatasetsPage: React.FC = () => {
       searchQuery,
       sourceFilter,
       selectedCatalog: selectedCatalogSource,
+      browseLevel,
+      selectedSchemaName,
+      selectedTableName,
+      tableSearchQuery,
+      connectorDetailTab,
+      previewPageSize,
+      mobileCatalogPane,
     };
     writeDatasetsView(user.uid, workspaceId, state);
   }, [
@@ -230,13 +280,115 @@ const DatasetsPage: React.FC = () => {
     searchQuery,
     sourceFilter,
     selectedCatalogSource,
+    browseLevel,
+    selectedSchemaName,
+    selectedTableName,
+    tableSearchQuery,
+    connectorDetailTab,
+    previewPageSize,
+    mobileCatalogPane,
   ]);
+
+  const applyCatalogDrill = (tables: DatasetTable[], kind: 'connector' | 'datasource'): void => {
+    const sourceKey = selectedCatalogSource ? catalogSourceKey(selectedCatalogSource) : null;
+    const pending = pendingDrillRef.current;
+    const pendingKey =
+      pending?.selectedCatalog &&
+      (pending.selectedCatalog.kind === 'datasource' ||
+        pending.selectedCatalog.kind === 'connector') &&
+      pending.selectedCatalog.id
+        ? catalogSourceKey(pending.selectedCatalog as CatalogSourceRef)
+        : null;
+
+    const canRestore =
+      Boolean(sourceKey) &&
+      pendingKey === sourceKey &&
+      appliedDrillKeyRef.current !== sourceKey &&
+      Boolean(pending);
+
+    if (canRestore && pending && sourceKey) {
+      appliedDrillKeyRef.current = sourceKey;
+
+      if (kind === 'connector') {
+        const schemaNames = new Set(
+          tables.map((t) => parseTableIdentity(t).schema).filter(Boolean),
+        );
+        const schema =
+          pending.selectedSchemaName && schemaNames.has(pending.selectedSchemaName)
+            ? pending.selectedSchemaName
+            : null;
+        const tableExists = pending.selectedTableName
+          ? tables.some((t) => t.table_name === pending.selectedTableName)
+          : false;
+        const table = tableExists ? pending.selectedTableName! : null;
+
+        const level: CatalogBrowseLevel =
+          pending.browseLevel === 'tables' && (schema || table)
+            ? 'tables'
+            : pending.browseLevel === 'schemas'
+              ? 'schemas'
+              : schema || table
+                ? 'tables'
+                : 'schemas';
+
+        setBrowseLevel(level);
+        let resolvedSchema = schema;
+        if (!resolvedSchema && table) {
+          const match = tables.find((t) => t.table_name === table);
+          if (match) resolvedSchema = parseTableIdentity(match).schema;
+        }
+        setSelectedSchemaName(resolvedSchema);
+        setSelectedTableName(table);
+        if (pending.connectorDetailTab === 'columns' || pending.connectorDetailTab === 'data') {
+          setConnectorDetailTab(pending.connectorDetailTab);
+        }
+        return;
+      }
+
+      // datasource / file
+      setBrowseLevel('tables');
+      setSelectedSchemaName(null);
+      const tableExists = pending.selectedTableName
+        ? tables.some((t) => t.table_name === pending.selectedTableName)
+        : false;
+      setSelectedTableName(
+        tableExists ? pending.selectedTableName! : (tables[0]?.table_name ?? null),
+      );
+      return;
+    }
+
+    // Defaults when not restoring
+    if (kind === 'connector') {
+      setBrowseLevel('schemas');
+      setSelectedSchemaName(null);
+      setSelectedTableName(null);
+      setConnectorDetailTab('columns');
+    } else {
+      setBrowseLevel('tables');
+      setSelectedSchemaName(null);
+      setSelectedTableName(tables[0]?.table_name ?? null);
+    }
+  };
 
   const datasources = workspaceContext?.datasources || [];
   const connectors = workspaceContext?.connectors || [];
   const loading = workspaceContext?.loading || false;
   const currentRole = workspaceContext?.currentRole ?? null;
+  const datasourcesAtLimit = isDatasourcesAtLimit(workspaceContext?.workspaceUsage ?? null);
+  const canUpgrade = canShowWorkspaceUpgradeCta(currentRole);
   const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => {});
+
+  const openConnectOrUpgrade = () => {
+    if (datasourcesAtLimit) {
+      if (canUpgrade) {
+        navigate(BILLING_UPGRADE_HREF);
+        return;
+      }
+      toast.error(workspaceLimitUpgradeMessage(currentRole, 'datasources'));
+      return;
+    }
+    setShowConnectionPanel(true);
+  };
 
   const canMutateSelected = (): boolean => {
     if (!selectedItemForMenu) return false;
@@ -313,15 +465,7 @@ const DatasetsPage: React.FC = () => {
 
     if (row.kind === 'connector') {
       const meta = row.connector.metadata_status;
-      if (meta === 'PENDING' || meta === 'PROCESSING') {
-        setCatalogTables([]);
-        setSelectedTableName(null);
-        setSelectedSchemaName(null);
-        setBrowseLevel('schemas');
-        setTablesLoading(false);
-        return;
-      }
-      if (meta === 'FAILED') {
+      if (meta === 'PENDING' || meta === 'PROCESSING' || meta === 'FAILED') {
         setCatalogTables([]);
         setSelectedTableName(null);
         setSelectedSchemaName(null);
@@ -338,16 +482,11 @@ const DatasetsPage: React.FC = () => {
           const tables = await fetchAllConnectorTables(token, workspaceId, row.connector.id);
           if (cancelled) return;
           setCatalogTables(tables);
-          setBrowseLevel('schemas');
-          setSelectedSchemaName(null);
-          setSelectedTableName(null);
-          setConnectorDetailTab('columns');
+          applyCatalogDrill(tables, 'connector');
         } catch {
           if (cancelled) return;
           setCatalogTables([]);
-          setSelectedTableName(null);
-          setSelectedSchemaName(null);
-          setBrowseLevel('schemas');
+          applyCatalogDrill([], 'connector');
         } finally {
           if (!cancelled) setTablesLoading(false);
         }
@@ -377,16 +516,12 @@ const DatasetsPage: React.FC = () => {
         if (cancelled) return;
         const tables = fetched.length > 0 ? fetched : tablesFromMetadata(row.datasource);
         setCatalogTables(tables);
-        setBrowseLevel('tables');
-        setSelectedSchemaName(null);
-        setSelectedTableName(tables[0]?.table_name ?? null);
+        applyCatalogDrill(tables, 'datasource');
       } catch {
         if (cancelled) return;
         const fallback = tablesFromMetadata(row.datasource);
         setCatalogTables(fallback);
-        setBrowseLevel('tables');
-        setSelectedSchemaName(null);
-        setSelectedTableName(fallback[0]?.table_name ?? null);
+        applyCatalogDrill(fallback, 'datasource');
       } finally {
         if (!cancelled) setTablesLoading(false);
       }
@@ -395,6 +530,8 @@ const DatasetsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
+    // applyCatalogDrill closes over selectedCatalogSource / pending refs — intentional on source change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore drill when source/tables identity changes
   }, [user, selectedCatalogSource, unifiedSources, workspaceId]);
 
   const schemaGroups = useMemo(() => groupTablesBySchema(catalogTables), [catalogTables]);
@@ -640,40 +777,67 @@ const DatasetsPage: React.FC = () => {
   const handleConfirmDelete = async () => {
     if (!itemToDelete || !user || !workspaceId) return;
 
+    const deletedId = itemToDelete.id;
+    const deletedType = itemToDelete.type;
+    const resourceLabel = deletedType === 'datasource' ? 'dataset' : 'connector';
+
     try {
       setIsDeleting(true);
       const token = await user.getIdToken();
 
-      if (itemToDelete.type === 'datasource') {
-        await apiClient.deleteDatasource(token, itemToDelete.id);
+      if (deletedType === 'datasource') {
+        await apiClient.deleteDatasource(token, deletedId);
         if (workspaceContext?.refreshDatasources) {
           await workspaceContext.refreshDatasources();
         }
       } else {
-        await apiClient.deleteConnector(token, workspaceId, itemToDelete.id);
+        await apiClient.deleteConnector(token, workspaceId, deletedId);
         if (workspaceContext?.refreshConnectors) {
           await workspaceContext.refreshConnectors();
         }
       }
 
+      if (workspaceContext?.refreshWorkspaceUsage) {
+        await workspaceContext.refreshWorkspaceUsage();
+      }
+
+      if (datasourceContext?.selectedDatasourceId === deletedId) {
+        const remainingSources =
+          deletedType === 'datasource'
+            ? [
+                ...datasources.filter((ds) => ds.id !== deletedId).map((ds) => ds.id),
+                ...connectors.map((c) => c.id),
+              ]
+            : [
+                ...datasources.map((ds) => ds.id),
+                ...connectors.filter((c) => c.id !== deletedId).map((c) => c.id),
+              ];
+        setSelectedDatasourceId(remainingSources[0] ?? null);
+      }
+
       setShowDeleteConfirm(false);
       setItemToDelete(null);
       toast.success(
-        `${itemToDelete.type === 'datasource' ? 'Dataset' : 'Connector'} deleted successfully`,
+        `${deletedType === 'datasource' ? 'Dataset' : 'Connector'} deleted successfully`,
       );
     } catch (err) {
       console.error('Failed to delete item:', err);
-      toast.error(
-        `Failed to delete ${itemToDelete.type === 'datasource' ? 'dataset' : 'connector'}. Please try again.`,
-      );
+      toast.error(formatResourceDeleteError(err, resourceLabel));
     } finally {
       setIsDeleting(false);
     }
   };
 
+  const refreshCatalogInBackground = async () => {
+    await Promise.all([
+      workspaceContext?.refreshConnectors?.({ silent: true }),
+      workspaceContext?.refreshDatasources?.({ silent: true }),
+    ]);
+  };
+
   const handleEditSuccess = async () => {
     if (workspaceContext?.refreshDatasources) {
-      await workspaceContext.refreshDatasources();
+      await workspaceContext.refreshDatasources({ silent: true });
     }
     setShowEditModal(false);
     setShowRenameModal(false);
@@ -684,19 +848,12 @@ const DatasetsPage: React.FC = () => {
   const handleLiveSourceSuccess = async () => {
     const demoId = findDemoDatasource(datasources)?.id ?? null;
     const hadDemo = Boolean(demoId) || datasources.some((d) => Boolean(d.is_demo));
-    if (workspaceContext?.refreshConnectors) {
-      await workspaceContext.refreshConnectors();
-    }
-    if (workspaceContext?.refreshDatasources) {
-      await workspaceContext.refreshDatasources();
-    }
+    await refreshCatalogInBackground();
     if (hadDemo && user && workspaceId) {
       try {
         const token = await user.getIdToken();
         await ensureDemoRemovedAfterLiveSource(token, workspaceId, datasources);
-        if (workspaceContext?.refreshDatasources) {
-          await workspaceContext.refreshDatasources();
-        }
+        await workspaceContext?.refreshDatasources?.({ silent: true });
         if (demoId && datasourceContext?.selectedDatasourceId === demoId) {
           datasourceContext.setSelectedDatasourceId(null);
         }
@@ -708,6 +865,12 @@ const DatasetsPage: React.FC = () => {
       await workspaceContext.refreshWorkspaceUsage();
     }
     toast.success('Datasource connected successfully.');
+  };
+
+  const handleConnectionPanelClose = () => {
+    setShowConnectionPanel(false);
+    // Refetch even when dismissed via X (upload may already exist server-side).
+    void refreshCatalogInBackground();
   };
 
   const getMenuItems = (): ActionSheetItem[] => {
@@ -883,6 +1046,8 @@ const DatasetsPage: React.FC = () => {
   };
 
   const hasContent = unifiedSources.length > 0;
+  /** Avoid blanking the catalog on background refetch after connect/close. */
+  const showCatalogLoading = loading && !hasContent;
 
   const renderSourceIcon = (row: UnifiedRow) => {
     const iconProps = { size: 16, strokeWidth: 1.75 as const };
@@ -939,17 +1104,30 @@ const DatasetsPage: React.FC = () => {
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            className="btn-gradient-primary sc-connect-cta--desktop"
-            onClick={() => setShowConnectionPanel(true)}
-          >
-            <Plus size={18} strokeWidth={2.5} aria-hidden />
-            Connect Enterprise DB
-          </button>
+          {datasourcesAtLimit && canUpgrade ? (
+            <button
+              type="button"
+              className="btn-gradient-primary sc-connect-cta--desktop"
+              onClick={openConnectOrUpgrade}
+              title={UPGRADE_TO_ADD_DATASOURCES_LABEL}
+            >
+              {UPGRADE_TO_ADD_DATASOURCES_LABEL}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn-gradient-primary sc-connect-cta--desktop"
+              onClick={openConnectOrUpgrade}
+              disabled={datasourcesAtLimit}
+              title={datasourcesAtLimit ? PLAN_MANAGED_BY_OWNER_COPY : undefined}
+            >
+              <Plus size={18} strokeWidth={2.5} aria-hidden />
+              Connect Enterprise DB
+            </button>
+          )}
         </header>
 
-        {!loading && hasContent && (
+        {!showCatalogLoading && hasContent && (
           <div className="sc-toolbar">
             {unifiedSources.length > SEARCH_VISIBILITY_THRESHOLD && (
               <div className="sc-search-wrap">
@@ -986,13 +1164,29 @@ const DatasetsPage: React.FC = () => {
         <button
           className="upload-dataset-fab"
           type="button"
-          onClick={() => setShowConnectionPanel(true)}
-          aria-label="Connect data source"
+          onClick={openConnectOrUpgrade}
+          disabled={datasourcesAtLimit && !canUpgrade}
+          aria-label={
+            datasourcesAtLimit && canUpgrade
+              ? UPGRADE_TO_ADD_DATASOURCES_LABEL
+              : 'Connect data source'
+          }
+          title={
+            datasourcesAtLimit
+              ? canUpgrade
+                ? UPGRADE_TO_ADD_DATASOURCES_LABEL
+                : PLAN_MANAGED_BY_OWNER_COPY
+              : undefined
+          }
         >
-          <Plus size={26} strokeWidth={2.5} />
+          {datasourcesAtLimit && canUpgrade ? (
+            <span className="upload-dataset-fab__upgrade">Upgrade</span>
+          ) : (
+            <Plus size={26} strokeWidth={2.5} />
+          )}
         </button>
 
-        {loading ? (
+        {showCatalogLoading ? (
           <div className="sc-catalog-layout">
             <div className="sc-panel sc-col--sources">
               {[1, 2, 3].map((i) => (
@@ -1014,14 +1208,27 @@ const DatasetsPage: React.FC = () => {
             <p>
               Upload a spreadsheet or connect PostgreSQL to explore schemas and analyze with AI.
             </p>
-            <button
-              type="button"
-              className="btn-gradient-primary"
-              onClick={() => setShowConnectionPanel(true)}
-            >
-              <Plus size={18} strokeWidth={2.5} aria-hidden />
-              Connect Enterprise DB
-            </button>
+            {datasourcesAtLimit && canUpgrade ? (
+              <button
+                type="button"
+                className="btn-gradient-primary"
+                onClick={openConnectOrUpgrade}
+                title={UPGRADE_TO_ADD_DATASOURCES_LABEL}
+              >
+                {UPGRADE_TO_ADD_DATASOURCES_LABEL}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-gradient-primary"
+                onClick={openConnectOrUpgrade}
+                disabled={datasourcesAtLimit}
+                title={datasourcesAtLimit ? PLAN_MANAGED_BY_OWNER_COPY : undefined}
+              >
+                <Plus size={18} strokeWidth={2.5} aria-hidden />
+                Connect Enterprise DB
+              </button>
+            )}
           </div>
         ) : filteredSources.length === 0 ? (
           <div className="sc-empty-hero">
@@ -1079,22 +1286,32 @@ const DatasetsPage: React.FC = () => {
                         row.kind === 'datasource'
                           ? row.datasource.status === 'READY'
                           : row.connector.status === 'ACTIVE';
+                      const isFailed =
+                        row.kind === 'datasource'
+                          ? row.datasource.status === 'FAILED'
+                          : row.connector.status === 'FAILED';
+                      const isDatasourcePending = row.kind === 'datasource' && !ready && !isFailed;
 
                       return (
                         <div
                           key={catalogSourceKey(ref)}
                           role="button"
-                          tabIndex={ready || row.kind !== 'datasource' ? 0 : -1}
-                          className={`sc-source-item ${isSelected ? 'is-selected' : ''} ${
-                            !ready && row.kind === 'datasource' ? 'is-disabled' : ''
-                          }`}
-                          aria-disabled={!ready && row.kind === 'datasource' ? true : undefined}
+                          tabIndex={ready || row.kind !== 'datasource' || isFailed ? 0 : -1}
+                          className={[
+                            'sc-source-item',
+                            isSelected ? 'is-selected' : '',
+                            isFailed ? 'is-failed' : '',
+                            isDatasourcePending ? 'is-disabled' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          aria-disabled={isDatasourcePending ? true : undefined}
                           onClick={() => {
-                            if (!ready && row.kind === 'datasource') return;
+                            if (isDatasourcePending) return;
                             handleCatalogSourceSelect(ref);
                           }}
                           onKeyDown={(e) => {
-                            if (!ready && row.kind === 'datasource') return;
+                            if (isDatasourcePending) return;
                             if (e.key === 'Enter' || e.key === ' ') {
                               e.preventDefault();
                               handleCatalogSourceSelect(ref);
@@ -1105,36 +1322,41 @@ const DatasetsPage: React.FC = () => {
                             <span className="sc-source-item__icon" aria-hidden>
                               {renderSourceIcon(row)}
                             </span>
-                            <div>
-                              <p className="sc-source-item__name">
-                                {title}
-                                {row.kind === 'datasource' && row.datasource.is_demo ? (
-                                  <span className="sc-source-item__sample-badge">Sample data</span>
-                                ) : null}
-                              </p>
-                              <p className="sc-source-item__host">{hostHint}</p>
+                            <div className="sc-source-item__body">
+                              <div className="sc-source-item__header">
+                                <div className="sc-source-item__title-block">
+                                  <p className="sc-source-item__name">
+                                    {title}
+                                    {row.kind === 'datasource' && row.datasource.is_demo ? (
+                                      <span className="sc-source-item__sample-badge">
+                                        Sample data
+                                      </span>
+                                    ) : null}
+                                  </p>
+                                  <p className="sc-source-item__host">{hostHint}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="sc-source-item__actions-btn"
+                                  aria-haspopup="menu"
+                                  aria-label={`Actions for ${title}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isMobile) handleMoreClick(e, ref.id, menuType);
+                                    else handleDesktopMenuClick(e, ref.id, menuType);
+                                  }}
+                                >
+                                  Actions
+                                  <ChevronDown size={14} strokeWidth={2.25} aria-hidden />
+                                </button>
+                              </div>
+                              <div className="sc-source-item__meta">
+                                <span className={`sc-status-dot ${statusDotClass(pill.className)}`}>
+                                  {pill.label}
+                                </span>
+                                <span>{tableLabel}</span>
+                              </div>
                             </div>
-                          </div>
-                          <div className="sc-source-item__meta">
-                            <span
-                              className={`sc-status-dot ${pill.className.includes('success') ? '' : ''}`}
-                            >
-                              {pill.label}
-                            </span>
-                            <span>{tableLabel}</span>
-                          </div>
-                          <div className="sc-source-item__actions">
-                            <button
-                              type="button"
-                              className="sc-source-item__menu-btn"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (isMobile) handleMoreClick(e, ref.id, menuType);
-                                else handleDesktopMenuClick(e, ref.id, menuType);
-                              }}
-                            >
-                              Options
-                            </button>
                           </div>
                         </div>
                       );
@@ -1438,7 +1660,7 @@ const DatasetsPage: React.FC = () => {
       {showConnectionPanel && workspaceId && (
         <DatasourceConnectionPanel
           workspaceId={workspaceId}
-          onClose={() => setShowConnectionPanel(false)}
+          onClose={handleConnectionPanelClose}
           onSuccess={() => {
             void handleLiveSourceSuccess();
           }}

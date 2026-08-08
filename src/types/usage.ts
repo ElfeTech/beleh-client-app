@@ -1,10 +1,18 @@
 // Usage and Plan Type Definitions
 // Matches backend API contract for /api/usage/* endpoints
 
+/** Credit conversion metadata returned on usage / plan payloads. */
+export interface CreditInfo {
+  tokens_per_credit: number;
+  credit_cost_usd: number | null;
+  currency?: string;
+}
+
 // Plan Types
 export interface PlanLimits {
   monthly_query_limit: number;
-  monthly_llm_token_limit: number;
+  monthly_credit_limit: number;
+  daily_credit_limit?: number;
   monthly_rows_scanned_limit: number;
   monthly_chart_renders_limit: number;
   max_datasets: number;
@@ -32,6 +40,8 @@ export interface Plan {
   limits: PlanLimits;
   features: PlanFeatures;
   is_active: boolean;
+  tokens_per_credit?: number;
+  credit_cost_usd?: number | null;
 }
 
 export interface PlanResponse {
@@ -50,12 +60,12 @@ export interface UsageMetrics {
   queries_used: number;
   queries_limit: number;
   queries_remaining: number;
-  llm_tokens_used: number;
-  llm_tokens_limit: number;
-  llm_tokens_remaining: number;
-  daily_llm_tokens_used?: number;
-  daily_llm_tokens_limit?: number;
-  daily_llm_tokens_remaining?: number;
+  credits_used: number;
+  credits_limit: number;
+  credits_remaining: number;
+  daily_credits_used?: number;
+  daily_credits_limit?: number;
+  daily_credits_remaining?: number;
   rows_scanned_used: number;
   rows_scanned_limit: number;
   rows_scanned_remaining: number;
@@ -89,6 +99,9 @@ export interface CurrentUsageResponse {
   daily_reset_at?: string | null;
   last_updated: string;
   value?: PlanValueBlock | null;
+  credit?: CreditInfo | null;
+  tokens_per_credit?: number;
+  credit_cost_usd?: number | null;
   is_trial?: boolean;
   trial_end?: string | null;
   plan_status?: string | null;
@@ -105,6 +118,11 @@ export interface RemainingQuotaResponse {
   percentage_used: number;
   can_execute_query: boolean;
   reset_date: string;
+  credits_remaining?: number;
+  daily_credits_remaining?: number;
+  daily_credits_limit?: number;
+  tokens_per_credit?: number;
+  credit_cost_usd?: number | null;
   included_value_usd?: number | null;
   used_value_usd?: number | null;
   remaining_value_usd?: number | null;
@@ -117,6 +135,9 @@ export interface UsageSummary {
   queries_percentage: number;
   datasources_percentage: number;
   members_percentage: number;
+  credits_used_pct?: number;
+  tokens_per_credit?: number;
+  credit_cost_usd?: number | null;
   plan_name: string;
   reset_date: string;
   warnings: UsageWarning[];
@@ -130,15 +151,7 @@ export interface UsageSummary {
 export interface UsageWarning {
   level: 'info' | 'warning' | 'critical';
   message: string;
-  metric:
-    | 'queries'
-    | 'datasources'
-    | 'members'
-    | 'tokens'
-    | 'llm_tokens'
-    | 'daily_llm_tokens'
-    | 'rows'
-    | 'charts';
+  metric: 'queries' | 'datasources' | 'members' | 'credits' | 'daily_credits' | 'rows' | 'charts';
   percentage: number;
 }
 
@@ -160,7 +173,7 @@ export interface QuotaCheckResponse {
 export interface DailyUsage {
   date: string;
   queries: number;
-  llm_tokens: number;
+  credits: number;
   rows_scanned: number;
   chart_renders: number;
 }
@@ -169,7 +182,7 @@ export interface MonthlyUsage {
   period_start: string;
   period_end: string;
   total_queries: number;
-  total_llm_tokens: number;
+  total_credits: number;
   total_rows_scanned: number;
   total_chart_renders: number;
 }

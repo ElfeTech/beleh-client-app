@@ -327,7 +327,7 @@ export function useChatRun(params: UseChatRunParams) {
           (payload.code?.toUpperCase() === 'QUOTA_EXCEEDED'
             ? new QuotaExceededError({
                 error: 'quota_exceeded',
-                limit_type: 'llm_tokens',
+                limit_type: 'credits',
                 current_usage: 0,
                 limit: 0,
                 remaining: 0,

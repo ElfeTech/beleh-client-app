@@ -118,13 +118,15 @@ export interface WorkspaceUsageResponse {
   workspaces_limit: number;
   queries_used?: number;
   queries_limit?: number;
-  llm_tokens_used?: number;
-  llm_tokens_limit?: number;
-  /** Remaining period AI tokens when provided by the API. */
-  llm_tokens_remaining?: number;
-  daily_llm_tokens_used?: number;
-  daily_llm_tokens_limit?: number;
-  daily_llm_tokens_remaining?: number;
+  credits_used?: number;
+  credits_limit?: number;
+  /** Remaining period AI credits when provided by the API. */
+  credits_remaining?: number;
+  daily_credits_used?: number;
+  daily_credits_limit?: number;
+  daily_credits_remaining?: number;
+  tokens_per_credit?: number;
+  credit_cost_usd?: number | null;
   daily_reset_at?: string | null;
   reset_at?: string | null;
   is_trial?: boolean;
@@ -135,12 +137,7 @@ export interface WorkspaceUsageResponse {
 }
 
 export type QuotaLimitType =
-  | 'queries'
-  | 'llm_tokens'
-  | 'daily_llm_tokens'
-  | 'datasets'
-  | 'members_per_workspace'
-  | 'workspaces';
+  'queries' | 'credits' | 'daily_credits' | 'datasets' | 'members_per_workspace' | 'workspaces';
 
 export interface QuotaExceededDetail {
   error: 'quota_exceeded';
@@ -474,15 +471,7 @@ export interface SortingConfig {
 /** Legacy chart encoding shape used by older chart components */
 export interface VisualizationRecommendation {
   type?:
-    | 'line'
-    | 'multiline'
-    | 'bar'
-    | 'stacked_bar'
-    | 'heatmap'
-    | 'scatter'
-    | 'pie'
-    | 'table'
-    | 'auto';
+    'line' | 'multiline' | 'bar' | 'stacked_bar' | 'heatmap' | 'scatter' | 'pie' | 'table' | 'auto';
   visualization_type?:
     | 'line'
     | 'multiline'

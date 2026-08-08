@@ -1,187 +1,168 @@
 .sheet-selection-container {
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
+  gap: 1rem;
+  min-height: 0;
 }
 
 .sheet-selection-header h3 {
   margin: 0;
-  font-size: 1.125rem;
-  font-weight: 800;
+  font-size: 1.05rem;
+  font-weight: 750;
   letter-spacing: -0.02em;
   color: var(--text-primary, var(--gray-900));
 }
 
 .sheet-selection-header p {
-  margin: 0.35rem 0 0;
+  margin: 0.4rem 0 0;
   font-size: 0.8125rem;
-  line-height: 1.5;
+  line-height: 1.45;
   color: var(--text-tertiary, var(--gray-500));
+  max-width: 42rem;
 }
 
-.sheet-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-  gap: 0.85rem;
-}
-
-.sheet-card {
+.sheet-selection-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 1rem 1.1rem;
-  background: var(--ds-surface, #fff);
+}
+
+.sheet-selection-count {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted, var(--gray-500));
+}
+
+.sheet-selection-toolbar-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sheet-selection-text-btn {
+  border: none;
+  background: none;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--accent-teal-600, #0d9488);
+  cursor: pointer;
+}
+
+.sheet-selection-text-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sheet-selection-text-btn:not(:disabled):hover {
+  text-decoration: underline;
+}
+
+.sheet-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  max-height: min(52vh, 28rem);
+}
+
+.sheet-check-row {
+  width: 100%;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  text-align: left;
+  padding: 0.75rem 0.85rem;
+  border-radius: 0.75rem;
   border: 1px solid var(--ds-border-subtle, var(--gray-200));
-  border-radius: 0.85rem;
+  background: var(--ds-surface, #fff);
   cursor: pointer;
   transition:
-    border-color 0.18s ease,
-    box-shadow 0.2s ease,
-    background 0.18s ease,
-    transform 0.15s ease;
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
-.sheet-card:hover {
+.sheet-check-row:hover {
   border-color: color-mix(in srgb, var(--accent-teal-500) 35%, var(--border-primary));
-  box-shadow: var(--ds-shadow-card, 0 6px 18px rgba(15, 23, 42, 0.06));
 }
 
-.sheet-card.selected {
-  border-color: color-mix(in srgb, var(--accent-teal-500) 55%, var(--border-primary));
+.sheet-check-row.is-selected {
+  border-color: color-mix(in srgb, var(--accent-teal-500) 50%, var(--border-primary));
   background: color-mix(in srgb, var(--accent-teal-500) 6%, var(--ds-surface, #fff));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent-teal-500) 22%, transparent);
 }
 
-.sheet-card-content {
-  display: flex;
-  align-items: center;
-  gap: 0.85rem;
-  min-width: 0;
-}
-
-.sheet-icon {
-  width: 2.25rem;
-  height: 2.25rem;
+.sheet-check-box {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  margin-top: 0.1rem;
+  border-radius: 0.35rem;
+  border: 1.5px solid var(--border-primary, var(--gray-300));
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--ds-surface-muted, var(--gray-100));
-  color: var(--text-muted, var(--gray-500));
-  border-radius: 0.55rem;
-  border: 1px solid var(--ds-border-subtle, var(--gray-200));
-  flex-shrink: 0;
+  color: #fff;
+  background: transparent;
 }
 
-.sheet-icon svg {
-  width: 1.125rem;
-  height: 1.125rem;
+.sheet-check-box.is-checked {
+  background: var(--accent-teal-500, #14b8a6);
+  border-color: var(--accent-teal-500, #14b8a6);
 }
 
-.sheet-card.selected .sheet-icon {
-  background: color-mix(in srgb, var(--accent-teal-500) 14%, var(--ds-surface-muted));
-  color: var(--accent-teal-500);
-  border-color: color-mix(in srgb, var(--accent-teal-500) 28%, var(--border-primary));
-}
-
-.sheet-info {
+.sheet-check-body {
+  min-width: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 0.3rem;
-  min-width: 0;
 }
 
-.sheet-name {
-  font-size: 0.9rem;
+.sheet-check-name {
+  font-size: 0.875rem;
   font-weight: 700;
-  color: var(--text-primary, var(--gray-900));
+  color: var(--text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.status-badge {
+.sheet-check-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.55rem;
+}
+
+.sheet-check-hint {
+  font-size: 0.7rem;
+  color: var(--text-muted, var(--gray-500));
+}
+
+.sheet-check-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
+  padding: 0.12rem 0.45rem;
+  border-radius: 999px;
   font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding: 0.2rem 0.5rem;
-  border-radius: 999px;
-  width: fit-content;
-}
-
-.status-badge .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
-
-.status-badge.ready {
-  background: color-mix(in srgb, #10b981 12%, transparent);
-  color: #059669;
-}
-
-.status-badge.ready .dot {
-  background: #10b981;
-}
-
-.status-badge.attention {
-  background: color-mix(in srgb, #f59e0b 14%, transparent);
+  letter-spacing: 0.02em;
+  background: color-mix(in srgb, #f59e0b 16%, transparent);
   color: #b45309;
 }
 
-.status-badge.attention .dot {
-  background: #f59e0b;
+.sheet-check-pill--ready {
+  background: color-mix(in srgb, var(--success, #10b981) 14%, transparent);
+  color: #047857;
 }
 
-.status-attention-container {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
+[data-theme='dark'] .sheet-check-row {
+  background: var(--panel-bg, #1e293b);
 }
 
-.sheet-issue-text {
-  font-size: 0.6875rem;
-  color: var(--error, #dc2626);
-  line-height: 1.35;
-  font-weight: 500;
-}
-
-.sheet-checkbox {
-  flex-shrink: 0;
-}
-
-.checked-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  background: var(--accent-teal-500);
-  color: #fff;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.checked-icon svg {
-  width: 0.875rem;
-  height: 0.875rem;
-}
-
-.unchecked-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-  border: 2px solid var(--ds-border-subtle, var(--gray-300));
-  border-radius: 999px;
-}
-
-html[data-theme='dark'] .sheet-card {
-  background: rgba(255, 255, 255, 0.02);
-  border-color: var(--border-color);
-}
-
-html[data-theme='dark'] .sheet-card.selected {
-  background: color-mix(in srgb, var(--accent-teal-500) 10%, transparent);
+[data-theme='dark'] .sheet-check-pill {
+  color: #fbbf24;
 }

@@ -7,7 +7,8 @@ import { toast } from 'sonner';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
-import { writeActiveWorkspaceId } from '../lib/uiMemory';
+import { writeActiveWorkspaceId, UI_KEYS, type UiMemoryScope } from '../lib/uiMemory';
+import { useUiMemory } from '../hooks/useUiMemory';
 import { ContextMenu, type ContextMenuItem } from '../components/common/ContextMenu';
 import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
@@ -16,11 +17,14 @@ import type { WorkspaceResponse } from '../types/api';
 import {
   canDeleteWorkspace,
   canRenameWorkspace,
+  canShowWorkspaceUpgradeCta,
   createWorkspaceOwnershipHelper,
   isWorkspacesAtLimit,
-  PLAN_LIMIT_REACHED_TOOLTIP,
+  PLAN_MANAGED_BY_OWNER_COPY,
+  BILLING_UPGRADE_HREF,
   workspaceLimitUpgradeMessage,
   workspaceOwnershipLabel,
+  UPGRADE_TO_ADD_WORKSPACES_LABEL,
 } from '../utils/workspaceAccess';
 import './WorkspacesPage.css';
 
@@ -39,7 +43,17 @@ export function WorkspacesPage() {
     loading,
   } = useWorkspace();
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const workspacesAtLimit = isWorkspacesAtLimit(workspaceUsage);
+  const canUpgrade = canShowWorkspaceUpgradeCta(currentRole);
+
+  const workspacesSearchScope: UiMemoryScope | null = user?.uid
+    ? { kind: 'user', uid: user.uid }
+    : null;
+  const [searchQuery, setSearchQuery] = useUiMemory(
+    workspacesSearchScope,
+    UI_KEYS.workspacesListSearch,
+    '',
+  );
   const [syncFrequency, setSyncFrequency] = useState('hourly');
   const [reindexingId, setReindexingId] = useState<string | null>(null);
   const [contextMenuAnchor, setContextMenuAnchor] = useState<HTMLElement | null>(null);
@@ -251,25 +265,42 @@ export function WorkspacesPage() {
               <h1>Workspaces</h1>
               <p>Organize your data and analytics into separate workspaces</p>
             </div>
-            <button
-              type="button"
-              className="btn-gradient-primary create-workspace-button"
-              onClick={() => {
-                if (isWorkspacesAtLimit(workspaceUsage)) {
-                  toast.error(workspaceLimitUpgradeMessage(currentRole, 'workspaces'));
-                  return;
+            {workspacesAtLimit && canUpgrade ? (
+              <button
+                type="button"
+                className="btn-gradient-primary create-workspace-button"
+                onClick={() => navigate(BILLING_UPGRADE_HREF)}
+                title={UPGRADE_TO_ADD_WORKSPACES_LABEL}
+              >
+                {UPGRADE_TO_ADD_WORKSPACES_LABEL}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-gradient-primary create-workspace-button"
+                onClick={() => {
+                  if (workspacesAtLimit) {
+                    toast.error(workspaceLimitUpgradeMessage(currentRole, 'workspaces'));
+                    return;
+                  }
+                  setShowCreateModal(true);
+                }}
+                disabled={workspacesAtLimit}
+                title={
+                  workspacesAtLimit
+                    ? canUpgrade
+                      ? UPGRADE_TO_ADD_WORKSPACES_LABEL
+                      : PLAN_MANAGED_BY_OWNER_COPY
+                    : undefined
                 }
-                setShowCreateModal(true);
-              }}
-              disabled={isWorkspacesAtLimit(workspaceUsage)}
-              title={isWorkspacesAtLimit(workspaceUsage) ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              Create Workspace
-            </button>
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                Create Workspace
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -431,25 +462,39 @@ export function WorkspacesPage() {
                   ? 'Try a different search term'
                   : 'Create your first workspace to get started'}
               </p>
-              {!searchQuery && (
-                <button
-                  type="button"
-                  className="btn-gradient-primary empty-create-btn"
-                  onClick={() => {
-                    if (isWorkspacesAtLimit(workspaceUsage)) {
-                      toast.error(workspaceLimitUpgradeMessage(currentRole, 'workspaces'));
-                      return;
+              {!searchQuery &&
+                (workspacesAtLimit && canUpgrade ? (
+                  <button
+                    type="button"
+                    className="btn-gradient-primary empty-create-btn"
+                    onClick={() => navigate(BILLING_UPGRADE_HREF)}
+                    title={UPGRADE_TO_ADD_WORKSPACES_LABEL}
+                  >
+                    {UPGRADE_TO_ADD_WORKSPACES_LABEL}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn-gradient-primary empty-create-btn"
+                    onClick={() => {
+                      if (workspacesAtLimit) {
+                        toast.error(workspaceLimitUpgradeMessage(currentRole, 'workspaces'));
+                        return;
+                      }
+                      setShowCreateModal(true);
+                    }}
+                    disabled={workspacesAtLimit}
+                    title={
+                      workspacesAtLimit
+                        ? canUpgrade
+                          ? UPGRADE_TO_ADD_WORKSPACES_LABEL
+                          : PLAN_MANAGED_BY_OWNER_COPY
+                        : undefined
                     }
-                    setShowCreateModal(true);
-                  }}
-                  disabled={isWorkspacesAtLimit(workspaceUsage)}
-                  title={
-                    isWorkspacesAtLimit(workspaceUsage) ? PLAN_LIMIT_REACHED_TOOLTIP : undefined
-                  }
-                >
-                  Create Workspace
-                </button>
-              )}
+                  >
+                    Create Workspace
+                  </button>
+                ))}
             </div>
           ) : (
             <div className="workspaces-grid">

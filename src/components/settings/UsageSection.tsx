@@ -133,6 +133,7 @@ export function UsageSection() {
   const [expandedPlans, setExpandedPlans] = useState<Set<string>>(() => new Set());
   const plansSectionRef = useRef<HTMLElement | null>(null);
   const queryToastHandled = useRef(false);
+  const upgradeScrollHandled = useRef(false);
 
   const fetchBilling = useCallback(async () => {
     if (!user) {
@@ -183,7 +184,6 @@ export function UsageSection() {
     if (queryToastHandled.current) return;
     const checkout = searchParams.get('checkout');
     const upgraded = searchParams.get('upgraded');
-    const upgrade = searchParams.get('upgrade');
 
     if (checkout === 'canceled') {
       queryToastHandled.current = true;
@@ -191,7 +191,10 @@ export function UsageSection() {
       const next = new URLSearchParams(searchParams);
       next.delete('checkout');
       setSearchParams(next, { replace: true });
-    } else if (upgraded === '1') {
+      return;
+    }
+
+    if (upgraded === '1') {
       queryToastHandled.current = true;
       toast.success('Subscription updated.');
       void refreshUsageAfterAction();
@@ -199,14 +202,35 @@ export function UsageSection() {
       const next = new URLSearchParams(searchParams);
       next.delete('upgraded');
       setSearchParams(next, { replace: true });
-    } else if (upgrade === '1' && plansSectionRef.current) {
-      queryToastHandled.current = true;
-      plansSectionRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [searchParams, setSearchParams, refreshUsageAfterAction, fetchBilling]);
+
+  // Scroll to Available upgrade plans after Upgrade CTAs land on ?upgrade=1 / #billing-plans.
+  // Retries until usage + plans UI are mounted (avoids racing early loading returns).
+  useEffect(() => {
+    if (upgradeScrollHandled.current) return;
+    const upgrade = searchParams.get('upgrade');
+    const hashTargetsPlans =
+      typeof window !== 'undefined' && window.location.hash === '#billing-plans';
+    if (upgrade !== '1' && !hashTargetsPlans) return;
+    if (isLoading && !currentUsage) return;
+    if (plansLoading || !plansSectionRef.current) return;
+
+    upgradeScrollHandled.current = true;
+    const el = plansSectionRef.current;
+    window.requestAnimationFrame(() => {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+
+    if (upgrade === '1') {
       const next = new URLSearchParams(searchParams);
       next.delete('upgrade');
       setSearchParams(next, { replace: true });
     }
-  }, [searchParams, setSearchParams, refreshUsageAfterAction, fetchBilling]);
+    if (hashTargetsPlans) {
+      window.history.replaceState(null, '', `${window.location.pathname}${window.location.search}`);
+    }
+  }, [searchParams, setSearchParams, plansLoading, isLoading, currentUsage]);
 
   const openPortal = useCallback(async () => {
     if (!user || portalLoading) return;
@@ -282,12 +306,6 @@ export function UsageSection() {
     usagePlan?.tier,
   );
   const meterPlanLimits = activeCatalogPlan?.limits ?? usagePlan?.limits ?? null;
-  const currentPlanIndex = catalogPlanIndex(
-    catalogPlans,
-    subscription,
-    usagePlan?.id,
-    usagePlan?.tier,
-  );
   const planName = subscription?.plan?.name ?? activeCatalogPlan?.name ?? usagePlan?.name ?? 'Free';
   const planDescription =
     activeCatalogPlan?.description ??
@@ -313,11 +331,20 @@ export function UsageSection() {
   const daysLeft = isOnTrial ? trialDaysLeft(trialEndIso) : null;
   const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
   const hasStripeSub = Boolean(subscription?.stripe_subscription_id);
+  // App free-trial users still report a paid entitlement plan_id/tier — do not treat that as
+  // a paid subscription for CTAs, or checkout stays disabled as "Currently active plan".
+  const hasPaidCurrentPlan =
+    !isOnTrial && hasStripeSub && (status === 'active' || status === 'past_due');
+  const currentPlanIndex = hasPaidCurrentPlan
+    ? catalogPlanIndex(catalogPlans, subscription, usagePlan?.id, usagePlan?.tier)
+    : -1;
 
-  /** Public upgrade grid: Free stays off pricing unless it is the current plan. */
+  /** Public upgrade grid: Free stays off pricing unless it is the paid current plan. */
   const publicCatalogPlans = catalogPlans.filter((p) => {
     if (!isFreeTier(p)) return true;
-    return isCurrentCatalogPlan(p, subscription, usagePlan?.id, usagePlan?.tier);
+    return (
+      hasPaidCurrentPlan && isCurrentCatalogPlan(p, subscription, usagePlan?.id, usagePlan?.tier)
+    );
   });
   const showCycleToggle = catalogPlans.some(
     (p) =>
@@ -459,12 +486,9 @@ export function UsageSection() {
         ) : (
           <div className="billing-plans-grid">
             {publicCatalogPlans.map((tierPlan) => {
-              const isCurrent = isCurrentCatalogPlan(
-                tierPlan,
-                subscription,
-                usagePlan?.id,
-                usagePlan?.tier,
-              );
+              const isCurrent =
+                hasPaidCurrentPlan &&
+                isCurrentCatalogPlan(tierPlan, subscription, usagePlan?.id, usagePlan?.tier);
               const tierIndex = catalogPlans.findIndex((p) => p.plan_id === tierPlan.plan_id);
               const isDowngrade =
                 !isCurrent &&

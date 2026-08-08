@@ -31,7 +31,10 @@ import {
   readActiveWorkspaceId,
   readSidebarCollapsed,
   writeSidebarCollapsed,
+  UI_KEYS,
+  type UiMemoryScope,
 } from '../../lib/uiMemory';
+import { useUiMemory } from '../../hooks/useUiMemory';
 import { SEARCH_VISIBILITY_THRESHOLD } from '../../constants/pagination';
 import './UnifiedSidebar.css';
 
@@ -73,10 +76,16 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   }
 
   const [refreshingChats, setRefreshingChats] = useState(false);
-  const [sessionSearchQuery, setSessionSearchQuery] = useState('');
   const location = useLocation();
   const navigate = useNavigate();
   const { id: workspaceId } = useParams<{ id: string }>();
+  const sessionSearchScope: UiMemoryScope | null =
+    user?.uid && workspaceId ? { kind: 'workspace', uid: user.uid, workspaceId } : null;
+  const [sessionSearchQuery, setSessionSearchQuery] = useUiMemory(
+    sessionSearchScope,
+    UI_KEYS.workspaceSessionSearch,
+    '',
+  );
   const path = location.pathname;
   const { currentWorkspace, workspaces, workspaceUsage } = useWorkspace();
   const { summary, currentUsage } = useUsage();
@@ -196,14 +205,14 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   const usageFooterLine = useMemo(() => {
     if (!workspaceUsage) return null;
     const parts: string[] = [];
-    const tUsed = workspaceUsage.llm_tokens_used;
-    const tLimit = workspaceUsage.llm_tokens_limit;
+    const tUsed = workspaceUsage.credits_used;
+    const tLimit = workspaceUsage.credits_limit;
     if (tUsed != null && tLimit != null && tLimit >= 0) {
       const pct = Math.min(100, Math.round((tUsed / tLimit) * 100));
-      parts.push(`${pct}% AI tokens`);
+      parts.push(`${pct}% credits`);
     }
-    const dUsed = workspaceUsage.daily_llm_tokens_used;
-    const dLimit = workspaceUsage.daily_llm_tokens_limit;
+    const dUsed = workspaceUsage.daily_credits_used;
+    const dLimit = workspaceUsage.daily_credits_limit;
     if (dUsed != null && dLimit != null && dLimit >= 0) {
       const pct = Math.min(100, Math.round((dUsed / dLimit) * 100));
       parts.push(`${pct}% daily`);

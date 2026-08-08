@@ -40,10 +40,10 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
   const _selectedDataset = datasources.find((ds) => ds.id === selectedDatasourceId);
   void _selectedDataset;
 
-  const periodUsed = workspaceUsage?.llm_tokens_used ?? 0;
-  const periodLimit = workspaceUsage?.llm_tokens_limit;
-  const dailyUsed = workspaceUsage?.daily_llm_tokens_used ?? 0;
-  const dailyLimit = workspaceUsage?.daily_llm_tokens_limit;
+  const periodUsed = workspaceUsage?.credits_used ?? 0;
+  const periodLimit = workspaceUsage?.credits_limit;
+  const dailyUsed = workspaceUsage?.daily_credits_used ?? 0;
+  const dailyLimit = workspaceUsage?.daily_credits_limit;
 
   // Prefer the tighter of period vs daily when both are capped.
   const periodPct =
@@ -51,12 +51,12 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
   const dailyPct =
     dailyLimit != null && !isUnlimitedLimit(dailyLimit) ? usagePct(dailyUsed, dailyLimit) : 0;
   const percentageUsed = Math.max(periodPct, dailyPct);
-  const hasTokenMeter =
+  const hasCreditMeter =
     (periodLimit != null && !isUnlimitedLimit(periodLimit)) ||
     (dailyLimit != null && !isUnlimitedLimit(dailyLimit));
 
   const getUsageStatus = () => {
-    if (!hasTokenMeter) return { level: 'normal', color: '#10b981' };
+    if (!hasCreditMeter) return { level: 'normal', color: '#10b981' };
     if (percentageUsed >= USAGE_HARD_LIMIT_PCT) return { level: 'critical', color: '#ef4444' };
     if (percentageUsed >= USAGE_SOFT_WARN_PCT) return { level: 'warning', color: '#f59e0b' };
     return { level: 'normal', color: '#10b981' };
@@ -90,11 +90,11 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
           </svg>
         </button>
 
-        {/* Mobile Usage Badge - Circular Progress (AI tokens) */}
+        {/* Mobile Usage Badge - Circular Progress (AI credits) */}
         <button
           className={`mobile-usage-badge ${usageStatus.level}`}
           onClick={handleUsageClick}
-          aria-label={hasTokenMeter ? `${displayPct}% of AI token quota used` : 'Open usage'}
+          aria-label={hasCreditMeter ? `${displayPct}% of credit quota used` : 'Open usage'}
         >
           <svg className="usage-circle" viewBox="0 0 48 48">
             <circle
@@ -124,7 +124,7 @@ const MobileChatHeader: React.FC<MobileChatHeaderProps> = ({
               dominantBaseline="central"
               className="usage-circle-text"
             >
-              {hasTokenMeter ? `${displayPct}%` : ','}
+              {hasCreditMeter ? `${displayPct}%` : ','}
             </text>
           </svg>
         </button>

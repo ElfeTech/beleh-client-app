@@ -39,10 +39,10 @@ export function formatQuotaExceededAction(
       return canUpgrade
         ? { label: 'Upgrade plan', href: billingHref, showCta: true }
         : { label: 'Ask owner', href: billingHref, showCta: false };
-    case 'daily_llm_tokens':
+    case 'daily_credits':
       // Daily cap: inform about reset , not upgrade-only.
       return { label: 'OK', href: '#', showCta: false };
-    case 'llm_tokens':
+    case 'credits':
     case 'queries':
     default:
       return canUpgrade
@@ -58,21 +58,21 @@ export function formatQuotaExceededMessage(
   const base = error.quota.message?.trim() || error.message;
   const parts = [base];
 
-  if (error.quota.limit_type === 'daily_llm_tokens') {
+  if (error.quota.limit_type === 'daily_credits') {
     const resetAt = formatQuotaResetAt(error.quota.reset_at);
     if (resetAt) {
       parts.push(`Daily limit reached , resets at ${resetAt}.`);
     } else {
-      parts.push('Daily AI token limit reached. Try again after the daily reset.');
+      parts.push('Daily credit limit reached. Try again after the daily reset.');
     }
   } else if (
-    (error.quota.limit_type === 'llm_tokens' || error.quota.limit_type === 'queries') &&
+    (error.quota.limit_type === 'credits' || error.quota.limit_type === 'queries') &&
     formatQuotaResetDate(error.quota.reset_at)
   ) {
     parts.push(`Resets on ${formatQuotaResetDate(error.quota.reset_at)}.`);
   }
 
-  if (error.quota.limit_type !== 'daily_llm_tokens' && !canShowWorkspaceUpgradeCta(role)) {
+  if (error.quota.limit_type !== 'daily_credits' && !canShowWorkspaceUpgradeCta(role)) {
     parts.push(PLAN_MANAGED_BY_OWNER_COPY);
   }
 

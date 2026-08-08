@@ -11,16 +11,24 @@ import {
   AreaChart,
   Area,
 } from 'recharts';
-import { Activity, Database, Zap, TrendingUp, BarChart3, Layers } from 'lucide-react';
+import { Activity, Zap, TrendingUp, BarChart3, Layers } from 'lucide-react';
 import { useUsage } from '../context/UsageContext';
 import { useWorkspace } from '../context/WorkspaceContext';
-import { canShowWorkspaceUpgradeCta, PLAN_MANAGED_BY_OWNER_COPY } from '../utils/workspaceAccess';
+import { useAuth } from '../context/useAuth';
+import {
+  canShowWorkspaceUpgradeCta,
+  isUnlimitedLimit,
+  PLAN_MANAGED_BY_OWNER_COPY,
+} from '../utils/workspaceAccess';
 import { PlanValueCard } from '../components/usage/PlanValueCard';
 import { QuotaUsageGrid } from '../components/usage/QuotaUsageGrid';
 import { SettingsSectionHeader } from '../components/settings/SettingsSectionHeader';
 import { format, parseISO } from 'date-fns';
 import { cn } from '../lib/utils';
 import type { HistoricalUsageResponse } from '../types/usage';
+import { formatCreditCount } from '../utils/formatters';
+import { useUiMemory } from '../hooks/useUiMemory';
+import { UI_KEYS, type UiMemoryScope } from '../lib/uiMemory';
 import './UsageStatisticsPage.css';
 
 const TICK_STYLE = {
@@ -69,7 +77,7 @@ function AnalyticsSkeleton() {
   return (
     <>
       <div className="stats-grid">
-        {[1, 2, 3, 4].map((i) => (
+        {[1, 2, 3].map((i) => (
           <div
             key={i}
             className={cn('analytics-skeleton analytics-skeleton-kpi', `analytics-stagger-${i}`)}
@@ -80,7 +88,6 @@ function AnalyticsSkeleton() {
         <div className="analytics-skeleton analytics-skeleton-chart-lg analytics-stagger-5" />
         <div className="charts-layout__secondary">
           <div className="analytics-skeleton analytics-skeleton-chart-sm analytics-stagger-5" />
-          <div className="analytics-skeleton analytics-skeleton-chart-sm analytics-stagger-6" />
         </div>
       </div>
     </>
@@ -123,12 +130,16 @@ interface UsageStatisticsPageProps {
 const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = false }) => {
   const navigate = useNavigate();
   const { id: routeWorkspaceId } = useParams<{ id: string }>();
+  const { user } = useAuth();
   const { currentWorkspace, currentRole } = useWorkspace();
   const workspaceId = routeWorkspaceId ?? currentWorkspace?.id;
   const { currentUsage, getHistoricalUsage } = useUsage();
   const [history, setHistory] = useState<HistoricalUsageResponse | null>(null);
   const [loading, setLoading] = useState(true);
-  const [timeRange, setTimeRange] = useState(30);
+  const usageRangeScope: UiMemoryScope | null =
+    user?.uid && workspaceId ? { kind: 'workspace', uid: user.uid, workspaceId } : null;
+  const [timeRange, setTimeRangeRaw] = useUiMemory(usageRangeScope, UI_KEYS.usageTimeRange, 30);
+  const setTimeRange = (n: number) => setTimeRangeRaw(n);
   const showUpgrade = canShowWorkspaceUpgradeCta(currentRole);
 
   useEffect(() => {
@@ -144,40 +155,58 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
 
   const periodLabel = useMemo(() => `Last ${timeRange} days`, [timeRange]);
 
-  const stats = useMemo(
-    () => [
+  const creditMeter = useMemo(() => {
+    const metrics = currentUsage?.metrics;
+    if (!metrics) return null;
+    const used = metrics.credits_used ?? 0;
+    const limit = metrics.credits_limit ?? 0;
+    const remaining =
+      metrics.credits_remaining != null
+        ? Math.max(0, metrics.credits_remaining)
+        : isUnlimitedLimit(limit)
+          ? null
+          : Math.max(0, limit - used);
+    return { used, limit, remaining };
+  }, [currentUsage]);
+
+  const stats = useMemo(() => {
+    const creditsUsed = creditMeter?.used ?? history?.total_period?.total_credits ?? 0;
+    const creditsUnlimited = creditMeter != null && isUnlimitedLimit(creditMeter.limit);
+    const creditsDetail =
+      creditMeter == null
+        ? 'From selected reporting window'
+        : creditsUnlimited
+          ? `${formatCreditCount(creditsUsed)} used · Unlimited plan`
+          : `${formatCreditCount(creditMeter.remaining ?? 0)} left of ${formatCreditCount(creditMeter.limit)} allocated`;
+
+    return [
       {
         label: 'Total Queries',
-        value: history?.total_period?.total_queries ?? 0,
+        value: String(history?.total_period?.total_queries ?? 0),
+        detail: periodLabel,
         icon: Activity,
         accent: 'var(--kpi-accent-teal)',
         iconClass:
           'text-[color:var(--accent-teal-500)] bg-[color-mix(in_srgb,var(--accent-teal-500)_12%,transparent)]',
       },
       {
-        label: 'Tokens Consumed',
-        value: (history?.total_period?.total_llm_tokens ?? 0).toLocaleString(),
+        label: 'AI Credits',
+        value: formatCreditCount(creditsUsed),
+        detail: creditsDetail,
         icon: Zap,
         accent: 'var(--kpi-accent-amber)',
         iconClass: 'text-amber-500 bg-amber-500/10',
       },
       {
-        label: 'Rows Scanned',
-        value: (history?.total_period?.total_rows_scanned ?? 0).toLocaleString(),
-        icon: Database,
-        accent: 'var(--success)',
-        iconClass: 'text-emerald-500 bg-emerald-500/10',
-      },
-      {
         label: 'Charts Generated',
-        value: history?.total_period?.total_chart_renders ?? 0,
+        value: String(history?.total_period?.total_chart_renders ?? 0),
+        detail: periodLabel,
         icon: BarChart3,
         accent: 'var(--kpi-accent-purple)',
         iconClass: 'text-purple-500 bg-purple-500/10',
       },
-    ],
-    [history],
-  );
+    ];
+  }, [history, creditMeter, periodLabel]);
 
   const chartData =
     history?.daily_usage.map((d) => ({
@@ -258,6 +287,7 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
                     </div>
                   </div>
                   <span className="stat-value">{stat.value}</span>
+                  {stat.detail ? <span className="stat-detail">{stat.detail}</span> : null}
                 </div>
               ))}
             </div>
@@ -321,11 +351,11 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
 
                 <div className="charts-layout__secondary">
                   <ChartCard
-                    title="Token Efficiency"
-                    subtitle="LLM compute resources (in thousands)"
+                    title="Credit Usage"
+                    subtitle="AI credits used each day"
                     icon={<Zap className="h-4 w-4" strokeWidth={2} />}
                     iconClassName="text-amber-500 bg-amber-500/10"
-                    plotClassName="chart-plot chart-plot--compact"
+                    plotClassName="chart-plot"
                   >
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={chartData}>
@@ -347,50 +377,13 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
                           contentStyle={TOOLTIP_STYLE}
                           formatter={(value) => [
                             typeof value === 'number' ? value.toLocaleString() : String(value),
-                            'Tokens',
+                            'Credits',
                           ]}
                         />
                         <Bar
-                          dataKey="llm_tokens"
-                          name="Tokens"
+                          dataKey="credits"
+                          name="Credits"
                           fill="var(--chart-stroke)"
-                          radius={[4, 4, 0, 0]}
-                          barSize={20}
-                        />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartCard>
-
-                  <ChartCard
-                    title="Data Intensity"
-                    subtitle="Rows scanned per request"
-                    icon={<Database className="h-4 w-4" strokeWidth={2} />}
-                    iconClassName="text-emerald-500 bg-emerald-500/10"
-                    plotClassName="chart-plot chart-plot--compact"
-                  >
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData}>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          vertical={false}
-                          stroke="var(--border-primary)"
-                          opacity={0.5}
-                        />
-                        <XAxis
-                          dataKey="formattedDate"
-                          axisLine={false}
-                          tickLine={false}
-                          tick={TICK_STYLE}
-                        />
-                        <YAxis axisLine={false} tickLine={false} tick={TICK_STYLE} />
-                        <Tooltip
-                          cursor={{ fill: 'var(--bg-tertiary)', opacity: 0.4 }}
-                          contentStyle={TOOLTIP_STYLE}
-                        />
-                        <Bar
-                          dataKey="rows_scanned"
-                          name="Rows"
-                          fill="var(--success)"
                           radius={[4, 4, 0, 0]}
                           barSize={20}
                         />

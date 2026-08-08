@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
-import { authService, clearSessionLocal } from '../../services/authService';
+import { authService } from '../../services/authService';
 import { signInPathWithReturn } from '../../lib/publicRoutes';
 import {
   invalidateSessionValidationCache,
@@ -10,7 +10,7 @@ import {
   markSessionValidated,
 } from '../../lib/sessionValidationCache';
 import { ApiRequestError } from '../../utils/apiErrorMessage';
-import { AuthGatewayTransition } from './AuthGatewayTransition';
+import { AuthRestoreSpinner } from './AuthRestoreSpinner';
 import { ServerErrorPage } from '../../pages/ServerErrorPage';
 
 type GateStatus = 'checking' | 'ready' | 'unauthenticated' | 'server_error';
@@ -22,6 +22,7 @@ interface AuthSessionGateProps {
 /**
  * Route-level auth session middleware for all non-public app routes.
  * Validates Firebase user + ID token + backend GET /api/users/me (TTL-cached).
+ * Hard refresh uses a lightweight spinner; marketing gateway stays on SignIn/SignUp only.
  */
 export function AuthSessionGate({ children }: AuthSessionGateProps) {
   const { user, loading: authLoading } = useAuth();
@@ -30,75 +31,93 @@ export function AuthSessionGate({ children }: AuthSessionGateProps) {
   const [serverError, setServerError] = useState<Error | null>(null);
   const [retryToken, setRetryToken] = useState(0);
 
-  const validate = useCallback(async () => {
-    setStatus('checking');
-    setServerError(null);
-
-    if (!user) {
-      invalidateSessionValidationCache();
-      setStatus('unauthenticated');
-      return;
-    }
-
-    if (isSessionValidationFresh(user.uid)) {
-      setStatus('ready');
-      return;
-    }
-
-    try {
-      const token = await authService.getValidIdToken(true);
-      if (!token) {
-        clearSessionLocal();
-        invalidateSessionValidationCache();
-        setStatus('unauthenticated');
-        return;
-      }
-
-      await apiClient.getUserMe(token);
-      markSessionValidated(user.uid);
-      setStatus('ready');
-    } catch (err) {
-      const statusCode = err instanceof ApiRequestError ? err.status : undefined;
-
-      // Auth / identity failures , including 404 when Firebase user is not in the DB.
-      const isAuthFailure =
-        statusCode === 401 || statusCode === 403 || statusCode === 404 || statusCode === 400;
-
-      if (isAuthFailure) {
-        clearSessionLocal();
-        invalidateSessionValidationCache();
-        try {
-          await authService.signOut();
-        } catch {
-          /* already cleared locally */
-        }
-        setStatus('unauthenticated');
-        return;
-      }
-
-      // True server / availability problems , show 500 with retry.
-      if (statusCode == null || statusCode >= 500) {
-        setServerError(err instanceof Error ? err : new Error('Session validation failed'));
-        setStatus('server_error');
-        return;
-      }
-
-      // Other unexpected 4xx (e.g. 429) , retryable without forced sign-out.
-      setServerError(err instanceof Error ? err : new Error('Session validation failed'));
-      setStatus('server_error');
-    }
-  }, [user]);
-
   useEffect(() => {
     if (authLoading) {
       setStatus('checking');
       return;
     }
-    void validate();
-  }, [authLoading, validate, retryToken]);
+
+    let cancelled = false;
+
+    const run = async () => {
+      setServerError(null);
+
+      if (!user) {
+        invalidateSessionValidationCache();
+        if (!cancelled) setStatus('unauthenticated');
+        return;
+      }
+
+      // Persisted / in-memory TTL hit → render app immediately (soft-revalidate in background).
+      if (isSessionValidationFresh(user.uid)) {
+        if (!cancelled) setStatus('ready');
+        void softRevalidate(user.uid, () => cancelled);
+        return;
+      }
+
+      if (!cancelled) setStatus('checking');
+
+      try {
+        let token = await authService.getValidIdToken(false);
+        if (cancelled) return;
+
+        if (!token) {
+          token = await authService.getValidIdToken(true);
+        }
+        if (cancelled) return;
+
+        if (!token) {
+          invalidateSessionValidationCache();
+          setStatus('unauthenticated');
+          return;
+        }
+
+        try {
+          await apiClient.getUserMe(token);
+        } catch (err) {
+          if (cancelled) return;
+          const statusCode = err instanceof ApiRequestError ? err.status : undefined;
+          if (statusCode === 401) {
+            const refreshed = await authService.getValidIdToken(true);
+            if (cancelled) return;
+            if (!refreshed) throw err;
+            await apiClient.getUserMe(refreshed);
+          } else {
+            throw err;
+          }
+        }
+
+        if (cancelled) return;
+        markSessionValidated(user.uid);
+        setStatus('ready');
+      } catch (err) {
+        if (cancelled) return;
+        const statusCode = err instanceof ApiRequestError ? err.status : undefined;
+
+        if (statusCode === 401) {
+          invalidateSessionValidationCache();
+          try {
+            await authService.signOut();
+          } catch {
+            /* ignore */
+          }
+          if (!cancelled) setStatus('unauthenticated');
+          return;
+        }
+
+        setServerError(err instanceof Error ? err : new Error('Session validation failed'));
+        setStatus('server_error');
+      }
+    };
+
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, retryToken]);
 
   if (authLoading || status === 'checking') {
-    return <AuthGatewayTransition phase="authorized" />;
+    return <AuthRestoreSpinner />;
   }
 
   if (status === 'unauthenticated' || !user) {
@@ -124,4 +143,17 @@ export function AuthSessionGate({ children }: AuthSessionGateProps) {
   }
 
   return <>{children}</>;
+}
+
+/** Background revalidation when TTL says fresh — refresh stamp on success, ignore soft failures. */
+async function softRevalidate(uid: string, isCancelled: () => boolean): Promise<void> {
+  try {
+    const token = await authService.getValidIdToken(false);
+    if (isCancelled() || !token) return;
+    await apiClient.getUserMe(token);
+    if (isCancelled()) return;
+    markSessionValidated(uid);
+  } catch {
+    /* keep serving; next navigation or hard miss will re-check */
+  }
 }

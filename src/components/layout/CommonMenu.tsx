@@ -34,22 +34,22 @@ export function CommonMenu() {
     }
   };
 
-  const tokensUsed = workspaceUsage?.llm_tokens_used;
-  const tokensLimit = workspaceUsage?.llm_tokens_limit;
-  const dailyUsed = workspaceUsage?.daily_llm_tokens_used;
-  const dailyLimit = workspaceUsage?.daily_llm_tokens_limit;
+  const creditsUsed = workspaceUsage?.credits_used;
+  const creditsLimit = workspaceUsage?.credits_limit;
+  const dailyUsed = workspaceUsage?.daily_credits_used;
+  const dailyLimit = workspaceUsage?.daily_credits_limit;
   const resetLabel = formatQuotaResetDate(workspaceUsage?.reset_at);
   const daysLeft = workspaceUsage?.is_trial ? trialDaysLeft(workspaceUsage.trial_end) : null;
 
   const getUsageColor = () => {
     if (
-      (tokensUsed != null && isUsageHardLimit(tokensUsed, tokensLimit)) ||
+      (creditsUsed != null && isUsageHardLimit(creditsUsed, creditsLimit)) ||
       (dailyUsed != null && isUsageHardLimit(dailyUsed, dailyLimit))
     ) {
       return 'var(--color-error)';
     }
     if (
-      (tokensUsed != null && isUsageSoftWarn(tokensUsed, tokensLimit)) ||
+      (creditsUsed != null && isUsageSoftWarn(creditsUsed, creditsLimit)) ||
       (dailyUsed != null && isUsageSoftWarn(dailyUsed, dailyLimit))
     ) {
       return 'var(--color-warning)';
@@ -60,9 +60,9 @@ export function CommonMenu() {
   const getUsageText = () => {
     if (!workspaceUsage) return 'Usage unavailable';
     const parts: string[] = [];
-    if (tokensUsed != null && tokensLimit != null && !isUnlimitedLimit(tokensLimit)) {
-      const pct = Math.round(usagePct(tokensUsed, tokensLimit));
-      parts.push(`${pct}% AI tokens`);
+    if (creditsUsed != null && creditsLimit != null && !isUnlimitedLimit(creditsLimit)) {
+      const pct = Math.round(usagePct(creditsUsed, creditsLimit));
+      parts.push(`${pct}% credits`);
     }
     if (dailyUsed != null && dailyLimit != null && !isUnlimitedLimit(dailyLimit)) {
       const pct = Math.round(usagePct(dailyUsed, dailyLimit));

@@ -28,6 +28,8 @@ export interface BillingCatalogPlan {
   /** Marketing badge text, e.g. "Launch special". */
   discount_label?: string | null;
   has_discount?: boolean;
+  tokens_per_credit?: number;
+  credit_cost_usd?: number | null;
 }
 
 export interface BillingCatalogResponse {
@@ -70,9 +72,11 @@ export interface BillingSubscriptionPlan {
   plan_id: string;
   name: string;
   tier: string;
-  /** Period AI token pool when returned on the subscription plan payload. */
-  monthly_llm_token_limit?: number | null;
-  daily_llm_token_limit?: number | null;
+  /** Period AI credit pool when returned on the subscription plan payload. */
+  monthly_credit_limit?: number | null;
+  daily_credit_limit?: number | null;
+  tokens_per_credit?: number;
+  credit_cost_usd?: number | null;
 }
 
 export interface BillingSubscription {
