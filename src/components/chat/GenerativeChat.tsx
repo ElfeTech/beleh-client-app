@@ -1094,7 +1094,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             ref={scrollRef}
             className="analytics-page flex-1 overflow-y-auto px-2 py-4 sm:px-4 md:px-6 lg:px-10 space-y-6 md:space-y-8"
           >
-            <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 md:max-w-7xl md:gap-8">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 xl:max-w-[96rem] 2xl:max-w-[110rem] md:gap-8">
               {chatBodyPending ? (
                 <ChatThreadSkeleton />
               ) : (

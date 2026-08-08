@@ -8,17 +8,34 @@
 }
 
 .artifact-kpi {
+  margin-bottom: 0;
+}
+
+.artifact-stack--filters {
   margin-bottom: var(--space-4);
 }
 
+.artifact-stack--kpis {
+  margin-top: var(--space-5);
+}
+
 .artifact-kpi__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 11.5rem), 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
   gap: var(--space-3);
+  /* Prefer wrapping cards to the next row over clipping figures mid-number. */
+  overflow-x: auto;
 }
 
 .artifact-kpi__item {
-  min-width: 0;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+}
+
+.artifact-kpi__item .label-widget-card {
+  height: 100%;
 }
 
 .artifact-kpi__meta {
