@@ -73,8 +73,6 @@ import type {
   WorkspaceProviderCredentials,
   WorkspaceProviderUnbindResponse,
 } from '../types/provider';
-import { isPublicPath, signInPathWithReturn } from '../lib/publicRoutes';
-
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 class APIClient {
@@ -163,51 +161,37 @@ class APIClient {
         }
       }
 
-      // Handle 401 Unauthorized - token expired
+      // Handle 401 Unauthorized - attempt one token refresh, then let callers / AuthSessionGate handle auth loss.
+      // Do not hard-redirect here: concurrent cold-load requests can race and wipe a valid session.
       if (response.status === 401 && !isRetry) {
         console.warn(`[API] 401 Unauthorized on ${url}. Attempting token refresh...`);
 
+        const { authService } = await import('./authService');
+        let newToken: string | null = null;
         try {
-          // Attempt to refresh the token
-          const { authService } = await import('./authService');
-          const newToken = await authService.refreshToken();
-
-          if (newToken) {
-            console.log('[API] Token refreshed successfully, retrying request...');
-            // Update the Authorization header with the new token
-            const updatedHeaders = {
-              ...headers,
-              Authorization: `Bearer ${newToken}`,
-            };
-
-            // Retry the request with the new token
-            return this.request<T>(
-              endpoint,
-              {
-                ...options,
-                headers: updatedHeaders,
-              },
-              true,
-            ); // Mark as retry to prevent infinite loop
-          } else {
-            // Refresh failed, redirect to sign-in (avoid hijacking public pages / OAuth return tab)
-            console.error('[API] Token refresh failed (no user or token), redirecting to sign-in');
-            const path = typeof window !== 'undefined' ? window.location.pathname : '';
-            const search = typeof window !== 'undefined' ? window.location.search : '';
-            if (!isPublicPath(path)) {
-              window.location.href = signInPathWithReturn(path, search);
-            }
-            throw new Error('Authentication session expired. Please sign in again.');
-          }
+          newToken = await authService.refreshToken();
         } catch (refreshError) {
           console.error('[API] Error during token refresh:', refreshError);
-          const path = typeof window !== 'undefined' ? window.location.pathname : '';
-          const search = typeof window !== 'undefined' ? window.location.search : '';
-          if (!isPublicPath(path)) {
-            window.location.href = signInPathWithReturn(path, search);
-          }
-          throw new Error('Authentication session expired. Please sign in again.');
         }
+
+        if (newToken) {
+          console.log('[API] Token refreshed successfully, retrying request...');
+          return this.request<T>(
+            endpoint,
+            {
+              ...options,
+              headers: {
+                ...headers,
+                Authorization: `Bearer ${newToken}`,
+              },
+            },
+            true,
+          );
+        }
+
+        throw new ApiRequestError('Authentication session expired. Please sign in again.', {
+          status: 401,
+        });
       }
 
       // Handle 403 Forbidden - often means token not yet accepted (e.g. right after login); retry once after delay with fresh token
@@ -243,7 +227,7 @@ class APIClient {
           throw new QuotaExceededError(
             quota ?? {
               error: 'quota_exceeded',
-              limit_type: 'llm_tokens',
+              limit_type: 'credits',
               current_usage: 0,
               limit: 0,
               remaining: 0,

@@ -31,6 +31,7 @@ import { formatQuotaExceededMessage } from '../../utils/quotaExceededUi';
 import { isWorkspaceMemberSelf } from '../../utils/workspaceMembers';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
+import { readMembersView, writeMembersView, type MembersViewState } from '../../lib/uiMemory';
 import './SettingsShared.css';
 import './MembersSection.css';
 
@@ -120,6 +121,7 @@ export function MembersSection() {
   const [confirmRevoke, setConfirmRevoke] = useState<WorkspaceInvitation | null>(null);
   const [removing, setRemoving] = useState(false);
   const [selfMemberId, setSelfMemberId] = useState<string | null>(null);
+  const [membersViewHydrated, setMembersViewHydrated] = useState(false);
 
   const isOwner = canManageMembers(currentRole);
   const seatsUsed = workspaceUsage?.seats_used ?? membersTotal + invitesTotal;
@@ -129,6 +131,45 @@ export function MembersSection() {
       ? isSeatsAtLimit(workspaceUsage)
       : seatsLimit != null && seatsUsed >= seatsLimit;
   const showUpgrade = canShowWorkspaceUpgradeCta(currentRole);
+
+  useEffect(() => {
+    if (!user?.uid || !currentWorkspace?.id) return;
+    const stored = readMembersView(user.uid, currentWorkspace.id);
+    if (stored) {
+      if (stored.tab === 'members' || stored.tab === 'invites') setTab(stored.tab);
+      if (stored.searchInput != null) setSearchInput(stored.searchInput);
+      if (
+        stored.roleFilter === 'all' ||
+        stored.roleFilter === 'owner' ||
+        stored.roleFilter === 'member'
+      ) {
+        setRoleFilter(stored.roleFilter);
+      }
+      if (stored.pageSize === 25 || stored.pageSize === 50 || stored.pageSize === 100) {
+        setPageSize(stored.pageSize);
+      }
+    }
+    setMembersViewHydrated(true);
+  }, [user?.uid, currentWorkspace?.id]);
+
+  useEffect(() => {
+    if (!membersViewHydrated || !user?.uid || !currentWorkspace?.id) return;
+    const state: MembersViewState = {
+      tab,
+      searchInput,
+      roleFilter,
+      pageSize,
+    };
+    writeMembersView(user.uid, currentWorkspace.id, state);
+  }, [
+    membersViewHydrated,
+    user?.uid,
+    currentWorkspace?.id,
+    tab,
+    searchInput,
+    roleFilter,
+    pageSize,
+  ]);
 
   // Debounce search so we don't thrash while typing
   useEffect(() => {

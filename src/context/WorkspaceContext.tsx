@@ -51,8 +51,10 @@ interface WorkspaceContextType {
   workspaceUsage: WorkspaceUsageResponse | null;
   loading: boolean;
   refreshWorkspaces: () => Promise<void>;
-  refreshDatasources: () => Promise<void>;
-  refreshConnectors: () => Promise<void>;
+  /** Refetch datasources. Pass `{ silent: true }` to avoid flipping page-level loading. */
+  refreshDatasources: (options?: { silent?: boolean }) => Promise<void>;
+  /** Refetch connectors. Pass `{ silent: true }` to avoid flipping page-level loading. */
+  refreshConnectors: (options?: { silent?: boolean }) => Promise<void>;
   refreshWorkspaceUsage: () => Promise<WorkspaceUsageResponse | null>;
   loadWorkspaceContext: (
     workspaceId: string,
@@ -214,77 +216,86 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [user, isInitialized]);
 
   // Refresh datasources function using unified cache manager
-  const refreshDatasources = useCallback(async () => {
-    if (!user || !currentWorkspace) {
-      setDatasources([]);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const token = await user.getIdToken();
-      if (!token || typeof token !== 'string' || token.length < 10) {
-        console.warn('[WorkspaceContext] No valid token for datasources, skipping fetch');
+  const refreshDatasources = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!user || !currentWorkspace) {
+        setDatasources([]);
         return;
       }
 
-      // Always bypass stale cache so add/delete on other routes reflects immediately
-      apiCacheManager.invalidate('datasources', [token, currentWorkspace.id]);
+      // Keep existing catalog visible during background refetch after add/close.
+      const showLoading = !options?.silent;
+      try {
+        if (showLoading) setLoading(true);
+        const token = await user.getIdToken();
+        if (!token || typeof token !== 'string' || token.length < 10) {
+          console.warn('[WorkspaceContext] No valid token for datasources, skipping fetch');
+          return;
+        }
 
-      const data = await apiCacheManager.fetch(
-        'datasources',
-        async (authToken: string, wId: string) => {
-          return fetchAllPages(
-            (page, pageSize) =>
-              apiClient.listWorkspaceDatasourcesPaginated(authToken, wId, {
-                page,
-                page_size: pageSize,
-              }),
-            LIST_PAGE_SIZE,
-            MAX_LIST_PAGES,
-          );
-        },
-        [token, currentWorkspace.id],
-      );
+        // Always bypass stale cache so add/delete on other routes reflects immediately
+        apiCacheManager.invalidate('datasources', [token, currentWorkspace.id]);
 
-      setDatasources(data);
-    } catch (error) {
-      console.error('[WorkspaceContext] Failed to fetch datasources:', error);
-      setDatasources([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, currentWorkspace]);
+        const data = await apiCacheManager.fetch(
+          'datasources',
+          async (authToken: string, wId: string) => {
+            return fetchAllPages(
+              (page, pageSize) =>
+                apiClient.listWorkspaceDatasourcesPaginated(authToken, wId, {
+                  page,
+                  page_size: pageSize,
+                }),
+              LIST_PAGE_SIZE,
+              MAX_LIST_PAGES,
+            );
+          },
+          [token, currentWorkspace.id],
+        );
+
+        setDatasources(data);
+      } catch (error) {
+        console.error('[WorkspaceContext] Failed to fetch datasources:', error);
+        setDatasources([]);
+      } finally {
+        if (showLoading) setLoading(false);
+      }
+    },
+    [user, currentWorkspace],
+  );
 
   // Refresh connectors function
-  const refreshConnectors = useCallback(async () => {
-    if (!user || !currentWorkspace) {
-      setConnectors([]);
-      return;
-    }
+  const refreshConnectors = useCallback(
+    async (options?: { silent?: boolean }) => {
+      if (!user || !currentWorkspace) {
+        setConnectors([]);
+        return;
+      }
 
-    try {
-      setLoading(true);
-      const token = await user.getIdToken();
+      const showLoading = !options?.silent;
+      try {
+        if (showLoading) setLoading(true);
+        const token = await user.getIdToken();
 
-      apiCacheManager.invalidate('connectors', [token, currentWorkspace.id]);
+        apiCacheManager.invalidate('connectors', [token, currentWorkspace.id]);
 
-      const data = await apiCacheManager.fetch(
-        'connectors',
-        async (authToken: string, wId: string) => {
-          return apiClient.listConnectors(authToken, wId);
-        },
-        [token, currentWorkspace.id],
-      );
+        const data = await apiCacheManager.fetch(
+          'connectors',
+          async (authToken: string, wId: string) => {
+            return apiClient.listConnectors(authToken, wId);
+          },
+          [token, currentWorkspace.id],
+        );
 
-      setConnectors(data);
-    } catch (error) {
-      console.error('[WorkspaceContext] Failed to fetch connectors:', error);
-      setConnectors([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [user, currentWorkspace]);
+        setConnectors(data);
+      } catch (error) {
+        console.error('[WorkspaceContext] Failed to fetch connectors:', error);
+        setConnectors([]);
+      } finally {
+        if (showLoading) setLoading(false);
+      }
+    },
+    [user, currentWorkspace],
+  );
 
   // Load workspace context (state + metadata) using unified cache manager
   const loadWorkspaceContext = useCallback(

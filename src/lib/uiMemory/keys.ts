@@ -38,6 +38,20 @@ export interface DatasetsPageViewState {
   sourceFilter?: string;
   searchQuery?: string;
   selectedCatalog?: { kind: string; id: string } | null;
+  browseLevel?: string;
+  selectedSchemaName?: string | null;
+  selectedTableName?: string | null;
+  tableSearchQuery?: string;
+  connectorDetailTab?: string;
+  previewPageSize?: number;
+  mobileCatalogPane?: string;
+}
+
+export interface MembersViewState {
+  tab?: 'members' | 'invites';
+  searchInput?: string;
+  roleFilter?: string;
+  pageSize?: number;
 }
 
 /** Semantic keys stored under the `beleh:ui:` namespace (enveloped). */
@@ -51,6 +65,12 @@ export const UI_KEYS = {
   /** Workspace-scoped pointer to an in-flight chat run (sessionId + runId). */
   chatRunPointer: 'chatRunPointer',
   streamCapability: 'streamCapability',
+  workspaceDatasetSearch: 'workspaceDatasetSearch',
+  workspaceSessionSearch: 'workspaceSessionSearch',
+  workspacesListSearch: 'workspacesListSearch',
+  membersView: 'membersView',
+  usageTimeRange: 'usageTimeRange',
+  datasetPreviewPageSize: 'datasetPreviewPageSize',
 } as const;
 
 export type UiKey = (typeof UI_KEYS)[keyof typeof UI_KEYS];
@@ -164,6 +184,16 @@ export function writeDatasetsView(
 ): void {
   const scope: UiMemoryScope = { kind: 'workspace', uid, workspaceId };
   set(scope, UI_KEYS.datasetsView, state);
+}
+
+export function readMembersView(uid: string, workspaceId: string): MembersViewState | null {
+  const scope: UiMemoryScope = { kind: 'workspace', uid, workspaceId };
+  return get<MembersViewState>(scope, UI_KEYS.membersView);
+}
+
+export function writeMembersView(uid: string, workspaceId: string, state: MembersViewState): void {
+  const scope: UiMemoryScope = { kind: 'workspace', uid, workspaceId };
+  set(scope, UI_KEYS.membersView, state);
 }
 
 export function readComposerDraft(uid: string, sessionId: string | null): string {

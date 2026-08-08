@@ -51,6 +51,8 @@ function formatSourceType(ds: DataSourceResponse): string {
   return raw.replace(/\s+/g, '_').slice(0, 16);
 }
 
+const COMPOSER_MIN_ROWS = 2;
+/** Grow with content up to this many lines, then scroll. */
 const COMPOSER_MAX_ROWS = 4;
 
 function tagLabel(
@@ -120,9 +122,14 @@ export function ChatComposer({
     const styles = getComputedStyle(ta);
     const lineHeight = Number.parseFloat(styles.lineHeight) || 22;
     const paddingY = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom);
-    const fixedHeight = lineHeight * COMPOSER_MAX_ROWS + paddingY;
-    ta.style.height = `${fixedHeight}px`;
-    ta.style.overflowY = 'auto';
+    const minHeight = lineHeight * COMPOSER_MIN_ROWS + paddingY;
+    const maxHeight = lineHeight * COMPOSER_MAX_ROWS + paddingY;
+
+    ta.style.height = 'auto';
+    const contentHeight = ta.scrollHeight;
+    const next = Math.min(Math.max(contentHeight, minHeight), maxHeight);
+    ta.style.height = `${next}px`;
+    ta.style.overflowY = contentHeight > maxHeight + 1 ? 'auto' : 'hidden';
   }, []);
 
   useLayoutEffect(() => {
@@ -229,7 +236,9 @@ export function ChatComposer({
     [onDatasourceChange],
   );
 
-  const canSend = value.trim().length > 0 && !disabled && !isWaiting;
+  const charCount = value.length;
+  const overCharLimit = charCount > BI_CHAT_MAX_CHARS;
+  const canSend = value.trim().length > 0 && !disabled && !isWaiting && !overCharLimit;
   const showStop = isWaiting && typeof onStop === 'function';
 
   const dropdownPanel =
@@ -426,11 +435,11 @@ export function ChatComposer({
           }}
           placeholder={
             selectedDatasourceId === null || selectedDatasourceId === ''
-              ? 'Ask Beleh AI Analyst to query schemas, calculate savings, or produce charts...'
-              : 'Ask Beleh AI Analyst to query schemas, calculate savings, or produce charts...'
+              ? 'Ask about revenue, customers, trends, or performance...'
+              : 'Ask about revenue, customers, trends, or performance...'
           }
           disabled={disabled || isWaiting}
-          rows={COMPOSER_MAX_ROWS}
+          rows={COMPOSER_MIN_ROWS}
           wrap="soft"
           maxLength={BI_CHAT_MAX_CHARS}
           className={cn(
@@ -495,7 +504,20 @@ export function ChatComposer({
             </button>
           ) : null}
 
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex items-center gap-2">
+            <span
+              className={cn(
+                'tabular-nums text-[10px] font-medium tracking-wide',
+                overCharLimit || charCount >= BI_CHAT_MAX_CHARS
+                  ? 'text-[color:var(--color-error,#ef4444)]'
+                  : charCount >= BI_CHAT_MAX_CHARS * 0.9
+                    ? 'text-[color:var(--color-warning,#f59e0b)]'
+                    : 'text-[color:var(--text-muted)]',
+              )}
+              aria-live="polite"
+            >
+              {charCount.toLocaleString()} / {BI_CHAT_MAX_CHARS.toLocaleString()}
+            </span>
             {showStop ? (
               <button
                 type="button"

@@ -9,15 +9,7 @@ import { format, parseISO, isValid, getQuarter, getISOWeek } from 'date-fns';
  * Time granularity detection from data patterns
  */
 export type TimeGranularity =
-  | 'year'
-  | 'quarter'
-  | 'month'
-  | 'week'
-  | 'day'
-  | 'hour'
-  | 'minute'
-  | 'second'
-  | 'none';
+  'year' | 'quarter' | 'month' | 'week' | 'day' | 'hour' | 'minute' | 'second' | 'none';
 
 export interface FormatConfig {
   type: 'number' | 'currency' | 'percentage' | 'date' | 'time' | 'datetime' | 'string';
@@ -619,15 +611,39 @@ export function formatUsd(amount: number, currency = 'usd'): string {
   }
 }
 
-/** Full locale count for LLM tokens (no k/M shortening). */
-export function formatTokenCount(value: number): string {
+/** Full locale count for AI credits (no k/M shortening). */
+export function formatCreditCount(value: number | null | undefined): string {
+  if (value == null || Number.isNaN(value)) return '0';
   return value.toLocaleString();
 }
 
-export function formatUsageValue(value: number, metricKey: string): string {
-  return metricKey === 'tokens' || metricKey === 'daily_tokens'
-    ? formatTokenCount(value)
-    : value.toLocaleString();
+/** @deprecated Use formatCreditCount — kept for any lingering imports. */
+export const formatTokenCount = formatCreditCount;
+
+/** Display “1 credit ≈ $X” when cost is known; null/0 plans hide the line. */
+export function formatCreditCostUsd(cost: number | null | undefined): string | null {
+  if (cost == null || !Number.isFinite(cost) || cost <= 0) return null;
+  try {
+    const formatted = new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 4,
+    }).format(cost);
+    return `1 credit ≈ ${formatted}`;
+  } catch {
+    return `1 credit ≈ $${cost.toFixed(4)}`;
+  }
+}
+
+export function formatUsageValue(value: number | null | undefined, metricKey: string): string {
+  const n = value ?? 0;
+  return metricKey === 'credits' ||
+    metricKey === 'daily_credits' ||
+    metricKey === 'tokens' ||
+    metricKey === 'daily_tokens'
+    ? formatCreditCount(n)
+    : n.toLocaleString();
 }
 
 export function usagePercentage(used: number, limit: number): number {

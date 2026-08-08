@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import type { DataSourceResponse, ChatSessionRead } from '../../types/api';
 import { useDatasource } from '../../context/DatasourceContext';
@@ -10,14 +10,25 @@ import { ActionSheet, type ActionSheetItem } from '../common/ActionSheet';
 import { ConfirmDialog } from '../common/ConfirmDialog';
 import { DatasourceModal } from './DatasourceModal';
 import { useWorkspace } from '../../context/WorkspaceContext';
-import { canEditOrDeleteResource } from '../../utils/workspaceAccess';
+import {
+  BILLING_UPGRADE_HREF,
+  canEditOrDeleteResource,
+  UPGRADE_TO_ADD_DATASOURCES_LABEL,
+} from '../../utils/workspaceAccess';
+import { formatResourceDeleteError } from '../../utils/apiErrorMessage';
 import { SEARCH_VISIBILITY_THRESHOLD } from '../../constants/pagination';
+import { useUiMemory } from '../../hooks/useUiMemory';
+import { UI_KEYS } from '../../lib/uiMemory';
+import type { UiMemoryScope } from '../../lib/uiMemory';
 
 interface WorkspaceMenuProps {
   dataSources: DataSourceResponse[];
   onAddClick: () => void;
-  onRefresh?: () => void;
-  addDisabled?: boolean;
+  onRefresh?: () => void | Promise<void>;
+  /** Plan datasource cap reached — show Upgrade instead of Add. */
+  addAtLimit?: boolean;
+  canUpgrade?: boolean;
+  upgradeHref?: string;
   addDisabledReason?: string;
 }
 
@@ -31,7 +42,9 @@ export function WorkspaceMenu({
   dataSources,
   onAddClick,
   onRefresh,
-  addDisabled = false,
+  addAtLimit = false,
+  canUpgrade = false,
+  upgradeHref = BILLING_UPGRADE_HREF,
   addDisabledReason,
 }: WorkspaceMenuProps) {
   const { user } = useAuth();
@@ -47,7 +60,13 @@ export function WorkspaceMenu({
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
-  const [searchQuery, setSearchQuery] = useState('');
+  const datasetSearchScope: UiMemoryScope | null =
+    user?.uid && workspaceId ? { kind: 'workspace', uid: user.uid, workspaceId } : null;
+  const [searchQuery, setSearchQuery] = useUiMemory(
+    datasetSearchScope,
+    UI_KEYS.workspaceDatasetSearch,
+    '',
+  );
   const menuButtonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
 
   const getIconInfo = (type: string) => {
@@ -154,28 +173,26 @@ export function WorkspaceMenu({
   const handleConfirmDelete = async () => {
     if (!selectedDatasetForMenu || !user) return;
 
+    const deletedId = selectedDatasetForMenu;
+
     try {
       setIsDeleting(true);
       const token = await user.getIdToken();
-      await apiClient.deleteDatasource(token, selectedDatasetForMenu);
+      await apiClient.deleteDatasource(token, deletedId);
 
-      if (selectedDatasourceId === selectedDatasetForMenu) {
-        const remainingDatasets = dataSources.filter((ds) => ds.id !== selectedDatasetForMenu);
-        if (remainingDatasets.length > 0) {
-          setSelectedDatasourceId(remainingDatasets[0].id);
-        } else {
-          setSelectedDatasourceId(null);
-        }
+      if (selectedDatasourceId === deletedId) {
+        const nextDataset = dataSources.find((ds) => ds.id !== deletedId);
+        setSelectedDatasourceId(nextDataset?.id ?? null);
       }
 
-      onRefresh?.();
+      await onRefresh?.();
 
       setShowDeleteConfirm(false);
       setSelectedDatasetForMenu(null);
       toast.success('Dataset deleted successfully');
     } catch (err) {
       console.error('Failed to delete dataset:', err);
-      toast.error('Failed to delete dataset. Please try again.');
+      toast.error(formatResourceDeleteError(err, 'dataset'));
     } finally {
       setIsDeleting(false);
     }
@@ -356,18 +373,29 @@ export function WorkspaceMenu({
           );
         })}
       </div>
-      <button
-        className="add-dataset-btn"
-        onClick={onAddClick}
-        disabled={addDisabled}
-        title={addDisabledReason}
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <line x1="12" y1="5" x2="12" y2="19" />
-          <line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
-        Add New Dataset
-      </button>
+      {addAtLimit && canUpgrade ? (
+        <Link
+          to={upgradeHref}
+          className="add-dataset-btn add-dataset-btn--upgrade"
+          title={UPGRADE_TO_ADD_DATASOURCES_LABEL}
+        >
+          {UPGRADE_TO_ADD_DATASOURCES_LABEL}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          className="add-dataset-btn"
+          onClick={onAddClick}
+          disabled={addAtLimit}
+          title={addAtLimit ? addDisabledReason : undefined}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          Add New Dataset
+        </button>
+      )}
 
       {/* Desktop Context Menu */}
       <ContextMenu

@@ -69,6 +69,13 @@ export function canAccessBillingSettings(role: WorkspaceRole | null | undefined)
 /** Shared tooltip when a primary action is blocked by plan caps. */
 export const PLAN_LIMIT_REACHED_TOOLTIP = 'Plan limit reached';
 
+/** In-app billing page deep-link to the upgrade plans grid. */
+export const BILLING_UPGRADE_HREF = '/settings/billing?upgrade=1#billing-plans';
+
+/** CTA labels when a plan resource cap blocks Add/Create. */
+export const UPGRADE_TO_ADD_WORKSPACES_LABEL = 'Upgrade to add more workspaces';
+export const UPGRADE_TO_ADD_DATASOURCES_LABEL = 'Upgrade to add more datasources';
+
 /** Member-facing copy when billing is owned by the workspace owner. */
 export const PLAN_MANAGED_BY_OWNER_COPY = "This workspace's plan is managed by the owner.";
 
@@ -141,26 +148,26 @@ export function isQueriesAtLimit(
   return isResourceAtLimit(usage.queries_used, usage.queries_limit);
 }
 
-export function isLlmTokensAtLimit(
+export function isCreditsAtLimit(
   usage: {
-    llm_tokens_used?: number;
-    llm_tokens_limit?: number;
+    credits_used?: number;
+    credits_limit?: number;
   } | null,
 ): boolean {
-  if (!usage || usage.llm_tokens_used == null || usage.llm_tokens_limit == null) return false;
-  return isResourceAtLimit(usage.llm_tokens_used, usage.llm_tokens_limit);
+  if (!usage || usage.credits_used == null || usage.credits_limit == null) return false;
+  return isResourceAtLimit(usage.credits_used, usage.credits_limit);
 }
 
-export function isDailyLlmTokensAtLimit(
+export function isDailyCreditsAtLimit(
   usage: {
-    daily_llm_tokens_used?: number;
-    daily_llm_tokens_limit?: number;
+    daily_credits_used?: number;
+    daily_credits_limit?: number;
   } | null,
 ): boolean {
-  if (!usage || usage.daily_llm_tokens_used == null || usage.daily_llm_tokens_limit == null) {
+  if (!usage || usage.daily_credits_used == null || usage.daily_credits_limit == null) {
     return false;
   }
-  return isResourceAtLimit(usage.daily_llm_tokens_used, usage.daily_llm_tokens_limit);
+  return isResourceAtLimit(usage.daily_credits_used, usage.daily_credits_limit);
 }
 
 export function isPlanExpired(
@@ -192,11 +199,7 @@ export function trialDaysLeft(trialEnd: string | null | undefined): number | nul
 }
 
 export type ChatQuotaBlockReason =
-  | 'plan_expired'
-  | 'trial_ended'
-  | 'llm_tokens'
-  | 'daily_llm_tokens'
-  | null;
+  'plan_expired' | 'trial_ended' | 'credits' | 'daily_credits' | null;
 
 /** Why chat is locked from workspace usage (UX only; backend still enforces). */
 export function getChatQuotaBlockReason(
@@ -205,8 +208,8 @@ export function getChatQuotaBlockReason(
   if (!usage) return null;
   if (isPlanExpired(usage)) return 'plan_expired';
   if (isTrialEnded(usage)) return 'trial_ended';
-  if (isLlmTokensAtLimit(usage)) return 'llm_tokens';
-  if (isDailyLlmTokensAtLimit(usage)) return 'daily_llm_tokens';
+  if (isCreditsAtLimit(usage)) return 'credits';
+  if (isDailyCreditsAtLimit(usage)) return 'daily_credits';
   return null;
 }
 
@@ -225,18 +228,18 @@ export function isChatQuotaBlocked(usage: WorkspaceUsageResponse | null | undefi
 
 export function workspaceLimitUpgradeMessage(
   role: WorkspaceRole | null | undefined,
-  resource: 'seats' | 'datasources' | 'workspaces' | 'queries' | 'llm_tokens' | 'daily_llm_tokens',
+  resource: 'seats' | 'datasources' | 'workspaces' | 'queries' | 'credits' | 'daily_credits',
 ): string {
   const labels = {
     seats: 'member seats',
     datasources: 'datasets',
     workspaces: 'workspaces',
     queries: 'monthly queries',
-    llm_tokens: 'AI tokens',
-    daily_llm_tokens: 'daily AI tokens',
+    credits: 'credits',
+    daily_credits: 'daily credits',
   } as const;
-  if (resource === 'daily_llm_tokens') {
-    return `This workspace has reached its daily AI token limit.`;
+  if (resource === 'daily_credits') {
+    return `This workspace has reached its daily credit limit.`;
   }
   if (canShowWorkspaceUpgradeCta(role)) {
     return `You've reached the ${labels[resource]} limit. Upgrade your plan for more.`;

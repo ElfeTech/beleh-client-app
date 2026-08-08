@@ -103,18 +103,18 @@ export function UsageProvider({ children }: { children: ReactNode }) {
               ? 100
               : 0;
 
-        const tLimit = usageData.metrics.llm_tokens_limit;
-        const tUsed = usageData.metrics.llm_tokens_used;
-        const tokensUnlimited = tLimit < 0;
-        const tokensPercentage = tokensUnlimited
+        const tLimit = usageData.metrics.credits_limit;
+        const tUsed = usageData.metrics.credits_used;
+        const creditsUnlimited = tLimit < 0;
+        const creditsPercentage = creditsUnlimited
           ? 0
           : tLimit > 0
             ? (tUsed / tLimit) * 100
             : tUsed > 0
               ? 100
               : 0;
-        const dailyLimit = usageData.metrics.daily_llm_tokens_limit;
-        const dailyUsed = usageData.metrics.daily_llm_tokens_used ?? 0;
+        const dailyLimit = usageData.metrics.daily_credits_limit;
+        const dailyUsed = usageData.metrics.daily_credits_used ?? 0;
         const dailyUnlimited = dailyLimit == null || dailyLimit < 0;
         const dailyPercentage = dailyUnlimited
           ? 0
@@ -123,27 +123,40 @@ export function UsageProvider({ children }: { children: ReactNode }) {
             : dailyUsed > 0
               ? 100
               : 0;
-        // AI gate uses tokens (not queries when unlimited).
-        const tokenMeterPct = Math.max(tokensPercentage, dailyPercentage);
+        // AI gate uses credits (not queries when unlimited).
+        const creditMeterPct = Math.max(creditsPercentage, dailyPercentage);
         const canExecuteAi =
-          (tokensUnlimited || usageData.metrics.llm_tokens_remaining > 0) &&
-          (dailyUnlimited || (usageData.metrics.daily_llm_tokens_remaining ?? 1) > 0);
+          (creditsUnlimited || usageData.metrics.credits_remaining > 0) &&
+          (dailyUnlimited || (usageData.metrics.daily_credits_remaining ?? 1) > 0);
 
+        const creditMeta = usageData.credit;
         const derivedRemaining: RemainingQuotaResponse = {
           queries_remaining: usageData.metrics.queries_remaining,
           queries_used: qUsed,
           queries_limit: qLimit,
-          percentage_used: queriesUnlimited ? tokenMeterPct : queriesPercentage,
+          percentage_used: queriesUnlimited ? creditMeterPct : queriesPercentage,
           can_execute_query: queriesUnlimited
             ? canExecuteAi
             : usageData.metrics.queries_remaining > 0,
           reset_date: usageData.reset_at,
+          credits_remaining: usageData.metrics.credits_remaining,
+          daily_credits_remaining: usageData.metrics.daily_credits_remaining,
+          daily_credits_limit: dailyLimit,
+          tokens_per_credit:
+            creditMeta?.tokens_per_credit ??
+            usageData.tokens_per_credit ??
+            usageData.plan.tokens_per_credit,
+          credit_cost_usd:
+            creditMeta?.credit_cost_usd ??
+            usageData.credit_cost_usd ??
+            usageData.plan.credit_cost_usd ??
+            null,
           included_value_usd: value?.included_value_usd ?? null,
           used_value_usd: value?.used_value_usd ?? null,
           remaining_value_usd: value?.remaining_value_usd ?? null,
           value_used_pct: value?.value_used_pct ?? null,
-          currency: value?.currency ?? 'usd',
-          is_unlimited: queriesUnlimited && tokensUnlimited,
+          currency: value?.currency ?? creditMeta?.currency ?? 'usd',
+          is_unlimited: queriesUnlimited && creditsUnlimited,
         };
         setRemaining(derivedRemaining);
 
@@ -166,36 +179,36 @@ export function UsageProvider({ children }: { children: ReactNode }) {
           });
         }
 
-        // Period AI token warnings
-        if (!tokensUnlimited && tokensPercentage >= 100) {
+        // Period credit warnings
+        if (!creditsUnlimited && creditsPercentage >= 100) {
           warnings.push({
             level: 'critical',
-            message: `You've used all AI tokens for this period. Upgrade to continue.`,
-            metric: 'llm_tokens',
-            percentage: tokensPercentage,
+            message: `You've used all credits for this period. Upgrade to continue.`,
+            metric: 'credits',
+            percentage: creditsPercentage,
           });
-        } else if (!tokensUnlimited && tokensPercentage >= 80) {
+        } else if (!creditsUnlimited && creditsPercentage >= 80) {
           warnings.push({
             level: 'warning',
-            message: `You've used ${tokensPercentage.toFixed(0)}% of your AI token quota.`,
-            metric: 'llm_tokens',
-            percentage: tokensPercentage,
+            message: `You've used ${creditsPercentage.toFixed(0)}% of your credit quota.`,
+            metric: 'credits',
+            percentage: creditsPercentage,
           });
         }
 
-        // Daily AI token warnings (Free trial)
+        // Daily credit warnings (Free trial)
         if (!dailyUnlimited && dailyPercentage >= 100) {
           warnings.push({
             level: 'critical',
-            message: `You've reached today's AI token limit. It resets at midnight UTC.`,
-            metric: 'daily_llm_tokens',
+            message: `You've reached today's credit limit. It resets at midnight UTC.`,
+            metric: 'daily_credits',
             percentage: dailyPercentage,
           });
         } else if (!dailyUnlimited && dailyPercentage >= 80) {
           warnings.push({
             level: 'warning',
-            message: `You've used ${dailyPercentage.toFixed(0)}% of today's AI token allowance.`,
-            metric: 'daily_llm_tokens',
+            message: `You've used ${dailyPercentage.toFixed(0)}% of today's credit allowance.`,
+            metric: 'daily_credits',
             percentage: dailyPercentage,
           });
         }

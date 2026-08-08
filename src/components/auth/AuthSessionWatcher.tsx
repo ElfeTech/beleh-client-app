@@ -6,7 +6,11 @@ import { invalidateSessionValidationCache } from '../../lib/sessionValidationCac
 
 /**
  * Global auth session watcher: when Firebase user becomes null on a protected
- * path (sign-out, session expiry), redirect to sign-in with a safe return URL.
+ * path after we previously observed a signed-in user (sign-out, session expiry),
+ * redirect to sign-in with a safe return URL.
+ *
+ * Cold load with no session is handled by AuthSessionGate — do not redirect here
+ * before a real authenticated → signed-out transition.
  */
 export function AuthSessionWatcher() {
   const { user, loading } = useAuth();
@@ -22,19 +26,19 @@ export function AuthSessionWatcher() {
       return;
     }
 
-    // Only redirect after we previously observed a signed-in user, or when
-    // landing on a protected path with no user (deep link without session).
-    const onProtected = !isPublicPath(location.pathname);
-    if (!onProtected) {
+    // Cold load / never signed in this tab — Gate handles protected deep links.
+    if (!hadUserRef.current) return;
+
+    if (isPublicPath(location.pathname) || location.pathname === '/signin') {
       hadUserRef.current = false;
       return;
     }
 
     invalidateSessionValidationCache();
-    const to = signInPathWithReturn(location.pathname, location.search);
-    // Avoid bouncing if already navigating to sign-in
-    if (location.pathname === '/signin') return;
-    navigate(to, { replace: true, state: { from: location } });
+    navigate(signInPathWithReturn(location.pathname, location.search), {
+      replace: true,
+      state: { from: location },
+    });
     hadUserRef.current = false;
   }, [user, loading, location.pathname, location.search, location, navigate]);
 

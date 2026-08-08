@@ -1,5 +1,5 @@
 import type { BillingCatalogPlan } from '../types/billing';
-import { formatTokenCount } from '../utils/formatters';
+import { formatCreditCostUsd, formatCreditCount } from '../utils/formatters';
 
 export interface PlanFeatureLine {
   key: string;
@@ -46,25 +46,32 @@ function humanizeFeatureKey(key: string): string {
   return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : key;
 }
 
-function countLabel(value: number, singular: string, plural = `${singular}s`): string {
-  if (value <= 0) return `Unlimited ${plural.toLowerCase()}`;
+function countLabel(
+  value: number | null | undefined,
+  singular: string,
+  plural = `${singular}s`,
+): string {
+  if (value == null || value <= 0) return `Unlimited ${plural.toLowerCase()}`;
   const noun = value === 1 ? singular : plural;
   return `${value.toLocaleString()} ${noun}`;
 }
 
 function limitLines(plan: BillingCatalogPlan): PlanFeatureLine[] {
-  const limits = plan.limits;
+  const limits = plan.limits ?? ({} as BillingCatalogPlan['limits']);
   const lines: PlanFeatureLine[] = [];
 
-  // Omit query lines when unlimited (-1 / <= 0) , seeded plans no longer gate on queries.
-  if (limits.monthly_query_limit > 0) {
+  // Omit query lines when unlimited / missing (-1 / <= 0 / nullish).
+  const queryLimit = limits.monthly_query_limit;
+  if (typeof queryLimit === 'number' && queryLimit > 0) {
     lines.push({
       key: 'limit-queries',
-      label: `${limits.monthly_query_limit.toLocaleString()} queries per month`,
+      label: `${queryLimit.toLocaleString()} queries per month`,
       source: 'limit',
     });
   }
 
+  const creditLimit = limits.monthly_credit_limit;
+  const creditCostLine = formatCreditCostUsd(plan.credit_cost_usd);
   lines.push(
     {
       key: 'limit-datasets',
@@ -72,13 +79,22 @@ function limitLines(plan: BillingCatalogPlan): PlanFeatureLine[] {
       source: 'limit',
     },
     {
-      key: 'limit-tokens',
+      key: 'limit-credits',
       label:
-        limits.monthly_llm_token_limit <= 0
-          ? 'Unlimited AI tokens'
-          : `${formatTokenCount(limits.monthly_llm_token_limit)} AI tokens per month`,
+        creditLimit == null || creditLimit <= 0
+          ? 'Unlimited AI credits'
+          : `${formatCreditCount(creditLimit)} AI credits per month`,
       source: 'limit',
     },
+  );
+  if (creditCostLine) {
+    lines.push({
+      key: 'limit-credit-cost',
+      label: creditCostLine,
+      source: 'limit',
+    });
+  }
+  lines.push(
     {
       key: 'limit-charts',
       label: countLabel(limits.monthly_chart_renders_limit, 'Chart render'),

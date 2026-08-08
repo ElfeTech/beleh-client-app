@@ -3,34 +3,10 @@ import { useMemo } from 'react';
 import { shuffleArray } from '../../lib/shuffleArray';
 import './ChatWelcome.css';
 
-export interface EnterprisePromptCard {
-  title: string;
-  preview: string;
-  prompt: string;
-}
-
-export const ENTERPRISE_DEFAULT_PROMPTS: EnterprisePromptCard[] = [
-  {
-    title: 'Top projects by token load',
-    preview: 'Which top 5 projects have the largest token consumption this month?',
-    prompt: 'Which top 5 projects have the largest token consumption this month?',
-  },
-  {
-    title: 'Token cache ROI audit',
-    preview: 'Calculate total enterprise token savings from cache hits vs cold queries.',
-    prompt: 'Calculate total enterprise token savings from cache hits vs cold queries.',
-  },
-  {
-    title: 'Connection pool metrics',
-    preview: 'Show current database connection pool usage, wait time, and saturation.',
-    prompt: 'Show current database connection pool usage, wait time, and saturation.',
-  },
-];
-
 const SAMPLE_FALLBACK_PROMPTS = [
-  'What tables are in this sample dataset?',
-  'Summarize the key metrics in the sample data.',
-  'What insights stand out in the sample data?',
+  'Which products drove the most revenue this month?',
+  'How did sales compare to last quarter?',
+  'Which customers contributed the most growth?',
 ];
 
 export function resolveDemoSuggestedPrompts(apiPrompts?: string[] | null): string[] {
@@ -40,7 +16,6 @@ export function resolveDemoSuggestedPrompts(apiPrompts?: string[] | null): strin
 
 interface ChatWelcomeProps {
   onPromptClick: (prompt: string) => void;
-  schemaTableCount?: number;
   disabled?: boolean;
   /** When false, sample prompts are replaced by connect / demo CTAs. */
   hasDatasources?: boolean;
@@ -62,7 +37,6 @@ interface ChatWelcomeProps {
 
 export function ChatWelcome({
   onPromptClick,
-  schemaTableCount,
   disabled,
   hasDatasources = true,
   sourcesLoading = false,
@@ -94,27 +68,27 @@ export function ChatWelcome({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by demoPromptsKey
   }, [demoPromptsKey]);
   const useDemoPrompts = hasDatasources && demoBoundWelcome;
-  const showPrompts =
-    !sourcesLoading && hasDatasources && (!useDemoPrompts || chipPrompts.length > 0);
+  const showDemoChips =
+    !sourcesLoading && hasDatasources && useDemoPrompts && chipPrompts.length > 0;
 
   const title = showDualCta
     ? 'Try Beleh on sample data'
     : showConnectOnly
       ? 'Add a data source to begin'
-      : demoHeadline?.trim() || 'Enterprise AI Analytics Workspace';
+      : demoHeadline?.trim() || 'Ask about your business';
 
   const subtitle = showDualCta
     ? 'Explore a ready-made sample dataset with suggested questions, or add your own files and databases.'
     : showConnectOnly
-      ? 'Add a datasource or connect a database to start asking questions in natural language and generating charts.'
+      ? 'Connect your sales, finance, or operations data to start asking questions in plain language.'
       : demoMessage?.trim() ||
-        'Connect your business datasets and express your requests in natural language. The system converts raw questions into compliant SQL queries, generates responsive tabular matrices, and plots custom charts instantly.';
+        'Ask about revenue, customers, performance, or trends — get clear answers and charts instantly.';
 
   const busy = disabled || demoConnecting;
 
   return (
     <div
-      className={`chat-welcome chat-welcome--enterprise${showEmptyOnboarding ? ' chat-welcome--no-sources' : ''}`}
+      className={`chat-welcome chat-welcome--enterprise${showEmptyOnboarding ? ' chat-welcome--no-sources' : ''}${!showEmptyOnboarding ? ' chat-welcome--compact' : ''}`}
     >
       <div className="chat-welcome-hero">
         <div className="chat-welcome-icon-stack" aria-hidden>
@@ -169,61 +143,28 @@ export function ChatWelcome({
             onClick={onConnectDatasource}
           >
             <Database size={18} strokeWidth={2.25} aria-hidden />
-            Add datasource / Connect DB
+            Add your data
           </button>
         </div>
       ) : null}
 
-      {showPrompts ? (
+      {showDemoChips ? (
         <div className="chat-welcome-prompts">
-          {useDemoPrompts ? (
-            <div className="chat-welcome-prompts-chips" role="list">
-              {chipPrompts.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  role="listitem"
-                  className="chat-welcome-prompt-chip"
-                  disabled={busy}
-                  onClick={() => onPromptClick(prompt)}
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="chat-welcome-prompts-row">
-              {ENTERPRISE_DEFAULT_PROMPTS.map((card) => (
-                <button
-                  key={card.title}
-                  type="button"
-                  className="chat-welcome-prompt-card"
-                  disabled={busy}
-                  onClick={() => onPromptClick(card.prompt)}
-                >
-                  <span className="chat-welcome-prompt-card__title">{card.title}</span>
-                  <span className="chat-welcome-prompt-card__preview">{card.preview}</span>
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="chat-welcome-prompts-chips" role="list">
+            {chipPrompts.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                role="listitem"
+                className="chat-welcome-prompt-chip"
+                disabled={busy}
+                onClick={() => onPromptClick(prompt)}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
         </div>
-      ) : null}
-
-      {!showEmptyOnboarding && showPrompts ? (
-        <footer className="chat-welcome-footer">
-          <p>
-            Powered by Beleh Analytical Engine v0.1.0
-            <span className="chat-welcome-footer__sep"> · </span>
-            compliance guidelines applied.
-          </p>
-          <p className="chat-welcome-footer__schema">
-            Schema:{' '}
-            {schemaTableCount != null && schemaTableCount > 0
-              ? `${schemaTableCount} Table${schemaTableCount === 1 ? '' : 's'} Connected`
-              : 'No tables connected'}
-          </p>
-        </footer>
       ) : null}
     </div>
   );

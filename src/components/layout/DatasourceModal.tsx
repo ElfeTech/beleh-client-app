@@ -4,10 +4,10 @@ import { Upload, FileSpreadsheet, X, Loader2, CheckCircle2, AlertCircle } from '
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
 import { authService } from '../../services/authService';
-import type { DataSourceResponse, ExcelSheet, SheetRecoveryConfig } from '../../types/api';
+import type { DataSourceResponse, ExcelSheet } from '../../types/api';
 import { StepIndicator } from '../upload/StepIndicator';
 import { SheetSelection } from '../upload/SheetSelection';
-import { HeaderSelection } from '../upload/HeaderSelection';
+import { HeaderRowPicker } from '../upload/HeaderSelection';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { formatDatasourceError } from '../../utils/apiErrorMessage';
 import {
@@ -27,32 +27,23 @@ interface DatasourceModalProps {
 }
 
 type UploadStatus =
-  | 'IDLE'
-  | 'UPLOADING'
-  | 'PENDING'
-  | 'PROCESSING'
-  | 'READY'
-  | 'FAILED'
-  | 'NEEDS_INPUT';
-
-const FLOW_STEPS = [
-  { id: 1, label: 'Upload' },
-  { id: 2, label: 'Select Sheets' },
-  { id: 3, label: 'Set Headers' },
-  { id: 4, label: 'Finalize' },
-];
+  'IDLE' | 'UPLOADING' | 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'NEEDS_INPUT';
 
 const STEP_SUBTITLES: Record<number, string> = {
   1: 'Upload a spreadsheet and name your dataset. We support CSV and Excel.',
-  2: 'Choose which sheets to include in this dataset.',
-  3: 'Confirm the header row for each selected sheet.',
-  4: 'We are validating and preparing your data for analysis.',
+  2: 'Choose which sheets to include. Preview samples help you decide.',
+  3: 'Tap the row that has the column titles. Preview is a sliced sample.',
+  4: 'Importing the full sheets you selected.',
 };
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function buildHeaderQueue(sheets: ExcelSheet[]): ExcelSheet[] {
+  return sheets.filter((s) => s.selected && s.needs_user_input);
 }
 
 export function DatasourceModal({
@@ -80,11 +71,22 @@ export function DatasourceModal({
   const [currentStep, setCurrentStep] = useState(1);
   const [datasource, setDatasource] = useState<DataSourceResponse | null>(null);
   const [sheets, setSheets] = useState<ExcelSheet[]>([]);
+  const [headerQueue, setHeaderQueue] = useState<ExcelSheet[]>([]);
+  const [headerIndex, setHeaderIndex] = useState(0);
+  const [selectedHeaders, setSelectedHeaders] = useState<Record<string, number>>({});
+  const [includeSheetsStep, setIncludeSheetsStep] = useState(false);
 
   const datasourcesAtLimit = mode === 'add' && isDatasourcesAtLimit(workspaceUsage);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollIntervalRef = useRef<number | null>(null);
+  const submitRecoveryRef = useRef<
+    (
+      ds: DataSourceResponse,
+      sheetsSnapshot: ExcelSheet[],
+      headersSnapshot: Record<string, number>,
+    ) => Promise<void>
+  >(() => Promise.resolve());
 
   // Cleanup polling on unmount
   useEffect(() => {
@@ -110,6 +112,34 @@ export function DatasourceModal({
     }));
   };
 
+  const enterNeedsInputFlow = (dataset: DataSourceResponse) => {
+    setDatasource(dataset);
+    setUploadStatus('NEEDS_INPUT');
+    setError(null);
+    setProgress(50);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+    const mappedSheets = mapDatasourceToSheets(dataset);
+    setSheets(mappedSheets);
+    setSelectedHeaders({});
+    const multi = mappedSheets.length > 1;
+    setIncludeSheetsStep(multi);
+
+    if (multi) {
+      setCurrentStep(2);
+      return;
+    }
+
+    const queue = buildHeaderQueue(mappedSheets);
+    setHeaderQueue(queue);
+    setHeaderIndex(0);
+    if (queue.length === 0) {
+      void submitRecoveryRef.current(dataset, mappedSheets, {});
+      return;
+    }
+    setCurrentStep(3);
+  };
+
   const pollDatasetStatus = async (datasetId: string) => {
     try {
       const token = authService.getAuthToken();
@@ -119,25 +149,12 @@ export function DatasourceModal({
 
       setDatasource(dataset);
 
-      // Check if user input is needed (even if status is FAILED)
       const needsInput =
         dataset.status === 'NEEDS_INPUT' ||
         (dataset.status === 'FAILED' && dataset.metadata_json?.requires_user_input);
 
-      if (needsInput) {
-        setUploadStatus('NEEDS_INPUT');
-        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-
-        const mappedSheets = mapDatasourceToSheets(dataset);
-        setSheets(mappedSheets);
-
-        // Determine next step
-        if (mappedSheets.length > 1) {
-          setCurrentStep(2);
-        } else if (mappedSheets.some((s) => s.needs_user_input)) {
-          setCurrentStep(3);
-        }
-        setProgress(50);
+      if (needsInput && currentStep < 2) {
+        enterNeedsInputFlow(dataset);
       } else if (dataset.status === 'PENDING') {
         setProgress(60);
       } else if (dataset.status === 'PROCESSING') {
@@ -146,21 +163,15 @@ export function DatasourceModal({
         setProgress(100);
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
 
-        // Auto-create chat session and update workspace state
         try {
           const authToken = await user?.getIdToken();
           if (authToken && currentWorkspace) {
-            console.log('[AutoSession] Creating session for dataset:', dataset.id);
             const session = await apiClient.createChatSession(
               authToken,
               dataset.id,
               `Chat: ${dataset.name}`,
             );
-
-            console.log('[AutoSession] Updating workspace state with session:', session.id);
             await saveWorkspaceState(currentWorkspace.id, dataset.id, session.id);
-
-            // Refresh datasources to ensure the new one is listed
             await refreshDatasources();
           }
         } catch (sessionErr) {
@@ -171,7 +182,7 @@ export function DatasourceModal({
           onSuccess();
           onClose();
         }, 1500);
-      } else if (dataset.status === 'FAILED') {
+      } else if (dataset.status === 'FAILED' && !needsInput) {
         setProgress(0);
         setUploadStatus('FAILED');
         setError(formatDatasourceError(dataset));
@@ -251,15 +262,7 @@ export function DatasourceModal({
       }
 
       if (needsInput) {
-        setUploadStatus('NEEDS_INPUT');
-        const mappedSheets = mapDatasourceToSheets(result);
-        setSheets(mappedSheets);
-
-        if (mappedSheets.length > 1) {
-          setCurrentStep(2);
-        } else if (mappedSheets.some((s) => s.needs_user_input)) {
-          setCurrentStep(3);
-        }
+        enterNeedsInputFlow(result);
       } else {
         setUploadStatus(result.status);
         if (result.id) {
@@ -283,40 +286,36 @@ export function DatasourceModal({
     );
   };
 
-  const handleSheetsContinue = () => {
-    const selectedSheetNames = sheets.filter((s) => s.selected).map((s) => s.name);
-    if (selectedSheetNames.length === 0) return;
-    setCurrentStep(3);
+  const handleSelectAllSheets = () => {
+    setSheets((prev) => prev.map((s) => ({ ...s, selected: true })));
   };
 
-  const cleanupFailedDatasource = async () => {
-    if (!datasource?.id || !user) return;
-
-    // Only cleanup if we are in a state that should be cleaned up (failed or intermediate add mode)
-    const isFailed = uploadStatus === 'FAILED' || datasource.status === 'FAILED';
-    const isIntermediate = currentStep > 1 && currentStep < 4;
-
-    if (mode === 'add' && (isFailed || isIntermediate)) {
-      try {
-        const token = await user.getIdToken();
-        await apiClient.deleteDatasource(token, datasource.id);
-        console.log('[Cleanup] Deleted failed/cancelled datasource:', datasource.id);
-      } catch (err) {
-        console.error('[Cleanup] Failed to delete datasource:', err);
-      }
-    }
+  const handleClearSheets = () => {
+    setSheets((prev) => prev.map((s) => ({ ...s, selected: false })));
   };
 
-  const handleRecoverySubmit = async (configs: SheetRecoveryConfig[]) => {
-    if (!datasource || !user) return;
+  const submitRecovery = async (
+    ds: DataSourceResponse,
+    sheetsSnapshot: ExcelSheet[],
+    headersSnapshot: Record<string, number>,
+  ) => {
+    if (!user) return;
 
     try {
+      setError(null);
       setUploadStatus('PROCESSING');
+      setCurrentStep(4);
+      setProgress(60);
       const token = await user.getIdToken();
-      const result = await apiClient.recoverDatasource(token, datasource.id, {
-        datasource_id: datasource.id,
-        sheets_to_ingest: sheets.filter((s) => s.selected).map((s) => s.name),
-        sheet_configurations: configs,
+      const result = await apiClient.recoverDatasource(token, ds.id, {
+        datasource_id: ds.id,
+        sheets_to_ingest: sheetsSnapshot.filter((s) => s.selected).map((s) => s.name),
+        sheet_configurations: sheetsSnapshot
+          .filter((s) => s.selected)
+          .map((s) => ({
+            sheet_name: s.name,
+            header_row_index: headersSnapshot[s.name] ?? (s.needs_user_input ? -1 : 0),
+          })),
       });
 
       if (!result || !result.datasource_id) {
@@ -325,20 +324,82 @@ export function DatasourceModal({
 
       if (result.ingestion_started) {
         setUploadStatus('PENDING');
-        setCurrentStep(4);
-        // Ensure we use datasource_id explicitly
         pollIntervalRef.current = setInterval(() => pollDatasetStatus(result.datasource_id), 2000);
       } else {
-        // If ingestion didn't start, it might mean more input is needed
         setUploadStatus('NEEDS_INPUT');
         setError(
           result.message ||
-            "Some sheets still have validation issues. Please review and retry. Check your header doesn't have empty cell",
+            'Some sheets still need attention. Check your header row has no empty cells.',
         );
+        const multi = sheetsSnapshot.length > 1;
+        setIncludeSheetsStep(multi);
+        setCurrentStep(multi ? 2 : 3);
+        if (!multi) {
+          const queue = buildHeaderQueue(sheetsSnapshot);
+          setHeaderQueue(queue);
+          setHeaderIndex(0);
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to recover dataset');
       setUploadStatus('FAILED');
+    }
+  };
+  submitRecoveryRef.current = submitRecovery;
+
+  const handleSheetsContinue = () => {
+    if (!sheets.some((s) => s.selected) || !datasource) return;
+    const queue = buildHeaderQueue(sheets);
+    setHeaderQueue(queue);
+    setHeaderIndex(0);
+    if (queue.length === 0) {
+      void submitRecovery(datasource, sheets, selectedHeaders);
+      return;
+    }
+    setCurrentStep(3);
+  };
+
+  const handleHeaderContinue = () => {
+    const current = headerQueue[headerIndex];
+    if (!current || selectedHeaders[current.name] == null || !datasource) return;
+    if (headerIndex < headerQueue.length - 1) {
+      setHeaderIndex((i) => i + 1);
+      return;
+    }
+    void submitRecovery(datasource, sheets, selectedHeaders);
+  };
+
+  const handleWizardBack = () => {
+    if (currentStep === 3) {
+      if (headerIndex > 0) {
+        setHeaderIndex((i) => i - 1);
+        return;
+      }
+      if (includeSheetsStep) {
+        setCurrentStep(2);
+        return;
+      }
+      setCurrentStep(1);
+      return;
+    }
+    if (currentStep === 2) {
+      setCurrentStep(1);
+    }
+  };
+
+  const cleanupFailedDatasource = async () => {
+    if (!datasource?.id || !user) return;
+
+    const isFailed = uploadStatus === 'FAILED' || datasource.status === 'FAILED';
+    const isIntermediate = currentStep > 1 && currentStep < 4;
+
+    if (mode === 'add' && (isFailed || isIntermediate)) {
+      try {
+        const token = await user.getIdToken();
+        await apiClient.deleteDatasource(token, datasource.id);
+      } catch (err) {
+        console.error('[Cleanup] Failed to delete datasource:', err);
+      }
     }
   };
 
@@ -388,6 +449,29 @@ export function DatasourceModal({
         return '#6b7280';
     }
   };
+
+  const wizardSteps = useMemo(() => {
+    const steps: { id: number; label: string }[] = [{ id: 1, label: 'Upload' }];
+    let id = 2;
+    if (includeSheetsStep) steps.push({ id: id++, label: 'Sheets' });
+    steps.push({ id: id++, label: 'Headers' });
+    steps.push({ id: id, label: 'Import' });
+    return steps;
+  }, [includeSheetsStep]);
+
+  const wizardStepCurrent = useMemo(() => {
+    if (currentStep === 1) return 1;
+    if (currentStep === 2) return 2;
+    if (currentStep === 3) return includeSheetsStep ? 3 : 2;
+    return wizardSteps[wizardSteps.length - 1]?.id ?? 4;
+  }, [currentStep, includeSheetsStep, wizardSteps]);
+
+  const currentHeaderSheet = headerQueue[headerIndex];
+  const headerProgressLabel =
+    headerQueue.length > 1 ? `${headerIndex + 1} of ${headerQueue.length}` : null;
+  const headerRowSelected =
+    currentHeaderSheet != null && selectedHeaders[currentHeaderSheet.name] != null;
+  const isLastHeaderSheet = headerIndex >= headerQueue.length - 1;
 
   const canClose =
     uploadStatus === 'IDLE' || uploadStatus === 'FAILED' || uploadStatus === 'NEEDS_INPUT';
@@ -494,15 +578,28 @@ export function DatasourceModal({
           </div>
         );
       case 2:
-        return <SheetSelection sheets={sheets} onToggleSheet={handleToggleSheet} />;
-      case 3:
         return (
-          <HeaderSelection
+          <SheetSelection
             sheets={sheets}
-            onSubmit={handleRecoverySubmit}
-            onBack={() => (sheets.length > 1 ? setCurrentStep(2) : setCurrentStep(1))}
+            onToggleSheet={handleToggleSheet}
+            onSelectAll={handleSelectAllSheets}
+            onClearAll={handleClearSheets}
           />
         );
+      case 3:
+        return currentHeaderSheet ? (
+          <HeaderRowPicker
+            sheet={currentHeaderSheet}
+            selectedRow={selectedHeaders[currentHeaderSheet.name]}
+            progressLabel={headerProgressLabel}
+            onSelectRow={(rowIndex) => {
+              setSelectedHeaders((prev) => ({
+                ...prev,
+                [currentHeaderSheet.name]: rowIndex,
+              }));
+            }}
+          />
+        ) : null;
       case 4:
         return (
           <div className="upload-progress-container dataset-wizard-progress finalize-step">
@@ -527,12 +624,10 @@ export function DatasourceModal({
             </div>
             <p className="status-help-text">
               {uploadStatus === 'READY'
-                ? 'Everything looks good! Your data is ready to be visualized.'
+                ? 'Your dataset is ready.'
                 : uploadStatus === 'FAILED'
                   ? error || 'Processing failed. Please try again.'
-                  : uploadStatus === 'PROCESSING'
-                    ? "We're almost there. Just making sure all your data is properly structured."
-                    : 'Preparing your data...'}
+                  : 'Importing the full sheets you selected…'}
             </p>
           </div>
         );
@@ -566,7 +661,7 @@ export function DatasourceModal({
 
         <div className="dataset-wizard-body">
           {currentStep > 1 && mode === 'add' && (
-            <StepIndicator currentStep={currentStep} steps={FLOW_STEPS} />
+            <StepIndicator currentStep={wizardStepCurrent} steps={wizardSteps} />
           )}
 
           <div className="dataset-wizard-step-content">{renderStepContent()}</div>
@@ -604,13 +699,13 @@ export function DatasourceModal({
                         ? 'Uploading…'
                         : mode === 'edit'
                           ? 'Save changes'
-                          : 'Continue'}
+                          : 'Upload dataset'}
                   </button>
                 </>
               )}
               {currentStep === 2 && (
                 <>
-                  <button type="button" className="secondary-btn" onClick={() => setCurrentStep(1)}>
+                  <button type="button" className="secondary-btn" onClick={handleWizardBack}>
                     Back
                   </button>
                   <button
@@ -619,18 +714,24 @@ export function DatasourceModal({
                     onClick={handleSheetsContinue}
                     disabled={!sheets.some((s) => s.selected)}
                   >
-                    Continue to headers
+                    Continue
                   </button>
                 </>
               )}
               {currentStep === 3 && (
-                <button
-                  type="button"
-                  className="secondary-btn"
-                  onClick={() => (sheets.length > 1 ? setCurrentStep(2) : setCurrentStep(1))}
-                >
-                  Back
-                </button>
+                <>
+                  <button type="button" className="secondary-btn" onClick={handleWizardBack}>
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-gradient-primary"
+                    onClick={handleHeaderContinue}
+                    disabled={!headerRowSelected}
+                  >
+                    {isLastHeaderSheet ? 'Start import' : 'Continue'}
+                  </button>
+                </>
               )}
               {currentStep === 4 && (
                 <button
@@ -639,7 +740,7 @@ export function DatasourceModal({
                   onClick={handleClose}
                   disabled={uploadStatus !== 'READY'}
                 >
-                  {uploadStatus === 'READY' ? 'Finish & visualize' : 'Processing…'}
+                  {uploadStatus === 'READY' ? 'Done' : 'Importing…'}
                 </button>
               )}
             </>

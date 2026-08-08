@@ -10,6 +10,7 @@ import { AssistantAnalysisCard } from './AssistantAnalysisCard';
 import { ChartVisualization } from './ChartVisualization';
 import { SuggestedPrompts } from './SuggestedPrompts';
 import { ChatWelcome } from './ChatWelcome';
+import { ChatThreadSkeleton } from './ChatThreadSkeleton';
 import { ThinkingShimmer } from './ThinkingShimmer';
 import { turnHasRichUi } from '../../utils/responseViewAvailability';
 import { countSchemaTables } from '../../utils/datasourceDisplay';
@@ -104,7 +105,14 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     loadWorkspaceContext,
   } = useWorkspace();
   const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
-  const { activeSessionId, setActiveSessionId, addSession, isNewChatDraft } = useChatSession();
+  const {
+    activeSessionId,
+    setActiveSessionId,
+    addSession,
+    isNewChatDraft,
+    sessionsReady,
+    sessions,
+  } = useChatSession();
   const [sourcePickerOpenRequest, setSourcePickerOpenRequest] = useState(0);
   const softNudgeKeyRef = useRef<string | null>(null);
   const [demoStatus, setDemoStatus] = useState<WorkspaceDemoStatus | null>(null);
@@ -121,16 +129,18 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   /** Free plan: chat stays locked until a live source or sample demo is connected. */
   const sourceRequiredForChat = isFreePlanUser && !workspaceLoading && !hasWorkspaceSources;
   const showUpgrade = canShowWorkspaceUpgradeCta(currentRole);
-  const upgradeHref = workspaceUsage?.upgrade_url?.trim() || '/settings/billing?upgrade=1';
+  /** Always land on billing plans grid (query + hash) — do not use backend upgrade_url for in-app CTA. */
+  const billingUpgradeHref = '/settings/billing?upgrade=1#billing-plans';
+  const upgradeHref = workspaceUsage?.upgrade_url?.trim() || billingUpgradeHref;
   const dailyResetLabel = formatQuotaResetAt(workspaceUsage?.daily_reset_at);
 
   const chatLockBanner = useMemo(() => {
     if (!chatBlockReason) return null;
-    if (chatBlockReason === 'daily_llm_tokens') {
+    if (chatBlockReason === 'daily_credits') {
       return {
         message: dailyResetLabel
           ? `Daily limit reached , resets at ${dailyResetLabel}.`
-          : 'Daily AI token limit reached. Try again after the daily reset.',
+          : 'Daily credit limit reached. Try again after the daily reset.',
         showUpgradeCta: false,
       };
     }
@@ -144,7 +154,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     }
     return {
       message: showUpgrade
-        ? 'This workspace has reached its AI token quota.'
+        ? 'This workspace has reached its credit quota.'
         : PLAN_MANAGED_BY_OWNER_COPY,
       showUpgradeCta: showUpgrade,
     };
@@ -347,22 +357,21 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     if (!user || !wid) return;
     const hadDemo = Boolean(demoStatus?.connected) || datasources.some((d) => Boolean(d.is_demo));
     const demoId = findDemoDatasource(datasources)?.id ?? null;
+    const silent = { silent: true } as const;
     try {
       const token = await user.getIdToken();
-      await refreshConnectors();
-      await refreshDatasources();
+      await Promise.all([refreshConnectors(silent), refreshDatasources(silent)]);
       if (hadDemo) {
         await leaveWorkspaceDemo(token, wid);
         if (demoId && selectedDatasourceId === demoId) {
           setSelectedDatasourceId(null);
         }
       }
-      await Promise.all([refreshDatasources(), refreshWorkspaceUsage(), refreshDemoStatus()]);
+      await Promise.all([refreshDatasources(silent), refreshWorkspaceUsage(), refreshDemoStatus()]);
       invalidateContextCache(wid);
       await loadWorkspaceContext(wid, true);
     } catch {
-      await refreshConnectors();
-      await refreshDatasources();
+      await Promise.all([refreshConnectors(silent), refreshDatasources(silent)]);
     }
   }, [
     user,
@@ -574,22 +583,19 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         const resetKey = usage.reset_at ?? usage.daily_reset_at ?? 'cycle';
         const nudgeKey = `${currentWorkspace?.id ?? workspaceId}:${resetKey}`;
         if (softNudgeKeyRef.current === nudgeKey) return;
-        const tokensWarn = isUsageSoftWarn(usage.llm_tokens_used ?? 0, usage.llm_tokens_limit);
-        const dailyWarn = isUsageSoftWarn(
-          usage.daily_llm_tokens_used ?? 0,
-          usage.daily_llm_tokens_limit,
-        );
-        if (!tokensWarn && !dailyWarn) return;
+        const creditsWarn = isUsageSoftWarn(usage.credits_used ?? 0, usage.credits_limit);
+        const dailyWarn = isUsageSoftWarn(usage.daily_credits_used ?? 0, usage.daily_credits_limit);
+        if (!creditsWarn && !dailyWarn) return;
         softNudgeKeyRef.current = nudgeKey;
-        const which = dailyWarn && !tokensWarn ? 'daily' : 'period';
+        const which = dailyWarn && !creditsWarn ? 'daily' : 'period';
         toast.message(
           showUpgrade
             ? which === 'daily'
-              ? "You have used over 80% of today's AI token allowance."
-              : "You have used over 80% of this workspace's AI token quota."
+              ? "You have used over 80% of today's credit allowance."
+              : "You have used over 80% of this workspace's credit quota."
             : which === 'daily'
-              ? `You have used over 80% of today's AI token allowance. ${PLAN_MANAGED_BY_OWNER_COPY}`
-              : `You have used over 80% of this workspace's AI token quota. ${PLAN_MANAGED_BY_OWNER_COPY}`,
+              ? `You have used over 80% of today's credit allowance. ${PLAN_MANAGED_BY_OWNER_COPY}`
+              : `You have used over 80% of this workspace's credit quota. ${PLAN_MANAGED_BY_OWNER_COPY}`,
           {
             action:
               showUpgrade && which === 'period'
@@ -811,15 +817,41 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
 
   // Empty active sessions (e.g. right after demo connect) still show ChatWelcome
   // so API suggested_prompts can be clicked as the first user message.
+  // Gate until session list + restore + history settle so refresh never flashes welcome prompts.
+  const lastActiveSessionId = workspaceContext?.state?.last_active_session_id ?? null;
+  const awaitingSessionRestore =
+    sessionsReady &&
+    !isNewChatDraft &&
+    !activeSessionId &&
+    Boolean(lastActiveSessionId) &&
+    lastActiveSessionId !== '1' &&
+    lastActiveSessionId !== 'undefined' &&
+    sessions.some((s) => s.id === lastActiveSessionId);
+
+  const workspaceContextPending =
+    Boolean(currentWorkspace?.id) &&
+    (!workspaceContext || workspaceContext.workspace.id !== currentWorkspace?.id);
+
+  const sessionBootstrapPending =
+    !isNewChatDraft && (!sessionsReady || workspaceContextPending || awaitingSessionRestore);
+
+  const historyPending =
+    Boolean(activeSessionId) &&
+    activeSessionId !== 'undefined' &&
+    activeSessionId !== '1' &&
+    loadingHistory;
+
+  const chatBodyPending = sessionBootstrapPending || historyPending;
+
   const showWelcomeScreen = useMemo(() => {
-    if (loadingHistory) return false;
+    if (chatBodyPending) return false;
     if (isWaiting) return false;
     if ((apiMessages?.length ?? 0) > 0) return false;
     const hasRealThread = localMessages.some(
       (m) => m.id !== 'welcome' && (m.role === 'user' || m.role === 'assistant'),
     );
     return !hasRealThread;
-  }, [loadingHistory, apiMessages, localMessages, isWaiting]);
+  }, [chatBodyPending, isWaiting, apiMessages, localMessages]);
 
   const hasDatasources = hasWorkspaceSources;
   // Avoid flashing the empty-state CTA before the first datasource/connector fetch settles.
@@ -919,8 +951,109 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     setInput(`I want to connect ${connectorId}`);
   };
 
+  const composerStatusLabel =
+    schemaTableCount != null && schemaTableCount > 0
+      ? ` · ${schemaTableCount} dataset${schemaTableCount === 1 ? '' : 's'} ready`
+      : selectedDatasourceId
+        ? ' · Data connected'
+        : '';
+
+  const composerPanel = (
+    <div className="relative mx-auto w-full max-w-3xl md:max-w-4xl">
+      {chatQuotaBlocked && chatLockBanner && (
+        <div className="mb-3 flex flex-col items-center gap-2 rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)] px-4 py-3 text-center text-sm text-[color:var(--text-secondary)]">
+          <p>{chatLockBanner.message}</p>
+          {chatLockBanner.showUpgradeCta ? (
+            <Link
+              to={upgradeHref}
+              className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
+            >
+              Upgrade plan
+            </Link>
+          ) : null}
+        </div>
+      )}
+      {sourceRequiredForChat && !chatQuotaBlocked && (
+        <div className="mb-3 flex flex-col items-center gap-2 rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)] px-4 py-3 text-center text-sm text-[color:var(--text-secondary)]">
+          <p>Connect your data or explore sample data to enable chat.</p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {showDemoCta ? (
+              <button
+                type="button"
+                className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
+                disabled={demoConnecting}
+                onClick={() => void handleStartDemo()}
+              >
+                Explore sample data
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
+              onClick={() => setShowConnectionPanel(true)}
+            >
+              Add your data
+            </button>
+          </div>
+        </div>
+      )}
+      {!selectedDatasourceId &&
+        localMessages.length > 1 &&
+        !chatQuotaBlocked &&
+        !sourceRequiredForChat && (
+          <div className="mb-3 flex justify-center">
+            <button
+              type="button"
+              className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary uppercase tracking-widest animate-in fade-in slide-in-from-bottom-2"
+              onClick={() => setSourcePickerOpenRequest((n) => n + 1)}
+            >
+              Tip: Choose a data source for deeper analysis
+            </button>
+          </div>
+        )}
+      {workspaceId ? (
+        <ChatComposer
+          workspaceId={workspaceId}
+          value={input}
+          onChange={setInput}
+          onSubmit={handleSend}
+          isWaiting={isWaiting}
+          onStop={() => void cancelRun()}
+          disabled={chatQuotaBlocked || demoConnecting || sourceRequiredForChat}
+          disabledReason={
+            chatQuotaBlocked
+              ? PLAN_LIMIT_REACHED_TOOLTIP
+              : sourceRequiredForChat
+                ? 'Connect your data or explore sample data to start chatting.'
+                : null
+          }
+          sourcePickerOpenRequest={sourcePickerOpenRequest}
+          datasources={datasources}
+          connectors={connectors}
+          selectedDatasourceId={selectedDatasourceId}
+          onDatasourceChange={setSelectedDatasourceId}
+          onConnectDatasource={() => setShowConnectionPanel(true)}
+          onRemoveDemo={() => void handleRemoveDemo()}
+        />
+      ) : (
+        <p className="text-sm text-muted-foreground text-center">Missing workspace context</p>
+      )}
+
+      <p className="mt-2.5 text-center text-[10px] text-[color:var(--text-muted)]">
+        Powered by Beleh
+        <span className="hidden md:inline"> · answers you can share with your team</span>
+        {composerStatusLabel}
+      </p>
+    </div>
+  );
+
   return (
-    <div className="chat-container chat-container--enterprise relative z-0 flex min-h-0 flex-1 flex-col font-sans">
+    <div
+      className={cn(
+        'chat-container chat-container--enterprise relative z-0 flex min-h-0 flex-1 flex-col font-sans',
+        showWelcomeScreen && 'chat-container--welcome-center',
+      )}
+    >
       {workspaceId ? (
         <ChatWorkspaceHeader
           workspaceId={workspaceId}
@@ -929,301 +1062,240 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
           connectors={connectors}
           onRefresh={() => void handleHeaderRefresh()}
           refreshing={headerRefreshing}
+          showUpgradeCta={isFreePlanUser && showUpgrade}
+          upgradeHref={billingUpgradeHref}
         />
       ) : null}
 
-      <div
-        ref={scrollRef}
-        className="analytics-page flex-1 overflow-y-auto px-2 py-4 sm:px-4 md:px-6 lg:px-10 space-y-6 md:space-y-8"
-      >
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 md:max-w-7xl md:gap-8">
-          {showWelcomeScreen ? (
-            <ChatWelcome
-              onPromptClick={handleWelcomePrompt}
-              schemaTableCount={schemaTableCount ?? undefined}
-              disabled={isWaiting || demoConnecting || sourceRequiredForChat}
-              hasDatasources={hasDatasources}
-              sourcesLoading={!sourcesReady || demoStatusLoading}
-              onConnectDatasource={() => setShowConnectionPanel(true)}
-              showDemoCta={showDemoCta}
-              onStartDemo={() => void handleStartDemo()}
-              demoConnecting={demoConnecting}
-              demoHeadline={demoCopy?.headline}
-              demoMessage={demoCopy?.message}
-              demoPrompts={demoCopy?.suggested_prompts}
-              preferDemoPrompts={selectedIsDemo}
-              usedPrompts={usedDemoPrompts}
-            />
-          ) : null}
-          <AnimatePresence initial={false}>
-            {localMessages
-              .filter((msg) => msg.id !== 'welcome')
-              .map((msg) => (
-                <motion.div
-                  key={msg.id}
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className={cn(
-                    'flex w-full',
-                    msg.role === 'user' ? 'justify-end' : 'justify-start',
-                  )}
-                >
-                  {msg.role === 'user' ? (
-                    <div className="chat-message-width--user user-request">
-                      <div className="user-request__body">
-                        <div className="user-request__bubble">
-                          <p className="user-request__text">{msg.content}</p>
-                        </div>
-                        <div className="user-request__avatar" aria-hidden="true">
-                          {userInitial}
-                        </div>
-                      </div>
-                      <div className="user-request__header">
-                        <CopyTextButton text={msg.content} label="prompt" />
-                        <span className="user-request__time">
-                          {msg.timestamp.toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit',
-                          })}
-                          {msg.status === 'sending' ? ' · Sending' : null}
-                          {msg.status === 'error' ? ' · Failed' : null}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="chat-message-width--assistant flex flex-col gap-3">
-                      {msg.failure ? (
-                        <ChatFailureCard
-                          title={msg.failure.title}
-                          detail={msg.failure.detail}
-                          canRetry={msg.failure.canRetry}
-                          disabled={isWaiting}
-                          upgradeHref={msg.failure.upgradeHref}
-                          showUpgradeCta={
-                            Boolean(msg.failure.quotaLimitType) &&
-                            (msg.failure.showUpgradeCta ?? showUpgrade)
-                          }
-                          upgradeLabel={
-                            msg.failure.quotaLimitType === 'datasets'
-                              ? 'View datasources'
-                              : msg.failure.quotaLimitType === 'members_per_workspace'
-                                ? 'Manage members'
-                                : 'Upgrade plan'
-                          }
-                          onRetry={
-                            msg.retryPrompt
-                              ? () => {
-                                  setLocalMessages((prev) =>
-                                    prev.filter(
-                                      (m, i, arr) =>
-                                        !(
-                                          i === arr.length - 1 &&
-                                          m.role === 'assistant' &&
-                                          m.failure
-                                        ),
-                                    ),
-                                  );
-                                  void sendMessage(msg.retryPrompt!, { skipUserMessage: true });
-                                }
-                              : undefined
-                          }
-                        />
-                      ) : null}
+      {showWelcomeScreen ? (
+        <div className="chat-empty-stage flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-3 py-6 sm:px-4 md:px-6">
+          <ChatWelcome
+            onPromptClick={handleWelcomePrompt}
+            disabled={isWaiting || demoConnecting || sourceRequiredForChat}
+            hasDatasources={hasDatasources}
+            sourcesLoading={!sourcesReady || demoStatusLoading}
+            onConnectDatasource={() => setShowConnectionPanel(true)}
+            showDemoCta={showDemoCta}
+            onStartDemo={() => void handleStartDemo()}
+            demoConnecting={demoConnecting}
+            demoHeadline={demoCopy?.headline}
+            demoMessage={demoCopy?.message}
+            demoPrompts={demoCopy?.suggested_prompts}
+            preferDemoPrompts={selectedIsDemo}
+            usedPrompts={usedDemoPrompts}
+          />
+          <div className="chat-composer-dock chat-composer-dock--float relative z-30 w-full shrink-0 overflow-visible pt-4 md:pt-6">
+            {composerPanel}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div
+            ref={scrollRef}
+            className="analytics-page flex-1 overflow-y-auto px-2 py-4 sm:px-4 md:px-6 lg:px-10 space-y-6 md:space-y-8"
+          >
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 xl:max-w-[96rem] 2xl:max-w-[110rem] md:gap-8">
+              {chatBodyPending ? (
+                <ChatThreadSkeleton />
+              ) : (
+                <>
+                  <AnimatePresence initial={false}>
+                    {localMessages
+                      .filter((msg) => msg.id !== 'welcome')
+                      .map((msg) => (
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3 }}
+                          className={cn(
+                            'flex w-full',
+                            msg.role === 'user' ? 'justify-end' : 'justify-start',
+                          )}
+                        >
+                          {msg.role === 'user' ? (
+                            <div className="chat-message-width--user user-request">
+                              <div className="user-request__body">
+                                <div className="user-request__bubble">
+                                  <p className="user-request__text">{msg.content}</p>
+                                </div>
+                                <div className="user-request__avatar" aria-hidden="true">
+                                  {userInitial}
+                                </div>
+                              </div>
+                              <div className="user-request__header">
+                                <CopyTextButton text={msg.content} label="prompt" />
+                                <span className="user-request__time">
+                                  {msg.timestamp.toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                  {msg.status === 'sending' ? ' · Sending' : null}
+                                  {msg.status === 'error' ? ' · Failed' : null}
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="chat-message-width--assistant flex flex-col gap-3">
+                              {msg.failure ? (
+                                <ChatFailureCard
+                                  title={msg.failure.title}
+                                  detail={msg.failure.detail}
+                                  canRetry={msg.failure.canRetry}
+                                  disabled={isWaiting}
+                                  upgradeHref={msg.failure.upgradeHref}
+                                  showUpgradeCta={
+                                    Boolean(msg.failure.quotaLimitType) &&
+                                    (msg.failure.showUpgradeCta ?? showUpgrade)
+                                  }
+                                  upgradeLabel={
+                                    msg.failure.quotaLimitType === 'datasets'
+                                      ? 'View datasources'
+                                      : msg.failure.quotaLimitType === 'members_per_workspace'
+                                        ? 'Manage members'
+                                        : 'Upgrade plan'
+                                  }
+                                  onRetry={
+                                    msg.retryPrompt
+                                      ? () => {
+                                          setLocalMessages((prev) =>
+                                            prev.filter(
+                                              (m, i, arr) =>
+                                                !(
+                                                  i === arr.length - 1 &&
+                                                  m.role === 'assistant' &&
+                                                  m.failure
+                                                ),
+                                            ),
+                                          );
+                                          void sendMessage(msg.retryPrompt!, {
+                                            skipUserMessage: true,
+                                          });
+                                        }
+                                      : undefined
+                                  }
+                                />
+                              ) : null}
 
-                      {!msg.failure && msg.metadata ? (
-                        (() => {
-                          const meta = msg.metadata as ChatMessageMetadata;
-                          if (turnHasRichUi(meta)) {
-                            return (
-                              <AssistantAnalysisCard
-                                key={msg.id}
-                                text={msg.content}
-                                artifacts={meta.artifacts ?? []}
-                                meta={meta.meta}
-                                timestamp={msg.timestamp}
-                                onAsk={(prompt) => void sendMessage(prompt)}
-                                disabled={isWaiting}
-                              />
-                            );
-                          }
-                          return (
-                            <>
-                              {msg.content ? (
-                                <div className="message-plain message-plain--assistant">
-                                  <div className="message-plain__toolbar">
-                                    <CopyTextButton text={msg.content} label="response" />
+                              {!msg.failure && msg.metadata ? (
+                                (() => {
+                                  const meta = msg.metadata as ChatMessageMetadata;
+                                  if (turnHasRichUi(meta)) {
+                                    return (
+                                      <AssistantAnalysisCard
+                                        key={msg.id}
+                                        text={msg.content}
+                                        artifacts={meta.artifacts ?? []}
+                                        meta={meta.meta}
+                                        timestamp={msg.timestamp}
+                                        onAsk={(prompt) => void sendMessage(prompt)}
+                                        disabled={isWaiting}
+                                      />
+                                    );
+                                  }
+                                  return (
+                                    <>
+                                      {msg.content ? (
+                                        <div className="message-plain message-plain--assistant">
+                                          <div className="message-plain__toolbar">
+                                            <CopyTextButton text={msg.content} label="response" />
+                                          </div>
+                                          <MarkdownText>{msg.content}</MarkdownText>
+                                        </div>
+                                      ) : null}
+                                      <ChartVisualization artifacts={meta.artifacts ?? []} />
+                                    </>
+                                  );
+                                })()
+                              ) : !msg.failure ? (
+                                msg.content ? (
+                                  <div className="message-plain message-plain--assistant">
+                                    <div className="message-plain__toolbar">
+                                      <CopyTextButton text={msg.content} label="response" />
+                                    </div>
+                                    <MarkdownText>{msg.content}</MarkdownText>
                                   </div>
-                                  <MarkdownText>{msg.content}</MarkdownText>
+                                ) : null
+                              ) : null}
+
+                              {msg.type === 'widget' && msg.widgetType === 'connector' ? (
+                                <div className="rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--panel-bg)] p-1">
+                                  <ConnectorWidget onSelect={handleConnectorSelect} />
                                 </div>
                               ) : null}
-                              <ChartVisualization artifacts={meta.artifacts ?? []} />
-                            </>
-                          );
-                        })()
-                      ) : !msg.failure ? (
-                        msg.content ? (
-                          <div className="message-plain message-plain--assistant">
-                            <div className="message-plain__toolbar">
-                              <CopyTextButton text={msg.content} label="response" />
+
+                              {msg.role === 'assistant' &&
+                                !msg.failure &&
+                                msg.id === latestAssistantWithSuggestionsId &&
+                                (() => {
+                                  const meta = msg.metadata as ChatMessageMetadata | undefined;
+                                  const fromArtifacts = getAskPromptsFromArtifacts(
+                                    meta?.artifacts ?? [],
+                                  );
+                                  const suggested = selectedIsDemo
+                                    ? shuffledDemoFollowUps
+                                    : fromArtifacts;
+                                  if (!suggested.length && !demoSuggestionsExhausted) return null;
+                                  return (
+                                    <SuggestedPrompts
+                                      prompts={suggested}
+                                      onSelect={handleSuggestedPrompt}
+                                      disabled={isWaiting}
+                                      label={
+                                        selectedIsDemo ? 'Try another sample question' : undefined
+                                      }
+                                      exhaustedHint={
+                                        demoSuggestionsExhausted
+                                          ? "You've tried the sample questions — ask your own about this dataset to explore further."
+                                          : null
+                                      }
+                                    />
+                                  );
+                                })()}
                             </div>
-                            <MarkdownText>{msg.content}</MarkdownText>
+                          )}
+                        </motion.div>
+                      ))}
+                  </AnimatePresence>
+                  {isWaiting && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex justify-start"
+                    >
+                      <div className="chat-message-width--assistant message-plain message-plain--assistant flex flex-col gap-2">
+                        {partialText ? (
+                          <div className="opacity-80">
+                            <MarkdownText>{partialText}</MarkdownText>
                           </div>
-                        ) : null
-                      ) : null}
-
-                      {msg.type === 'widget' && msg.widgetType === 'connector' ? (
-                        <div className="rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--panel-bg)] p-1">
-                          <ConnectorWidget onSelect={handleConnectorSelect} />
-                        </div>
-                      ) : null}
-
-                      {msg.role === 'assistant' &&
-                        !msg.failure &&
-                        msg.id === latestAssistantWithSuggestionsId &&
-                        (() => {
-                          const meta = msg.metadata as ChatMessageMetadata | undefined;
-                          const fromArtifacts = getAskPromptsFromArtifacts(meta?.artifacts ?? []);
-                          const suggested = selectedIsDemo ? shuffledDemoFollowUps : fromArtifacts;
-                          if (!suggested.length && !demoSuggestionsExhausted) return null;
-                          return (
-                            <SuggestedPrompts
-                              prompts={suggested}
-                              onSelect={handleSuggestedPrompt}
-                              disabled={isWaiting}
-                              label={selectedIsDemo ? 'Try another sample question' : undefined}
-                              exhaustedHint={
-                                demoSuggestionsExhausted
-                                  ? "You've tried the sample questions — ask your own about this dataset to explore further."
-                                  : null
-                              }
-                            />
-                          );
-                        })()}
-                    </div>
+                        ) : null}
+                        <ThinkingShimmer phrases={shimmerPhrases} />
+                      </div>
+                    </motion.div>
                   )}
-                </motion.div>
-              ))}
-          </AnimatePresence>
-          {isWaiting && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="flex justify-start"
-            >
-              <div className="chat-message-width--assistant message-plain message-plain--assistant flex flex-col gap-2">
-                {partialText ? (
-                  <div className="opacity-80">
-                    <MarkdownText>{partialText}</MarkdownText>
-                  </div>
-                ) : null}
-                <ThinkingShimmer phrases={shimmerPhrases} />
-              </div>
-            </motion.div>
-          )}
-          <div ref={messagesEndRef} className="h-px w-full shrink-0" aria-hidden />
-        </div>
-      </div>
-
-      {/* Floating composer , no dock background strip */}
-      <div className="chat-composer-dock chat-composer-dock--float relative z-30 shrink-0 overflow-visible px-3 pb-3 pt-2 md:px-6 md:pb-4">
-        <div className="relative mx-auto w-full max-w-3xl md:max-w-4xl">
-          {chatQuotaBlocked && chatLockBanner && (
-            <div className="mb-3 flex flex-col items-center gap-2 rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)] px-4 py-3 text-center text-sm text-[color:var(--text-secondary)]">
-              <p>{chatLockBanner.message}</p>
-              {chatLockBanner.showUpgradeCta ? (
-                <Link
-                  to={upgradeHref}
-                  className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
-                >
-                  Upgrade plan
-                </Link>
-              ) : null}
+                </>
+              )}
+              <div ref={messagesEndRef} className="h-px w-full shrink-0" aria-hidden />
             </div>
-          )}
-          {sourceRequiredForChat && !chatQuotaBlocked && (
-            <div className="mb-3 flex flex-col items-center gap-2 rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)] px-4 py-3 text-center text-sm text-[color:var(--text-secondary)]">
-              <p>Connect your data or explore sample data to enable chat.</p>
-              <div className="flex flex-wrap items-center justify-center gap-2">
-                {showDemoCta ? (
-                  <button
-                    type="button"
-                    className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
-                    disabled={demoConnecting}
-                    onClick={() => void handleStartDemo()}
-                  >
-                    Explore sample data
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
-                  onClick={() => setShowConnectionPanel(true)}
-                >
-                  Add your data
-                </button>
-              </div>
-            </div>
-          )}
-          {!selectedDatasourceId &&
-            localMessages.length > 1 &&
-            !chatQuotaBlocked &&
-            !sourceRequiredForChat && (
-              <div className="mb-3 flex justify-center">
-                <button
-                  type="button"
-                  className="px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-[10px] font-bold text-primary uppercase tracking-widest animate-in fade-in slide-in-from-bottom-2"
-                  onClick={() => setSourcePickerOpenRequest((n) => n + 1)}
-                >
-                  Tip: Select a database for deep analysis
-                </button>
-              </div>
-            )}
-          {workspaceId ? (
-            <ChatComposer
-              workspaceId={workspaceId}
-              value={input}
-              onChange={setInput}
-              onSubmit={handleSend}
-              isWaiting={isWaiting}
-              onStop={() => void cancelRun()}
-              disabled={chatQuotaBlocked || demoConnecting || sourceRequiredForChat}
-              disabledReason={
-                chatQuotaBlocked
-                  ? PLAN_LIMIT_REACHED_TOOLTIP
-                  : sourceRequiredForChat
-                    ? 'Connect your data or explore sample data to start chatting.'
-                    : null
-              }
-              sourcePickerOpenRequest={sourcePickerOpenRequest}
-              datasources={datasources}
-              connectors={connectors}
-              selectedDatasourceId={selectedDatasourceId}
-              onDatasourceChange={setSelectedDatasourceId}
-              onConnectDatasource={() => setShowConnectionPanel(true)}
-              onRemoveDemo={() => void handleRemoveDemo()}
-            />
-          ) : (
-            <p className="text-sm text-muted-foreground text-center">Missing workspace context</p>
-          )}
+          </div>
 
-          <p className="mt-2.5 text-center text-[10px] text-[color:var(--text-muted)]">
-            Powered by Beleh Analytical Engine v0.1.0
-            <span className="hidden md:inline"> // compliance guidelines applied</span>
-            {schemaTableCount != null
-              ? ` · Schema: ${schemaTableCount} columns connected`
-              : selectedDatasourceId
-                ? ' · Schema: connected'
-                : null}
-          </p>
-        </div>
-      </div>
+          <div className="chat-composer-dock chat-composer-dock--float relative z-30 shrink-0 overflow-visible px-3 pb-3 pt-2 md:px-6 md:pb-4">
+            {composerPanel}
+          </div>
+        </>
+      )}
 
       {showConnectionPanel && workspaceId && (
         <DatasourceConnectionPanel
           workspaceId={workspaceId}
           hideFileSources
-          onClose={() => setShowConnectionPanel(false)}
+          onClose={() => {
+            setShowConnectionPanel(false);
+            void Promise.all([
+              refreshConnectors({ silent: true }),
+              refreshDatasources({ silent: true }),
+            ]);
+          }}
           onSuccess={async () => {
             await handleLiveSourceConnected();
             toast.success('Datasource connected successfully.');

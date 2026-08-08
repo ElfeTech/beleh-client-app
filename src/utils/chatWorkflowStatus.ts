@@ -92,7 +92,7 @@ export function getWorkflowFailure(response: AssistantTurnResponse): WorkflowFai
 
 export function formatChatRequestError(err: unknown): WorkflowFailureInfo {
   if (isQuotaExceededError(err)) {
-    const isDaily = err.quota.limit_type === 'daily_llm_tokens';
+    const isDaily = err.quota.limit_type === 'daily_credits';
     const resetLabel = isDaily
       ? formatQuotaResetAt(err.quota.reset_at)
       : formatQuotaResetDate(err.quota.reset_at);
@@ -100,7 +100,7 @@ export function formatChatRequestError(err: unknown): WorkflowFailureInfo {
     if (isDaily && resetLabel) {
       detailParts.push(`Daily limit reached , resets at ${resetLabel}.`);
     } else if (
-      (err.quota.limit_type === 'queries' || err.quota.limit_type === 'llm_tokens') &&
+      (err.quota.limit_type === 'queries' || err.quota.limit_type === 'credits') &&
       resetLabel
     ) {
       detailParts.push(`Resets on ${resetLabel}.`);

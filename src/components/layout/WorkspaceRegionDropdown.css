@@ -310,6 +310,27 @@
   background: color-mix(in srgb, var(--sidebar-active-indicator) 10%, transparent);
 }
 
+.ws-region__add-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ws-region__add-btn--upgrade {
+  border-style: solid;
+  border-color: color-mix(in srgb, var(--accent-teal-500) 50%, var(--sidebar-border));
+  background: color-mix(in srgb, var(--accent-teal-500) 14%, transparent);
+  color: var(--accent-teal-500);
+  text-transform: none;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  line-height: 1.25;
+}
+
+.ws-region__add-btn--upgrade:hover {
+  background: color-mix(in srgb, var(--accent-teal-500) 22%, transparent);
+  border-color: var(--accent-teal-500);
+}
+
 .ws-region__form {
   display: flex;
   flex-direction: column;

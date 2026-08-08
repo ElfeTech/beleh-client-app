@@ -52,7 +52,8 @@ export function AssistantAnalysisCard({
     return true;
   });
 
-  const kpiAndFilters = peripheral.filter((a) => a.type === 'kpi' || a.type === 'filter_bar');
+  const filters = peripheral.filter((a) => a.type === 'filter_bar');
+  const kpis = peripheral.filter((a) => a.type === 'kpi');
   const afterViews = peripheral.filter((a) => a.type !== 'kpi' && a.type !== 'filter_bar');
 
   const context = {
@@ -95,9 +96,15 @@ export function AssistantAnalysisCard({
         </div>
       ) : null}
 
-      {kpiAndFilters.length > 0 ? (
-        <div className="artifact-stack">
-          {kpiAndFilters.map((a) => (
+      {text ? (
+        <div className="assistant-analysis-card__summary">
+          <MarkdownText>{text}</MarkdownText>
+        </div>
+      ) : null}
+
+      {filters.length > 0 ? (
+        <div className="artifact-stack artifact-stack--filters">
+          {filters.map((a) => (
             <ArtifactRenderer key={a.id} artifact={a} context={context} />
           ))}
         </div>
@@ -122,9 +129,11 @@ export function AssistantAnalysisCard({
         </ul>
       ) : null}
 
-      {text ? (
-        <div className="assistant-analysis-card__summary">
-          <MarkdownText>{text}</MarkdownText>
+      {kpis.length > 0 ? (
+        <div className="artifact-stack artifact-stack--kpis">
+          {kpis.map((a) => (
+            <ArtifactRenderer key={a.id} artifact={a} context={context} />
+          ))}
         </div>
       ) : null}
 

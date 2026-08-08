@@ -12,8 +12,8 @@ function messageFromRecord(obj: Record<string, unknown>): string | null {
 
 const QUOTA_LIMIT_TYPES = new Set<string>([
   'queries',
-  'llm_tokens',
-  'daily_llm_tokens',
+  'credits',
+  'daily_credits',
   'datasets',
   'members_per_workspace',
   'workspaces',
@@ -212,8 +212,8 @@ export function quotaExceededFromStreamError(payload: {
 
   return new QuotaExceededError({
     error: 'quota_exceeded',
-    // AI stream failures without a typed limit default to period tokens (not queries).
-    limit_type: limitType ?? 'llm_tokens',
+    // AI stream failures without a typed limit default to period credits (not queries).
+    limit_type: limitType ?? 'credits',
     current_usage: numberOrZero(payload.current_usage),
     limit: numberOrZero(payload.limit),
     remaining: numberOrZero(payload.remaining),
@@ -225,6 +225,25 @@ export function quotaExceededFromStreamError(payload: {
 
 export function isQuotaExceededError(error: unknown): error is QuotaExceededError {
   return error instanceof QuotaExceededError;
+}
+
+/** User-facing copy for dataset / connector delete failures. */
+export function formatResourceDeleteError(
+  error: unknown,
+  resourceLabel: 'dataset' | 'connector' = 'dataset',
+): string {
+  const fallback = `Failed to delete ${resourceLabel}. Please try again.`;
+  if (error instanceof ApiRequestError) {
+    if (error.status === 403) {
+      return `You don't have permission to delete this ${resourceLabel}.`;
+    }
+    if (error.status === 404) {
+      return `${resourceLabel === 'dataset' ? 'Dataset' : 'Connector'} not found.`;
+    }
+    if (error.message.trim()) return error.message;
+  }
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return fallback;
 }
 
 /** User-facing copy for invitation accept / create failures. */

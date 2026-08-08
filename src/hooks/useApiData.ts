@@ -172,6 +172,8 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
   const [page, setPage] = useState(initialPage);
   const [allMessages, setAllMessages] = useState<any[]>([]);
   const [hasMore, setHasMore] = useState(false);
+  /** Session id for which page-1 history has settled (success or error). */
+  const [settledSessionId, setSettledSessionId] = useState<string | null>(null);
   const pageRef = useRef(page);
   pageRef.current = page;
 
@@ -182,6 +184,7 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
     setPage(1);
     setAllMessages([]);
     setHasMore(false);
+    setSettledSessionId(null);
   }, [sessionId]);
 
   const fetchMessages = useCallback(
@@ -210,9 +213,13 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
         setHasMore(response.has_next);
         if (pageRef.current === 1) {
           setAllMessages(response.items);
+          if (canFetchMessages && sessionId) setSettledSessionId(sessionId);
         } else {
           setAllMessages((prev) => [...response.items, ...prev]);
         }
+      },
+      onError: () => {
+        if (canFetchMessages && sessionId) setSettledSessionId(sessionId);
       },
     },
   );
@@ -233,11 +240,15 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
     setPage(1);
     setAllMessages([]);
     setHasMore(false);
+    setSettledSessionId(null);
   }, []);
+
+  // Avoid one frame of loading=false with empty messages between session bind and fetch start.
+  const historyPending = canFetchMessages && settledSessionId !== sessionId;
 
   return {
     messages: allMessages,
-    loading,
+    loading: loading || historyPending,
     error,
     hasMore,
     loadMore,

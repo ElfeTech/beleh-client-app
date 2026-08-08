@@ -1598,12 +1598,12 @@ html[data-landing-theme='light'] .landing-emulator,
   background: #e4e8e2;
 }
 
-html[data-landing-theme='light'] .lpe-frame,
-.landing-page[data-theme='light'] .lpe-frame {
-  border-color: rgba(11, 17, 32, 0.12);
+html[data-landing-theme='light'] .lpe-browser,
+.landing-page[data-theme='light'] .lpe-browser {
+  border-color: rgba(11, 17, 32, 0.2);
   box-shadow:
-    0 28px 64px -24px rgba(11, 17, 32, 0.28),
-    0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+    0 40px 80px -28px rgba(11, 17, 32, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.5) inset;
 }
 
 .landing-page :focus-visible {

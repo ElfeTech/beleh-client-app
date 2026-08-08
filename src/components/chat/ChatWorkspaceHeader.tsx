@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ChevronDown, ChevronUp, Database, RefreshCw } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { ChevronDown, ChevronUp, Database, RefreshCw, Sparkles } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { ConnectorResponse, DataSourceResponse } from '../../types/api';
 import { getWorkspaceSourceContext } from '../../utils/datasourceDisplay';
@@ -14,6 +15,9 @@ interface ChatWorkspaceHeaderProps {
   connectors?: ConnectorResponse[];
   onRefresh?: () => void;
   refreshing?: boolean;
+  /** Show Upgrade CTA for free-plan owners in the chat top bar. */
+  showUpgradeCta?: boolean;
+  upgradeHref?: string;
 }
 
 export function ChatWorkspaceHeader({
@@ -23,6 +27,8 @@ export function ChatWorkspaceHeader({
   connectors = [],
   onRefresh,
   refreshing = false,
+  showUpgradeCta = false,
+  upgradeHref = '/settings/billing?upgrade=1#billing-plans',
 }: ChatWorkspaceHeaderProps) {
   const { user } = useAuth();
   const uid = user?.uid ?? '';
@@ -50,6 +56,13 @@ export function ChatWorkspaceHeader({
     setCollapsed((c) => !c);
   }, []);
 
+  const upgradeButton = showUpgradeCta ? (
+    <Link to={upgradeHref} className="chat-workspace-header__upgrade" title="Upgrade your plan">
+      <Sparkles className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+      Upgrade
+    </Link>
+  ) : null;
+
   if (collapsed) {
     return (
       <header className="chat-workspace-header chat-workspace-header--collapsed">
@@ -66,16 +79,19 @@ export function ChatWorkspaceHeader({
               {source.statusLabel.split('//')[0]?.trim()}
             </span>
           </div>
-          <button
-            type="button"
-            className="chat-workspace-header__icon-btn"
-            onClick={toggleCollapsed}
-            aria-expanded={false}
-            aria-label="Expand workspace context"
-            title="Show context"
-          >
-            <ChevronDown className="h-4 w-4" strokeWidth={2} />
-          </button>
+          <div className="chat-workspace-header__cluster-row">
+            {upgradeButton}
+            <button
+              type="button"
+              className="chat-workspace-header__icon-btn"
+              onClick={toggleCollapsed}
+              aria-expanded={false}
+              aria-label="Expand workspace context"
+              title="Show context"
+            >
+              <ChevronDown className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </div>
         </div>
       </header>
     );
@@ -112,6 +128,7 @@ export function ChatWorkspaceHeader({
             >
               {source.statusLabel}
             </span>
+            {upgradeButton}
             {onRefresh ? (
               <button
                 type="button"

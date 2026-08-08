@@ -64,7 +64,7 @@ export async function readSseRequest(options: ReadSseRequestOptions): Promise<Re
       throw new QuotaExceededError(
         quota ?? {
           error: 'quota_exceeded',
-          limit_type: 'llm_tokens',
+          limit_type: 'credits',
           current_usage: 0,
           limit: 0,
           remaining: 0,

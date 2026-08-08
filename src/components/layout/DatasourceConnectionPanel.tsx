@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { DatasourceConnectionPanelShell, PanelChrome } from './DatasourceConnectionPanelShell';
 import { CatalogView, type ConnectorPanelSelect } from './connector-panel/CatalogView';
@@ -76,6 +76,7 @@ export function DatasourceConnectionPanel({
   const [stack, setStack] = useState<PanelView[]>([{ id: 'catalog' }]);
   const [orgsHasConnections, setOrgsHasConnections] = useState(false);
   const [orgsConnectKey, setOrgsConnectKey] = useState(0);
+  const uploadBackHandlerRef = useRef<(() => boolean) | null>(null);
 
   const current = useMemo(() => stack[stack.length - 1] ?? ({ id: 'catalog' } as const), [stack]);
   const canGoBack = stack.length > 1;
@@ -101,6 +102,13 @@ export function DatasourceConnectionPanel({
       return next;
     });
   }, []);
+
+  const handlePanelBack = useCallback(() => {
+    if (current.id === 'upload' && uploadBackHandlerRef.current?.()) {
+      return;
+    }
+    pop();
+  }, [current.id, pop]);
 
   const handleCatalogSelect = (type: ConnectorPanelSelect) => {
     if (type === 'upload') push({ id: 'upload' });
@@ -134,7 +142,7 @@ export function DatasourceConnectionPanel({
         subtitle={chrome.subtitle}
         eyebrow={chrome.eyebrow}
         canGoBack={canGoBack}
-        onBack={pop}
+        onBack={handlePanelBack}
         onClose={onClose}
         headerActions={headerActions}
       />
@@ -148,6 +156,9 @@ export function DatasourceConnectionPanel({
           workspaceId={workspaceId}
           onCancel={pop}
           onSuccess={handleFlowSuccess}
+          onRegisterBackHandler={(handler) => {
+            uploadBackHandlerRef.current = handler;
+          }}
         />
       )}
 

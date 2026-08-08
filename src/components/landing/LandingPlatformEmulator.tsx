@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   Area,
   AreaChart,
@@ -14,12 +14,17 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
+import logoImage from '../../assets/logo.webp';
 import {
   EMULATOR_CHART_COLORS,
   EMULATOR_CHARTS_DELAY_MS,
+  EMULATOR_DEMO_URL,
   EMULATOR_LOOP_PAUSE_MS,
   EMULATOR_META_DELAY_MS,
+  EMULATOR_SEND_FLASH_MS,
+  EMULATOR_SIDEBAR_SESSIONS,
   EMULATOR_STREAM_WORD_MS,
+  EMULATOR_THINK_DELAY_MS,
   EMULATOR_TURNS,
   EMULATOR_TYPE_CHAR_MS,
   type EmulatorTurn,
@@ -27,7 +32,8 @@ import {
 } from './emulatorDemoScript';
 import './LandingPlatformEmulator.css';
 
-type Phase = 'idle' | 'typing' | 'meta' | 'charts' | 'streaming' | 'done';
+type Phase =
+  'idle' | 'composing' | 'sending' | 'thinking' | 'meta' | 'charts' | 'streaming' | 'done';
 
 type CompletedTurn = {
   turn: EmulatorTurn;
@@ -39,6 +45,12 @@ function prefersReducedMotion(): boolean {
   return (
     typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
   );
+}
+
+function truncateTitle(text: string, max = 36): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
 }
 
 function tooltipLabel(value: unknown): string {
@@ -68,12 +80,40 @@ function ChartTooltip({
   );
 }
 
+function ChartShell({
+  children,
+  tall,
+}: Readonly<{
+  children: ReactNode;
+  tall?: boolean;
+}>) {
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Defer mount so flex/grid parents have measured width before Recharts sizes.
+    const raf = window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        if (!cancelled) setReady(true);
+      });
+    });
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  return (
+    <div className={tall ? 'lpe-chart-wrap tall' : 'lpe-chart-wrap'}>{ready ? children : null}</div>
+  );
+}
+
 function DonutChart({ data, title }: Readonly<{ data: NamedValue[]; title: string }>) {
   return (
     <div className="lpe-viz-card">
       <div className="lpe-viz-title">{title}</div>
-      <div className="lpe-chart-wrap">
-        <ResponsiveContainer width="100%" height="100%">
+      <ChartShell>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={1}>
           <PieChart>
             <Pie
               data={data}
@@ -81,9 +121,10 @@ function DonutChart({ data, title }: Readonly<{ data: NamedValue[]; title: strin
               nameKey="name"
               cx="50%"
               cy="42%"
-              innerRadius={48}
-              outerRadius={78}
+              innerRadius={42}
+              outerRadius={68}
               paddingAngle={2}
+              isAnimationActive={false}
             >
               {data.map((item, i) => (
                 <Cell
@@ -95,14 +136,14 @@ function DonutChart({ data, title }: Readonly<{ data: NamedValue[]; title: strin
             <Tooltip content={<ChartTooltip />} />
             <Legend
               verticalAlign="bottom"
-              height={36}
+              height={32}
               iconType="square"
-              iconSize={10}
-              wrapperStyle={{ fontSize: 12, color: '#6b7280' }}
+              iconSize={9}
+              wrapperStyle={{ fontSize: 11, color: '#6b7280' }}
             />
           </PieChart>
         </ResponsiveContainer>
-      </div>
+      </ChartShell>
     </div>
   );
 }
@@ -111,8 +152,8 @@ function VerticalBarChart({ data, title }: Readonly<{ data: NamedValue[]; title:
   return (
     <div className="lpe-viz-card">
       <div className="lpe-viz-title">{title}</div>
-      <div className="lpe-chart-wrap tall">
-        <ResponsiveContainer width="100%" height="100%">
+      <ChartShell tall>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={1}>
           <BarChart data={data} margin={{ top: 8, right: 8, left: -8, bottom: 28 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis
@@ -120,18 +161,24 @@ function VerticalBarChart({ data, title }: Readonly<{ data: NamedValue[]; title:
               angle={-35}
               textAnchor="end"
               height={50}
-              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tick={{ fill: '#6b7280', fontSize: 10 }}
               axisLine={{ stroke: '#e5e7eb' }}
               tickLine={false}
             />
             <YAxis
-              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tick={{ fill: '#6b7280', fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               allowDecimals={false}
             />
             <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(59,130,246,0.06)' }} />
-            <Bar dataKey="value" name="Count" radius={[6, 6, 0, 0]} barSize={28}>
+            <Bar
+              dataKey="value"
+              name="Count"
+              radius={[6, 6, 0, 0]}
+              barSize={26}
+              isAnimationActive={false}
+            >
               {data.map((item, i) => (
                 <Cell
                   key={item.name}
@@ -141,7 +188,7 @@ function VerticalBarChart({ data, title }: Readonly<{ data: NamedValue[]; title:
             </Bar>
           </BarChart>
         </ResponsiveContainer>
-      </div>
+      </ChartShell>
     </div>
   );
 }
@@ -176,8 +223,8 @@ function AreaViz({
   return (
     <div className="lpe-viz-card">
       <div className="lpe-viz-title">{title}</div>
-      <div className="lpe-chart-wrap tall">
-        <ResponsiveContainer width="100%" height="100%">
+      <ChartShell tall>
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} debounce={1}>
           <AreaChart data={data} margin={{ top: 8, right: 12, left: -8, bottom: 28 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
             <XAxis
@@ -185,17 +232,17 @@ function AreaViz({
               angle={-35}
               textAnchor="end"
               height={50}
-              tick={{ fill: '#6b7280', fontSize: 11 }}
+              tick={{ fill: '#6b7280', fontSize: 10 }}
               axisLine={{ stroke: '#e5e7eb' }}
               tickLine={false}
             />
-            <YAxis tick={{ fill: '#6b7280', fontSize: 11 }} axisLine={false} tickLine={false} />
+            <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip content={<ChartTooltip />} />
             <Legend
               verticalAlign="top"
-              height={28}
+              height={24}
               iconType="circle"
-              wrapperStyle={{ fontSize: 12, color: '#6b7280' }}
+              wrapperStyle={{ fontSize: 11, color: '#6b7280' }}
             />
             <Area
               type="monotone"
@@ -204,6 +251,7 @@ function AreaViz({
               fill={EMULATOR_CHART_COLORS[0]}
               fillOpacity={0.28}
               strokeWidth={2}
+              isAnimationActive={false}
             />
             <Area
               type="monotone"
@@ -212,34 +260,75 @@ function AreaViz({
               fill={EMULATOR_CHART_COLORS[1]}
               fillOpacity={0.28}
               strokeWidth={2}
+              isAnimationActive={false}
             />
           </AreaChart>
         </ResponsiveContainer>
+      </ChartShell>
+    </div>
+  );
+}
+
+type SchemaKpiVisuals = Extract<EmulatorTurn, { visuals: { kind: 'schema-kpi' } }>['visuals'];
+
+function SchemaKpiVisual({ visuals: v }: Readonly<{ visuals: SchemaKpiVisuals }>) {
+  return (
+    <div className="lpe-viz-grid">
+      <div className="lpe-viz-card">
+        <div className="lpe-section-label">{v.tableLabel}</div>
+        <table className="lpe-schema-table">
+          <thead>
+            <tr>
+              <th>Column</th>
+              <th>Type</th>
+            </tr>
+          </thead>
+          <tbody>
+            {v.columns.map((col) => (
+              <tr key={col.name}>
+                <td className="name">{col.name}</td>
+                <td className="type">{col.type}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="lpe-insight">{v.insight}</p>
+      </div>
+      <div className="lpe-viz-stack">
+        <KpiCard sectionLabel="VISIBILITY" label={v.kpiLabel} value={v.kpiValue} />
+        <VerticalBarChart data={v.bar} title={v.barTitle} />
       </div>
     </div>
   );
 }
 
 function TurnVisuals({ turn }: Readonly<{ turn: EmulatorTurn }>) {
-  if (turn.visuals.kind === 'donut-bar') {
+  const { visuals } = turn;
+  if (visuals.kind === 'donut-bar') {
     return (
       <div className="lpe-viz-grid">
-        <DonutChart data={turn.visuals.donut} title={turn.visuals.donutTitle} />
-        <VerticalBarChart data={turn.visuals.bar} title={turn.visuals.barTitle} />
+        <DonutChart data={visuals.donut} title={visuals.donutTitle} />
+        <VerticalBarChart data={visuals.bar} title={visuals.barTitle} />
       </div>
     );
+  }
+  if (visuals.kind === 'schema-kpi') {
+    return <SchemaKpiVisual visuals={visuals} />;
   }
   return (
     <div className="lpe-viz-grid">
       <KpiCard
-        sectionLabel={turn.visuals.sectionLabel}
-        label={turn.visuals.kpiLabel}
-        value={turn.visuals.kpiValue}
+        sectionLabel={visuals.sectionLabel}
+        label={visuals.kpiLabel}
+        value={visuals.kpiValue}
       />
-      <AreaViz title={turn.visuals.areaTitle} data={turn.visuals.area} />
+      <AreaViz title={visuals.areaTitle} data={visuals.area} />
     </div>
   );
 }
+
+/** Keep chart trees stable while assistant summary streams (avoids Recharts remount/blank). */
+const MemoTurnVisuals = memo(TurnVisuals);
 
 function AiAvatar() {
   return (
@@ -297,6 +386,74 @@ function ChevronIcon() {
   );
 }
 
+function LockIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="5" y="11" width="14" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M8 11V8a4 4 0 118 0v3"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function ChatNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M5 6.5A2.5 2.5 0 017.5 4h9A2.5 2.5 0 0119 6.5v7A2.5 2.5 0 0116.5 16H10l-4 3v-3.5A2.5 2.5 0 015 13.5v-7z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function DatasetNavIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M4 7h16M4 12h16M4 17h10"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function SettingsIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M12 3v2M12 19v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M3 12h2M19 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path
+        d="M20 12a8 8 0 11-2.3-5.6M20 4v5h-5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function AssistantBlock({
   turn,
   showMeta,
@@ -334,7 +491,7 @@ function AssistantBlock({
           </div>
         ) : null}
 
-        {showCharts ? <TurnVisuals turn={turn} /> : null}
+        {showCharts ? <MemoTurnVisuals turn={turn} /> : null}
 
         {'note' in turn && turn.note && showCharts ? (
           <p className="lpe-note lpe-fade-in">{turn.note}</p>
@@ -351,6 +508,19 @@ function AssistantBlock({
   );
 }
 
+function ThinkingBlock() {
+  return (
+    <div className="lpe-thinking" aria-hidden>
+      <div className="lpe-thinking-dots">
+        <span />
+        <span />
+        <span />
+      </div>
+      <span className="lpe-thinking-label">Analyzing workspace sources…</span>
+    </div>
+  );
+}
+
 export function LandingPlatformEmulator() {
   const rootRef = useRef<HTMLElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -361,8 +531,11 @@ export function LandingPlatformEmulator() {
   const [completed, setCompleted] = useState<CompletedTurn[]>([]);
   const [turnIndex, setTurnIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>('idle');
-  const [typedPrompt, setTypedPrompt] = useState('');
+  const [composerText, setComposerText] = useState('');
+  const [activePrompt, setActivePrompt] = useState('');
   const [streamedSummary, setStreamedSummary] = useState('');
+  const [sessionPulse, setSessionPulse] = useState(false);
+  const [headerRefreshing, setHeaderRefreshing] = useState(false);
 
   const clearTimers = () => {
     timersRef.current.forEach((id) => window.clearTimeout(id));
@@ -387,8 +560,11 @@ export function LandingPlatformEmulator() {
     setCompleted([]);
     setTurnIndex(0);
     setPhase('idle');
-    setTypedPrompt('');
+    setComposerText('');
+    setActivePrompt('');
     setStreamedSummary('');
+    setSessionPulse(false);
+    setHeaderRefreshing(false);
   };
 
   const showFinalState = () => {
@@ -403,7 +579,8 @@ export function LandingPlatformEmulator() {
     );
     setTurnIndex(EMULATOR_TURNS.length);
     setPhase('done');
-    setTypedPrompt('');
+    setComposerText('');
+    setActivePrompt('');
     setStreamedSummary('');
   };
 
@@ -413,9 +590,12 @@ export function LandingPlatformEmulator() {
       { turn, prompt: turn.prompt, summary: turn.summary },
     ];
     setCompleted(nextCompleted);
-    setTypedPrompt('');
+    setComposerText('');
+    setActivePrompt('');
     setStreamedSummary('');
     setPhase('done');
+    setSessionPulse(true);
+    schedule(() => setSessionPulse(false), 650);
     schedule(() => runTurn(index + 1, nextCompleted), EMULATOR_LOOP_PAUSE_MS);
   };
 
@@ -444,25 +624,45 @@ export function LandingPlatformEmulator() {
   const revealChartsThenStream = (index: number, prior: CompletedTurn[], turn: EmulatorTurn) => {
     if (!visibleRef.current) return;
     setPhase('charts');
+    setHeaderRefreshing(false);
     schedule(() => streamSummary(index, prior, turn), EMULATOR_CHARTS_DELAY_MS);
   };
 
-  const typePrompt = (index: number, prior: CompletedTurn[], turn: EmulatorTurn) => {
+  const startThinking = (index: number, prior: CompletedTurn[], turn: EmulatorTurn) => {
+    if (!visibleRef.current) return;
+    setPhase('thinking');
+    setHeaderRefreshing(true);
+    schedule(() => {
+      if (!visibleRef.current) return;
+      setPhase('meta');
+      schedule(() => revealChartsThenStream(index, prior, turn), EMULATOR_META_DELAY_MS);
+    }, EMULATOR_THINK_DELAY_MS);
+  };
+
+  const composePrompt = (index: number, prior: CompletedTurn[], turn: EmulatorTurn) => {
     let charIdx = 0;
+    setPhase('composing');
+    setComposerText('');
+    setActivePrompt('');
 
     const typeNext = () => {
       if (!visibleRef.current) return;
       charIdx += 1;
-      setTypedPrompt(turn.prompt.slice(0, charIdx));
+      setComposerText(turn.prompt.slice(0, charIdx));
       if (charIdx < turn.prompt.length) {
         schedule(typeNext, EMULATOR_TYPE_CHAR_MS);
         return;
       }
-      setPhase('meta');
-      schedule(() => revealChartsThenStream(index, prior, turn), EMULATOR_META_DELAY_MS);
+      setPhase('sending');
+      schedule(() => {
+        if (!visibleRef.current) return;
+        setComposerText('');
+        setActivePrompt(turn.prompt);
+        startThinking(index, prior, turn);
+      }, EMULATOR_SEND_FLASH_MS);
     };
 
-    schedule(typeNext, 280);
+    schedule(typeNext, 320);
   };
 
   const runTurn = (index: number, prior: CompletedTurn[]) => {
@@ -479,16 +679,16 @@ export function LandingPlatformEmulator() {
 
     runningRef.current = true;
     setTurnIndex(index);
-    setTypedPrompt('');
+    setComposerText('');
+    setActivePrompt('');
     setStreamedSummary('');
-    setPhase('typing');
 
     if (prefersReducedMotion()) {
       finishTurn(index, prior, turn);
       return;
     }
 
-    typePrompt(index, prior, turn);
+    composePrompt(index, prior, turn);
   };
 
   const startPlayback = () => {
@@ -500,7 +700,8 @@ export function LandingPlatformEmulator() {
     clearTimers();
     setCompleted([]);
     setTurnIndex(0);
-    setTypedPrompt('');
+    setComposerText('');
+    setActivePrompt('');
     setStreamedSummary('');
     runTurn(0, []);
   };
@@ -537,13 +738,58 @@ export function LandingPlatformEmulator() {
 
   useEffect(() => {
     scrollToBottom();
-  }, [completed, typedPrompt, streamedSummary, phase, turnIndex]);
+  }, [completed, composerText, activePrompt, streamedSummary, phase, turnIndex]);
 
   const activeTurn = turnIndex < EMULATOR_TURNS.length ? EMULATOR_TURNS[turnIndex] : null;
-  const showActiveUser = Boolean(activeTurn && phase !== 'idle' && phase !== 'done' && typedPrompt);
+  const showActiveUser = Boolean(
+    activeTurn &&
+    activePrompt &&
+    (phase === 'thinking' ||
+      phase === 'meta' ||
+      phase === 'charts' ||
+      phase === 'streaming' ||
+      phase === 'sending'),
+  );
+  const showThinking = Boolean(activeTurn && phase === 'thinking');
   const showActiveAssistant = Boolean(
     activeTurn && (phase === 'meta' || phase === 'charts' || phase === 'streaming'),
   );
+
+  const sidebarSessions = useMemo(() => {
+    const live =
+      activeTurn && (phase === 'composing' || phase === 'sending' || showActiveUser)
+        ? [
+            {
+              id: activeTurn.id,
+              title: truncateTitle(activeTurn.sessionTitle || activeTurn.prompt),
+              active: true,
+            },
+          ]
+        : completed.length
+          ? [
+              {
+                id: completed[completed.length - 1].turn.id,
+                title: truncateTitle(
+                  completed[completed.length - 1].turn.sessionTitle ||
+                    completed[completed.length - 1].prompt,
+                ),
+                active: true,
+              },
+            ]
+          : [];
+
+    const seeds = EMULATOR_SIDEBAR_SESSIONS.filter(
+      (title) => !live.some((s) => s.title.startsWith(title.slice(0, 18))),
+    ).map((title, i) => ({
+      id: `seed-${i}`,
+      title: truncateTitle(title),
+      active: false,
+    }));
+
+    return [...live, ...seeds].slice(0, 5);
+  }, [activeTurn, phase, showActiveUser, completed]);
+
+  const composerDisplay = phase === 'composing' || phase === 'sending' ? composerText : '';
 
   return (
     <section className="landing-section landing-emulator" id="demo" ref={rootRef}>
@@ -556,87 +802,197 @@ export function LandingPlatformEmulator() {
           <h2>Ask once. Get the number, the chart, and the why.</h2>
           <p>
             Watch Beleh turn a plain-English question into execution stats, visuals, and a clear
-            answer the same flow you get inside the product.
+            answer — the same flow you get inside the product.
           </p>
         </div>
+      </div>
 
-        <div className="lpe-frame landing-reveal" aria-label="Beleh platform emulator">
-          <div className="lpe-scroll" ref={scrollRef}>
-            {completed.map((item) => (
-              <div key={item.turn.id} className="lpe-turn">
-                <div className="lpe-user-row">
-                  <div className="lpe-user-meta">
-                    <div className="lpe-user-bubble">{item.prompt}</div>
-                    <span className="lpe-user-time">{item.turn.userTime}</span>
-                  </div>
-                  <div className="lpe-avatar user" aria-hidden>
-                    {item.turn.userInitials}
-                  </div>
-                </div>
-                <AssistantBlock
-                  turn={item.turn}
-                  showMeta
-                  showCharts
-                  summaryText={item.summary}
-                  streaming={false}
-                />
-              </div>
-            ))}
-
-            {showActiveUser && activeTurn ? (
-              <div className="lpe-user-row">
-                <div className="lpe-user-meta">
-                  <div className="lpe-user-bubble">
-                    {typedPrompt}
-                    {phase === 'typing' ? <span className="lpe-cursor" aria-hidden /> : null}
-                  </div>
-                  {phase !== 'typing' ? (
-                    <span className="lpe-user-time">{activeTurn.userTime}</span>
-                  ) : null}
-                </div>
-                <div className="lpe-avatar user" aria-hidden>
-                  {activeTurn.userInitials}
-                </div>
-              </div>
-            ) : null}
-
-            {showActiveAssistant && activeTurn ? (
-              <AssistantBlock
-                turn={activeTurn}
-                showMeta={phase === 'meta' || phase === 'charts' || phase === 'streaming'}
-                showCharts={phase === 'charts' || phase === 'streaming'}
-                summaryText={streamedSummary}
-                streaming={phase === 'streaming'}
-              />
-            ) : null}
+      <div
+        className="lpe-browser landing-reveal"
+        aria-label="Beleh workspace running in a browser window"
+      >
+        <div className="lpe-chrome" aria-hidden>
+          <div className="lpe-traffic">
+            <span className="close" />
+            <span className="min" />
+            <span className="max" />
           </div>
+          <div className="lpe-urlbar">
+            <LockIcon />
+            <span className="lpe-urlbar-text">
+              <em>https://</em>
+              {EMULATOR_DEMO_URL}
+            </span>
+          </div>
+          <div className="lpe-chrome-actions">
+            <span />
+            <span />
+            <span />
+          </div>
+        </div>
 
-          <div className="lpe-tip">TIP: SELECT A DATABASE FOR DEEP ANALYSIS</div>
-
-          <div className="lpe-composer" aria-hidden>
-            <div className="lpe-composer-placeholder">
-              Ask Beleh AI Analyst to query schemas, calculate savings, or produce charts...
+        <div className="lpe-app">
+          <aside className="lpe-sidebar" aria-hidden>
+            <div className="lpe-side-brand">
+              <div className="lpe-side-brand-row">
+                <img src={logoImage} alt="" className="lpe-side-logo" />
+                <span className="lpe-side-pill">Workspace</span>
+              </div>
+              <p className="lpe-side-tagline">Ask. Analyze. Decide.</p>
             </div>
-            <div className="lpe-composer-bar">
-              <div className="lpe-composer-left">
-                <span className="lpe-chip">
+
+            <div className="lpe-side-region">
+              <div className="lpe-side-region-label">Active region</div>
+              <div className="lpe-side-region-value">
+                My Workspace
+                <ChevronIcon />
+              </div>
+            </div>
+
+            <div className="lpe-side-nav">
+              <div className="lpe-side-nav-item active">
+                <ChatNavIcon />
+                Chat
+              </div>
+              <div className="lpe-side-nav-item">
+                <DatasetNavIcon />
+                Data sources
+              </div>
+            </div>
+
+            <div className="lpe-side-sessions">
+              <div className="lpe-side-sessions-label">Recent chats</div>
+              {sidebarSessions.map((session) => (
+                <div
+                  key={session.id}
+                  className={`lpe-side-session${session.active ? ' active' : ''}${
+                    session.active && sessionPulse ? ' pulse' : ''
+                  }`}
+                >
+                  {session.title}
+                </div>
+              ))}
+            </div>
+
+            <div className="lpe-side-foot">
+              <div className="lpe-side-settings">
+                <SettingsIcon />
+                Settings
+              </div>
+              <div className="lpe-side-user">
+                <div className="lpe-side-user-avatar">JD</div>
+                <div className="lpe-side-user-meta">
+                  <div className="lpe-side-user-name">Jone Deo</div>
+                  <div className="lpe-side-user-email">jone@beleh.ai</div>
+                </div>
+                <span className="lpe-side-plan">STANDARD</span>
+              </div>
+            </div>
+          </aside>
+
+          <div className="lpe-main">
+            <div className="lpe-topbar" aria-hidden>
+              <div className="lpe-topbar-left">
+                <span className="lpe-topbar-source">
                   <DbIcon />
                   All sources
                   <ChevronIcon />
                 </span>
-                <span className="lpe-chip">
-                  <DbIcon />
-                  CONNECT DB
+                <span className="lpe-topbar-status">
+                  No datasource selected · analyzing all workspace sources
                 </span>
               </div>
-              <div className="lpe-send">
-                <SendIcon />
+              <div className="lpe-topbar-right">
+                <div className="lpe-cluster">
+                  Cluster status
+                  <br />
+                  <strong>Standby // All sources</strong>
+                </div>
+                <div className={`lpe-topbar-icon${headerRefreshing ? ' spinning' : ''}`}>
+                  <RefreshIcon />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="lpe-footer">
-            Powered by Beleh Analytical Engine v0.1.0 // compliance guidelines applied.
+            <div className="lpe-scroll" ref={scrollRef}>
+              {completed.map((item) => (
+                <div key={item.turn.id} className="lpe-turn">
+                  <div className="lpe-user-row">
+                    <div className="lpe-user-meta">
+                      <div className="lpe-user-bubble">{item.prompt}</div>
+                      <span className="lpe-user-time">{item.turn.userTime}</span>
+                    </div>
+                    <div className="lpe-avatar user" aria-hidden>
+                      {item.turn.userInitials}
+                    </div>
+                  </div>
+                  <AssistantBlock
+                    turn={item.turn}
+                    showMeta
+                    showCharts
+                    summaryText={item.summary}
+                    streaming={false}
+                  />
+                </div>
+              ))}
+
+              {showActiveUser && activeTurn ? (
+                <div className="lpe-user-row lpe-fade-in">
+                  <div className="lpe-user-meta">
+                    <div className="lpe-user-bubble">{activePrompt}</div>
+                    <span className="lpe-user-time">{activeTurn.userTime}</span>
+                  </div>
+                  <div className="lpe-avatar user" aria-hidden>
+                    {activeTurn.userInitials}
+                  </div>
+                </div>
+              ) : null}
+
+              {showThinking ? <ThinkingBlock /> : null}
+
+              {showActiveAssistant && activeTurn ? (
+                <AssistantBlock
+                  turn={activeTurn}
+                  showMeta={phase === 'meta' || phase === 'charts' || phase === 'streaming'}
+                  showCharts={phase === 'charts' || phase === 'streaming'}
+                  summaryText={streamedSummary}
+                  streaming={phase === 'streaming'}
+                />
+              ) : null}
+            </div>
+
+            <div className="lpe-tip">TIP: SELECT A DATABASE FOR DEEP ANALYSIS</div>
+
+            <div className={`lpe-composer${phase === 'sending' ? ' sending' : ''}`} aria-hidden>
+              <div className={`lpe-composer-placeholder${composerDisplay ? ' has-text' : ''}`}>
+                {composerDisplay || 'Ask about revenue, customers, trends, or performance...'}
+                {phase === 'composing' ? <span className="lpe-cursor" aria-hidden /> : null}
+              </div>
+              <div className="lpe-composer-bar">
+                <div className="lpe-composer-left">
+                  <span className="lpe-chip">
+                    <DbIcon />
+                    All sources
+                    <ChevronIcon />
+                  </span>
+                  <span className="lpe-chip">
+                    <DbIcon />
+                    CONNECT DB
+                  </span>
+                </div>
+                <div className={`lpe-send${phase === 'sending' ? ' active' : ''}`}>
+                  <SendIcon />
+                </div>
+              </div>
+            </div>
+
+            <div className="lpe-footer">
+              Powered by Beleh Analytical Engine v0.1.0 // compliance guidelines applied.
+            </div>
+
+            <div className="lpe-help-fab" aria-hidden>
+              ?
+            </div>
           </div>
         </div>
       </div>

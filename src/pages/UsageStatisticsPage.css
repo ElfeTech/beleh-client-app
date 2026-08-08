@@ -184,6 +184,15 @@ html[data-theme='dark'] .stat-card:hover {
   line-height: 1.1;
 }
 
+.stat-detail {
+  display: block;
+  margin-top: var(--space-2);
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
 .charts-layout {
   display: grid;
   grid-template-columns: 2fr 1fr;

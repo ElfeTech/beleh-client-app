@@ -5,6 +5,8 @@ import { useAuth } from '../context/useAuth';
 import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
 import { DatasetPreviewGrid } from '../components/datasets/DatasetPreviewGrid';
 import type { DatasetTable, DatasetTablePreviewResponse } from '../types/api';
+import { useUiMemory } from '../hooks/useUiMemory';
+import { UI_KEYS, type UiMemoryScope } from '../lib/uiMemory';
 import './DatasetPreviewPage.css';
 
 export const DatasetPreviewPage: React.FC = () => {
@@ -22,7 +24,13 @@ export const DatasetPreviewPage: React.FC = () => {
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
+  const previewSizeScope: UiMemoryScope | null = user?.uid ? { kind: 'user', uid: user.uid } : null;
+  const [pageSize, setPageSizeRaw] = useUiMemory(
+    previewSizeScope,
+    UI_KEYS.datasetPreviewPageSize,
+    10,
+  );
+  const setPageSize = (n: number) => setPageSizeRaw(n);
   const [showTableActionSheet, setShowTableActionSheet] = useState(false);
 
   const isInitialLoadRef = useRef(true);
