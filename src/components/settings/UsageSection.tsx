@@ -6,7 +6,6 @@ import { useUsage } from '../../context/UsageContext';
 import { useAuth } from '../../context/useAuth';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { apiClient } from '../../services/apiClient';
-import { QuotaUsageGrid } from '../usage/QuotaUsageGrid';
 import type { BillingCatalogPlan, BillingPrice, BillingSubscription } from '../../types/billing';
 import { ApiRequestError, formatBillingErrorToast } from '../../utils/apiErrorMessage';
 import {
@@ -305,7 +304,6 @@ export function UsageSection() {
     usagePlan?.id,
     usagePlan?.tier,
   );
-  const meterPlanLimits = activeCatalogPlan?.limits ?? usagePlan?.limits ?? null;
   const planName = subscription?.plan?.name ?? activeCatalogPlan?.name ?? usagePlan?.name ?? 'Free';
   const planDescription =
     activeCatalogPlan?.description ??
@@ -331,10 +329,16 @@ export function UsageSection() {
   const daysLeft = isOnTrial ? trialDaysLeft(trialEndIso) : null;
   const cancelAtPeriodEnd = Boolean(subscription?.cancel_at_period_end);
   const hasStripeSub = Boolean(subscription?.stripe_subscription_id);
-  // App free-trial users still report a paid entitlement plan_id/tier — do not treat that as
+  const isFreePlanTier = [workspaceUsage?.plan_tier, usagePlan?.tier, subscription?.plan?.tier].some(
+    (tier) => typeof tier === 'string' && tier.toLowerCase().includes('free'),
+  );
+  // Free / trial users still report a paid entitlement plan_id/tier — do not treat that as
   // a paid subscription for CTAs, or checkout stays disabled as "Currently active plan".
   const hasPaidCurrentPlan =
-    !isOnTrial && hasStripeSub && (status === 'active' || status === 'past_due');
+    !isOnTrial &&
+    !isFreePlanTier &&
+    hasStripeSub &&
+    (status === 'active' || status === 'past_due');
   const currentPlanIndex = hasPaidCurrentPlan
     ? catalogPlanIndex(catalogPlans, subscription, usagePlan?.id, usagePlan?.tier)
     : -1;
@@ -449,15 +453,6 @@ export function UsageSection() {
             </button>
           </div>
         )}
-      </section>
-
-      <section className="billing-section">
-        <h3 className="billing-section__title">
-          <Check size={16} strokeWidth={2.5} aria-hidden />
-          Plan includes &amp; usage tracker
-        </h3>
-
-        <QuotaUsageGrid mode="personal" planLimits={meterPlanLimits} />
       </section>
 
       <section className="billing-section" ref={plansSectionRef} id="billing-plans">
