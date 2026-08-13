@@ -23,7 +23,9 @@ import { BillingSuccessPage } from './pages/BillingSuccessPage';
 import { ProviderOAuthCallback } from './pages/ProviderOAuthCallback';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ServerErrorPage } from './pages/ServerErrorPage';
+import { LegalPage } from './pages/LegalPage';
 import { MainLayout } from './components/layout/MainLayout';
+import { RequireWorkspaceSources } from './components/routing/RequireWorkspaceSources';
 import FeedbackModal from './components/common/FeedbackModal';
 import { ClarityInit } from './components/analytics/ClarityInit';
 import { GoogleAnalyticsInit } from './components/analytics/GoogleAnalyticsInit';
@@ -67,6 +69,8 @@ function App() {
                         <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
                         <Route path="/auth/provider/callback" element={<ProviderOAuthCallback />} />
                         <Route path="/error" element={<ServerErrorPage />} />
+                        <Route path="/legal" element={<Navigate to="/legal/terms" replace />} />
+                        <Route path="/legal/:slug" element={<LegalPage />} />
 
                         {/* All other app routes require session validation */}
                         <Route
@@ -77,10 +81,21 @@ function App() {
                           }
                         >
                           <Route path="/workspace/:id" element={<Workspace />} />
-                          <Route path="/workspace/:id/datasets" element={<DatasetsPage />} />
+                          <Route
+                            path="/workspace/:id/datasets"
+                            element={
+                              <RequireWorkspaceSources>
+                                <DatasetsPage />
+                              </RequireWorkspaceSources>
+                            }
+                          />
                           <Route
                             path="/workspace/:id/datasets/:datasetId/preview"
-                            element={<DatasetPreviewPage />}
+                            element={
+                              <RequireWorkspaceSources>
+                                <DatasetPreviewPage />
+                              </RequireWorkspaceSources>
+                            }
                           />
                           <Route
                             path="/workspace/:id/sessions"

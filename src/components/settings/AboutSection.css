@@ -179,6 +179,37 @@ html[data-theme='dark'] .mission-quote-mark {
   color: var(--text-muted);
 }
 
+.legal-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.legal-back-btn {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--primary-600);
+  cursor: pointer;
+}
+
+.legal-back-btn:hover {
+  text-decoration: underline;
+}
+
+.legal-public-link {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.legal-public-link a {
+  color: var(--primary-600);
+}
+
 .social-section h3 {
   margin: 0 0 var(--space-3);
   font-size: var(--text-sm);
@@ -202,6 +233,8 @@ html[data-theme='dark'] .mission-quote-mark {
   background: var(--panel-bg);
   cursor: pointer;
   text-align: left;
+  text-decoration: none;
+  color: inherit;
 }
 
 .social-icon {

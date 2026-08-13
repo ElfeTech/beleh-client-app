@@ -59,6 +59,7 @@ import {
   extractApiErrorCode,
   extractQuotaExceededDetail,
   formatApiErrorMessage,
+  isAbortError,
   QuotaExceededError,
 } from '../utils/apiErrorMessage';
 import type {
@@ -246,6 +247,9 @@ class APIClient {
       const data = await response.json();
       return data;
     } catch (error) {
+      if (isAbortError(error) || options.signal?.aborted) {
+        throw error;
+      }
       console.error('[API] Request failed:', error);
       throw error;
     }
@@ -1164,11 +1168,15 @@ class APIClient {
     tableName: string,
     page: number = 1,
     pageSize: number = 50,
+    search?: string,
+    signal?: AbortSignal,
   ): Promise<DatasetTablePreviewResponse> {
     const queryParams = new URLSearchParams({
       page: page.toString(),
       page_size: pageSize.toString(),
     });
+    const q = search?.trim();
+    if (q) queryParams.set('search', q.slice(0, 200));
 
     return this.request<DatasetTablePreviewResponse>(
       `/api/datasets/${datasetId}/tables/${encodeURIComponent(tableName)}/preview?${queryParams.toString()}`,
@@ -1177,6 +1185,7 @@ class APIClient {
         headers: {
           Authorization: `Bearer ${authToken}`,
         },
+        signal,
       },
     );
   }
@@ -1188,11 +1197,15 @@ class APIClient {
     tableName: string,
     page: number = 1,
     pageSize: number = 50,
+    search?: string,
+    signal?: AbortSignal,
   ): Promise<DatasetTablePreviewResponse> {
     const queryParams = new URLSearchParams({
       page: page.toString(),
       page_size: pageSize.toString(),
     });
+    const q = search?.trim();
+    if (q) queryParams.set('search', q.slice(0, 200));
 
     return this.request<DatasetTablePreviewResponse>(
       `/api/connectors/workspaces/${encodeURIComponent(workspaceId)}/${encodeURIComponent(connectorId)}/tables/${encodeURIComponent(tableName)}/preview?${queryParams.toString()}`,
@@ -1201,6 +1214,7 @@ class APIClient {
         headers: {
           Authorization: `Bearer ${authToken}`,
         },
+        signal,
       },
     );
   }

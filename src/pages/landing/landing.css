@@ -1360,6 +1360,34 @@ html[data-landing-theme='light'] .landing-btn-ghost-dark.landing-pricing-card__c
   margin-bottom: 12px;
 }
 
+.landing-foot-socials {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.landing-foot-socials a {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-dark);
+  border-radius: 8px;
+  color: var(--tx-70, #cbd5e1);
+}
+
+.landing-foot-socials a:hover {
+  color: var(--tx-100, #f8fafc);
+  border-color: var(--tx-35, #64748b);
+}
+
+.landing-foot-socials svg {
+  width: 16px;
+  height: 16px;
+}
+
 .landing-foot-brand p {
   font-size: 13.5px;
   max-width: 260px;

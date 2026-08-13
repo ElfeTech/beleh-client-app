@@ -16,6 +16,7 @@ import { useUsage } from '../context/UsageContext';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAuth } from '../context/useAuth';
 import {
+  BILLING_UPGRADE_HREF,
   canShowWorkspaceUpgradeCta,
   isUnlimitedLimit,
   PLAN_MANAGED_BY_OWNER_COPY,
@@ -426,7 +427,7 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
                       <button
                         type="button"
                         className="px-6 py-2.5 rounded-xl bg-[color:var(--accent-teal-600)] text-white font-bold text-xs uppercase tracking-widest shadow-md hover:opacity-90 transition-all active:scale-[0.98]"
-                        onClick={() => navigate('/settings/billing?upgrade=1')}
+                        onClick={() => navigate(BILLING_UPGRADE_HREF)}
                       >
                         Upgrade Capacity
                       </button>

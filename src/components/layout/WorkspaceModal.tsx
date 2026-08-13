@@ -5,6 +5,7 @@ import { useAuth } from '../../context/useAuth';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { apiClient } from '../../services/apiClient';
 import {
+  BILLING_UPGRADE_HREF,
   canShowWorkspaceUpgradeCta,
   isWorkspacesAtLimit,
   workspaceLimitUpgradeMessage,
@@ -92,7 +93,7 @@ export function WorkspaceModal({ onClose, onSuccess }: WorkspaceModalProps) {
             <div className="form-error">
               {workspaceLimitUpgradeMessage(currentRole, 'workspaces')}{' '}
               {canShowWorkspaceUpgradeCta(currentRole) && (
-                <Link to="/settings/billing?upgrade=1">Upgrade</Link>
+                <Link to={BILLING_UPGRADE_HREF}>Upgrade</Link>
               )}
             </div>
           )}

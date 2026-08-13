@@ -30,11 +30,13 @@ import { ApiRequestError, isQuotaExceededError } from '../../utils/apiErrorMessa
 import { formatQuotaExceededAction, formatQuotaExceededMessage } from '../../utils/quotaExceededUi';
 import { formatQuotaResetAt } from '../../utils/formatters';
 import {
+  BILLING_UPGRADE_HREF,
   canSendChat,
   canShowWorkspaceUpgradeCta,
   getChatQuotaBlockReason,
   isDatasourcesAtLimit,
   isUsageSoftWarn,
+  normalizeBillingUpgradeHref,
   PLAN_LIMIT_REACHED_TOOLTIP,
   PLAN_MANAGED_BY_OWNER_COPY,
   workspaceLimitUpgradeMessage,
@@ -130,8 +132,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   const sourceRequiredForChat = isFreePlanUser && !workspaceLoading && !hasWorkspaceSources;
   const showUpgrade = canShowWorkspaceUpgradeCta(currentRole);
   /** Always land on billing plans grid (query + hash) — do not use backend upgrade_url for in-app CTA. */
-  const billingUpgradeHref = '/settings/billing?upgrade=1#billing-plans';
-  const upgradeHref = workspaceUsage?.upgrade_url?.trim() || billingUpgradeHref;
+  const billingUpgradeHref = BILLING_UPGRADE_HREF;
+  const upgradeHref = normalizeBillingUpgradeHref(
+    workspaceUsage?.upgrade_url?.trim() || billingUpgradeHref,
+  );
   const dailyResetLabel = formatQuotaResetAt(workspaceUsage?.daily_reset_at);
 
   const chatLockBanner = useMemo(() => {
@@ -602,7 +606,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                 ? {
                     label: 'Upgrade',
                     onClick: () => {
-                      window.location.assign('/settings/billing?upgrade=1');
+                      window.location.assign(BILLING_UPGRADE_HREF);
                     },
                   }
                 : undefined,

@@ -382,23 +382,24 @@ export function WorkspacesPage() {
                         {workspace.is_default && (
                           <span className="workspace-default-badge">Default</span>
                         )}
-                        {isActive && (
-                          <span className="workspace-ownership-badge workspace-ownership-badge--owned">
-                            Active
+                        {isActive ? (
+                          <span className="workspace-ownership-badge workspace-ownership-badge--current">
+                            Current
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <p className="ws-settings-row__desc">{workspaceDescription(workspace)}</p>
                     </div>
                     <div className="ws-settings-row__actions">
-                      <button
-                        type="button"
-                        className="ws-settings-switch-btn"
-                        disabled={isActive}
-                        onClick={() => handleSwitchWorkspace(workspace)}
-                      >
-                        {isActive ? 'Current' : 'Switch'}
-                      </button>
+                      {!isActive ? (
+                        <button
+                          type="button"
+                          className="ws-settings-switch-btn"
+                          onClick={() => handleSwitchWorkspace(workspace)}
+                        >
+                          Switch
+                        </button>
+                      ) : null}
                       <button
                         type="button"
                         className="ws-settings-reindex-btn"

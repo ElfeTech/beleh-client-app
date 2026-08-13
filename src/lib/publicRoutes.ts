@@ -12,7 +12,7 @@ export const PUBLIC_EXACT_PATHS = new Set([
 ]);
 
 /** Prefixes that remain public (OAuth / provider callbacks). */
-export const PUBLIC_PATH_PREFIXES = ['/auth/'] as const;
+export const PUBLIC_PATH_PREFIXES = ['/auth/', '/legal'] as const;
 
 export function isPublicPath(pathname: string): boolean {
   const path = pathname.split('?')[0] || '/';

@@ -1,3 +1,5 @@
+import type { LucideIcon } from 'lucide-react';
+import { Braces, Database, FileSpreadsheet, FileText, Layers, Table2 } from 'lucide-react';
 import type { ConnectorResponse, DataSourceResponse } from '../types/api';
 
 export function formatSourceType(ds: DataSourceResponse): string {
@@ -7,6 +9,38 @@ export function formatSourceType(ds: DataSourceResponse): string {
   if (raw.includes('CSV')) return 'CSV';
   if (raw.includes('MONGO')) return 'MONGODB';
   return raw.replace(/\s+/g, '_').slice(0, 16);
+}
+
+export function getSourceTypeIcon(options: {
+  kind?: 'datasource' | 'connector' | 'general';
+  type?: string | null;
+  mimeType?: string | null;
+}): LucideIcon {
+  if (!options.kind || options.kind === 'general') return Layers;
+  if (options.kind === 'connector') return Database;
+  const raw = `${options.type ?? ''} ${options.mimeType ?? ''}`.toUpperCase();
+  if (raw.includes('POSTGRES') || raw.includes('SQL') || raw.includes('MONGO')) return Database;
+  if (raw.includes('EXCEL') || raw.includes('SPREADSHEET') || raw.includes('XLSX')) {
+    return FileSpreadsheet;
+  }
+  if (raw.includes('CSV')) return Table2;
+  if (raw.includes('JSON')) return Braces;
+  return FileText;
+}
+
+export function getSelectedSourceIcon(
+  selectedDatasourceId: string | null,
+  datasources: DataSourceResponse[],
+  connectors: ConnectorResponse[] = [],
+): LucideIcon {
+  if (!selectedDatasourceId) return Layers;
+  const ds = datasources.find((d) => d.id === selectedDatasourceId);
+  if (ds) {
+    return getSourceTypeIcon({ kind: 'datasource', type: ds.type, mimeType: ds.mime_type });
+  }
+  const connector = connectors.find((c) => c.id === selectedDatasourceId);
+  if (connector) return getSourceTypeIcon({ kind: 'connector', type: connector.type });
+  return Layers;
 }
 
 export type WorkspaceSourceKind = 'general' | 'datasource' | 'connector';

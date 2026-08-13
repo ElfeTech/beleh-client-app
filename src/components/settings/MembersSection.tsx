@@ -16,6 +16,7 @@ import { useWorkspace } from '../../context/WorkspaceContext';
 import { apiClient } from '../../services/apiClient';
 import type { WorkspaceInvitation, WorkspaceMember, WorkspaceRole } from '../../types/api';
 import {
+  BILLING_UPGRADE_HREF,
   canManageMembers,
   canShowWorkspaceUpgradeCta,
   isSeatsAtLimit,
@@ -528,7 +529,7 @@ export function MembersSection() {
             {showUpgrade ? (
               <>
                 {' '}
-                <Link to="/settings/billing?upgrade=1">Upgrade your plan</Link>.
+                <Link to={BILLING_UPGRADE_HREF}>Upgrade your plan</Link>.
               </>
             ) : null}
           </p>

@@ -98,7 +98,9 @@
     --btn-secondary-bg: #ffffff;
     --btn-secondary-hover: #f8fafc;
     --btn-secondary-text: #334155;
-    --btn-secondary-border: #e2e8f0;
+    --btn-secondary-border: #cbd5e1;
+    --btn-secondary-shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 1px 3px rgba(15, 23, 42, 0.08);
+    --btn-secondary-shadow-hover: 0 2px 4px rgba(15, 23, 42, 0.08), 0 4px 8px rgba(15, 23, 42, 0.06);
     --btn-gradient-start: #00a3ff;
     --btn-gradient-mid: #38bdf8;
     --btn-gradient-end: #00d1b2;
@@ -167,7 +169,9 @@
     --btn-secondary-bg: #0f172a;
     --btn-secondary-hover: #1e293b;
     --btn-secondary-text: #e2e8f0;
-    --btn-secondary-border: #334155;
+    --btn-secondary-border: #475569;
+    --btn-secondary-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+    --btn-secondary-shadow-hover: 0 2px 4px rgba(0, 0, 0, 0.4), 0 4px 10px rgba(0, 0, 0, 0.3);
     --btn-gradient-start: #38bdf8;
     --btn-gradient-mid: #2dd4bf;
     --btn-gradient-end: #14b8a6;
@@ -924,10 +928,13 @@
   background: var(--btn-secondary-bg);
   color: var(--btn-secondary-text);
   border: 1px solid var(--btn-secondary-border);
+  box-shadow: var(--btn-secondary-shadow);
 }
 
 .secondary-btn:hover:not(:disabled) {
   background: var(--btn-secondary-hover);
+  border-color: color-mix(in srgb, var(--btn-secondary-border) 70%, var(--btn-secondary-text));
+  box-shadow: var(--btn-secondary-shadow-hover);
 }
 
 .modal-actions {
