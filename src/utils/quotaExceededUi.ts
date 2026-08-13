@@ -1,6 +1,6 @@
 import type { QuotaLimitType, WorkspaceRole } from '../types/api';
 import { formatQuotaResetAt, formatQuotaResetDate } from './formatters';
-import { canShowWorkspaceUpgradeCta, PLAN_MANAGED_BY_OWNER_COPY } from './workspaceAccess';
+import { canShowWorkspaceUpgradeCta, normalizeBillingUpgradeHref, PLAN_MANAGED_BY_OWNER_COPY } from './workspaceAccess';
 import type { QuotaExceededError } from './apiErrorMessage';
 
 export type QuotaExceededCta = {
@@ -21,7 +21,7 @@ export function formatQuotaExceededAction(
   },
 ): QuotaExceededCta {
   const canUpgrade = canShowWorkspaceUpgradeCta(role);
-  const billingHref = options?.upgradeUrl?.trim() || '/settings/billing?upgrade=1';
+  const billingHref = normalizeBillingUpgradeHref(options?.upgradeUrl?.trim());
   const datasetsHref = options?.workspaceId
     ? `/workspace/${options.workspaceId}/datasets`
     : '/datasets';

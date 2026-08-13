@@ -1,18 +1,17 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Check,
   ChevronDown,
   ChevronUp,
   Download,
-  Eye,
   Maximize2,
   Search,
-  Terminal,
 } from 'lucide-react';
 import type { DatasetTablePreviewResponse } from '../../types/api';
 import './DatasetPreviewGrid.css';
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+const SEARCH_DEBOUNCE_MS = 300;
 
 function formatCellValue(value: unknown): string {
   if (value === null || value === undefined) return 'NULL';
@@ -54,6 +53,10 @@ export interface DatasetPreviewGridProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
+  /** Server-side search query currently applied to the preview fetch. */
+  searchQuery?: string;
+  /** Called with debounced search text; parent should refetch and reset page. */
+  onSearchChange?: (query: string) => void;
   syncVerified?: boolean;
   embedded?: boolean;
   onExpand?: () => void;
@@ -69,27 +72,39 @@ export const DatasetPreviewGrid: React.FC<DatasetPreviewGridProps> = ({
   pageSize,
   onPageChange,
   onPageSizeChange,
+  searchQuery = '',
+  onSearchChange,
   syncVerified = true,
   embedded = false,
   onExpand,
 }) => {
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchInput, setSearchInput] = useState(searchQuery);
   const [sortCol, setSortCol] = useState<number | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  useEffect(() => {
+    setSearchInput(searchQuery);
+  }, [searchQuery, tableName]);
+
+  useEffect(() => {
+    if (!onSearchChange) return;
+    const handle = window.setTimeout(() => {
+      const next = searchInput.trim();
+      const current = searchQuery.trim();
+      if (next === current) return;
+      onSearchChange(next);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [searchInput, searchQuery, onSearchChange]);
 
   const columns = preview?.columns ?? [];
   const rawRows = preview?.rows ?? [];
   const totalRows = preview?.total_rows ?? estimatedRows;
   const totalPages = preview?.total_pages ?? 1;
+  const activeSearch = searchQuery.trim();
 
-  const filteredRows = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+  const displayRows = useMemo(() => {
     let rows = rawRows.map((row, i) => ({ row, index: i }));
-    if (q) {
-      rows = rows.filter(({ row }) =>
-        row.some((cell) => formatCellValue(cell).toLowerCase().includes(q)),
-      );
-    }
     if (sortCol !== null) {
       rows = [...rows].sort((a, b) => {
         const av = formatCellValue(a.row[sortCol]);
@@ -99,13 +114,13 @@ export const DatasetPreviewGrid: React.FC<DatasetPreviewGridProps> = ({
       });
     }
     return rows;
-  }, [rawRows, searchQuery, sortCol, sortDir]);
+  }, [rawRows, sortCol, sortDir]);
 
   const pageStart = totalRows === 0 ? 0 : (page - 1) * pageSize + 1;
   const displayEnd = totalRows === 0 ? 0 : Math.min(page * pageSize, totalRows);
-  const showingStart = filteredRows.length === 0 ? 0 : pageStart;
+  const showingStart = displayRows.length === 0 ? 0 : pageStart;
   const showingEnd =
-    filteredRows.length === 0 ? 0 : Math.min(pageStart + filteredRows.length - 1, displayEnd);
+    displayRows.length === 0 ? 0 : Math.min(pageStart + displayRows.length - 1, displayEnd);
 
   const toggleSort = (colIndex: number) => {
     if (sortCol === colIndex) {
@@ -144,23 +159,6 @@ export const DatasetPreviewGrid: React.FC<DatasetPreviewGridProps> = ({
           <button
             type="button"
             className="dataset-preview-grid__tool-btn"
-            disabled
-            title="Coming soon"
-          >
-            <Terminal size={14} aria-hidden />
-            Columns
-          </button>
-          <button
-            type="button"
-            className="dataset-preview-grid__tool-btn dataset-preview-grid__tool-btn--active"
-            aria-pressed
-          >
-            <Eye size={14} aria-hidden />
-            Grid View
-          </button>
-          <button
-            type="button"
-            className="dataset-preview-grid__tool-btn"
             disabled={!preview || rawRows.length === 0}
             onClick={() => preview && downloadCsv(tableName, columns, rawRows)}
             title="Download current page as CSV"
@@ -188,19 +186,20 @@ export const DatasetPreviewGrid: React.FC<DatasetPreviewGridProps> = ({
           <input
             type="search"
             className="dataset-preview-grid__search-input"
-            placeholder="Search rows in preview grid..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            aria-label="Search rows in preview"
+            placeholder="Search all rows…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            aria-label="Search all rows in table"
+            disabled={!onSearchChange}
           />
         </div>
         <span className="dataset-preview-grid__range">
           Showing {showingStart} - {showingEnd} of {totalRows.toLocaleString()} rows
-          {searchQuery.trim() ? ` (${filteredRows.length} on page match)` : ''}
+          {activeSearch ? ' matching search' : ''}
         </span>
       </div>
 
-      {loading ? (
+      {loading && !preview ? (
         <div className="dataset-preview-grid__loading" aria-busy>
           {[1, 2, 3, 4, 5].map((i) => (
             <div key={i} className="dataset-preview-grid__skeleton-row" />
@@ -209,7 +208,7 @@ export const DatasetPreviewGrid: React.FC<DatasetPreviewGridProps> = ({
       ) : !preview || columns.length === 0 ? (
         <div className="dataset-preview-grid__empty">No preview data available.</div>
       ) : (
-        <div className="dataset-preview-grid__table-wrap">
+        <div className="dataset-preview-grid__table-wrap" aria-busy={loading}>
           <table className="dataset-preview-grid__table">
             <thead>
               <tr>
@@ -241,14 +240,14 @@ export const DatasetPreviewGrid: React.FC<DatasetPreviewGridProps> = ({
               </tr>
             </thead>
             <tbody>
-              {filteredRows.length === 0 ? (
+              {displayRows.length === 0 ? (
                 <tr>
                   <td colSpan={columns.length + 1} className="dataset-preview-grid__empty">
-                    No rows match your search.
+                    {activeSearch ? 'No rows match your search.' : 'No rows to display.'}
                   </td>
                 </tr>
               ) : (
-                filteredRows.map(({ row, index }) => (
+                displayRows.map(({ row, index }) => (
                   <tr key={`${page}-${index}`}>
                     <td className="index-col">{pageStart + index}</td>
                     {row.map((cell, ci) => (

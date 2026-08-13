@@ -227,6 +227,13 @@ export function isQuotaExceededError(error: unknown): error is QuotaExceededErro
   return error instanceof QuotaExceededError;
 }
 
+/** True when fetch was cancelled via AbortController (do not surface as a UI error). */
+export function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException || error instanceof Error) && error.name === 'AbortError'
+  );
+}
+
 /** User-facing copy for dataset / connector delete failures. */
 export function formatResourceDeleteError(
   error: unknown,

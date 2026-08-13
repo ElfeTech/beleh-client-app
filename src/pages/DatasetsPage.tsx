@@ -66,13 +66,14 @@ import {
   workspaceLimitUpgradeMessage,
   UPGRADE_TO_ADD_DATASOURCES_LABEL,
 } from '../utils/workspaceAccess';
-import { formatResourceDeleteError } from '../utils/apiErrorMessage';
+import { formatResourceDeleteError, isAbortError } from '../utils/apiErrorMessage';
 import { ensureDemoRemovedAfterLiveSource, findDemoDatasource } from '../lib/workspaceDemo';
 import {
   INITIAL_PAGE,
   MAX_LIST_PAGES,
   SEARCH_VISIBILITY_THRESHOLD,
   TABLES_PAGE_SIZE,
+  TABLES_SEARCH_VISIBILITY_THRESHOLD,
 } from '../constants/pagination';
 import './DatasetsPage.css';
 
@@ -205,6 +206,7 @@ const DatasetsPage: React.FC = () => {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewPage, setPreviewPage] = useState(1);
   const [previewPageSize, setPreviewPageSize] = useState(10);
+  const [previewSearch, setPreviewSearch] = useState('');
   const [datasetsViewHydrated, setDatasetsViewHydrated] = useState(false);
   /** Stashed drill-down prefs from uiMemory; applied once tables load for the restored source. */
   const pendingDrillRef = useRef<DatasetsPageViewState | null>(null);
@@ -564,6 +566,25 @@ const DatasetsPage: React.FC = () => {
     return filterTablesByQuery(catalogTables, tableSearchQuery);
   }, [isConnectorSource, tablesInSelectedSchema, catalogTables, tableSearchQuery]);
 
+  const tablesSearchListCount =
+    isConnectorSource && browseLevel === 'schemas'
+      ? schemaGroups.length
+      : isConnectorSource
+        ? tablesInSelectedSchema.length
+        : catalogTables.length;
+  const showTablesSearch = tablesSearchListCount >= TABLES_SEARCH_VISIBILITY_THRESHOLD;
+
+  useEffect(() => {
+    if (!showTablesSearch && tableSearchQuery) {
+      setTableSearchQuery('');
+    }
+  }, [showTablesSearch, tableSearchQuery]);
+
+  const handlePreviewSearchChange = (query: string) => {
+    setPreviewSearch(query);
+    setPreviewPage(1);
+  };
+
   const selectedTable = useMemo(
     () => catalogTables.find((t) => t.table_name === selectedTableName) ?? null,
     [catalogTables, selectedTableName],
@@ -576,6 +597,7 @@ const DatasetsPage: React.FC = () => {
 
   useEffect(() => {
     setPreviewPage(1);
+    setPreviewSearch('');
     setPreviewData(null);
     setPreviewError(null);
   }, [selectedTableName, previewDatasetId, previewConnectorId]);
@@ -613,13 +635,14 @@ const DatasetsPage: React.FC = () => {
       return;
     }
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     (async () => {
       setPreviewLoading(true);
       setPreviewError(null);
       try {
         const token = await user.getIdToken();
+        if (controller.signal.aborted) return;
         const response =
           canPreviewConnector && previewConnectorId && workspaceId
             ? await apiClient.getConnectorTablePreview(
@@ -629,6 +652,8 @@ const DatasetsPage: React.FC = () => {
                 selectedTableName,
                 previewPage,
                 previewPageSize,
+                previewSearch,
+                controller.signal,
               )
             : await apiClient.getDatasetTablePreview(
                 token,
@@ -636,20 +661,22 @@ const DatasetsPage: React.FC = () => {
                 selectedTableName,
                 previewPage,
                 previewPageSize,
+                previewSearch,
+                controller.signal,
               );
-        if (!cancelled) setPreviewData(response);
+        if (controller.signal.aborted) return;
+        setPreviewData(response);
       } catch (err: unknown) {
-        if (!cancelled) {
-          setPreviewData(null);
-          setPreviewError(err instanceof Error ? err.message : 'Failed to load table preview.');
-        }
+        if (isAbortError(err) || controller.signal.aborted) return;
+        setPreviewData(null);
+        setPreviewError(err instanceof Error ? err.message : 'Failed to load table preview.');
       } finally {
-        if (!cancelled) setPreviewLoading(false);
+        if (!controller.signal.aborted) setPreviewLoading(false);
       }
     })();
 
     return () => {
-      cancelled = true;
+      controller.abort();
     };
   }, [
     user,
@@ -659,6 +686,7 @@ const DatasetsPage: React.FC = () => {
     selectedTableName,
     previewPage,
     previewPageSize,
+    previewSearch,
     selectedCatalogRow,
     connectorDetailTab,
   ]);
@@ -1413,31 +1441,33 @@ const DatasetsPage: React.FC = () => {
                             : catalogTables.length
                         })`}
                 </div>
-                <div className="sc-tables-search">
-                  <div className="sc-search-wrap">
-                    <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
-                    <input
-                      className="sc-search-input"
-                      placeholder={
-                        isConnectorSource && browseLevel === 'schemas'
-                          ? 'Search schemas…'
-                          : isConnectorSource
-                            ? 'Search tables…'
-                            : 'Search sheets & tables…'
-                      }
-                      value={tableSearchQuery}
-                      onChange={(e) => setTableSearchQuery(e.target.value)}
-                      aria-label="Search catalog"
-                      disabled={
-                        !selectedCatalogSource ||
-                        (selectedCatalogRow?.kind === 'connector' &&
-                          selectedCatalogRow.connector.metadata_status !== 'COMPLETED') ||
-                        (selectedCatalogRow?.kind === 'datasource' &&
-                          selectedCatalogRow.datasource.status !== 'READY')
-                      }
-                    />
+                {showTablesSearch ? (
+                  <div className="sc-tables-search">
+                    <div className="sc-search-wrap">
+                      <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
+                      <input
+                        className="sc-search-input"
+                        placeholder={
+                          isConnectorSource && browseLevel === 'schemas'
+                            ? 'Search schemas…'
+                            : isConnectorSource
+                              ? 'Search tables…'
+                              : 'Search sheets & tables…'
+                        }
+                        value={tableSearchQuery}
+                        onChange={(e) => setTableSearchQuery(e.target.value)}
+                        aria-label="Search catalog"
+                        disabled={
+                          !selectedCatalogSource ||
+                          (selectedCatalogRow?.kind === 'connector' &&
+                            selectedCatalogRow.connector.metadata_status !== 'COMPLETED') ||
+                          (selectedCatalogRow?.kind === 'datasource' &&
+                            selectedCatalogRow.datasource.status !== 'READY')
+                        }
+                      />
+                    </div>
                   </div>
-                </div>
+                ) : null}
                 <div className="sc-panel__body sc-panel__body--flush">
                   {tablesLoading ? (
                     <>
@@ -1592,6 +1622,8 @@ const DatasetsPage: React.FC = () => {
                       setPreviewPageSize(size);
                       setPreviewPage(1);
                     }}
+                    searchQuery={previewSearch}
+                    onSearchChange={handlePreviewSearchChange}
                   />
                 ) : selectedCatalogRow?.kind === 'connector' &&
                   browseLevel === 'schemas' &&
@@ -1640,6 +1672,8 @@ const DatasetsPage: React.FC = () => {
                       setPreviewPageSize(size);
                       setPreviewPage(1);
                     }}
+                    searchQuery={previewSearch}
+                    onSearchChange={handlePreviewSearchChange}
                     onExpand={() => handlePreview(previewDatasetId, selectedTable.table_name)}
                   />
                 ) : (

@@ -109,24 +109,33 @@
 .sc-filter-pill {
   padding: 0.45rem 0.85rem;
   border-radius: 999px;
-  border: 1px solid var(--border-primary);
-  background: var(--panel-bg);
-  color: var(--text-secondary);
+  border: 1px solid var(--btn-secondary-border);
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
   font-size: 0.75rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
   cursor: pointer;
+  box-shadow: var(--btn-secondary-shadow);
   transition:
     background 0.15s,
     color 0.15s,
-    border-color 0.15s;
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+
+.sc-filter-pill:hover:not(.is-active) {
+  background: var(--btn-secondary-hover);
+  border-color: color-mix(in srgb, var(--btn-secondary-border) 70%, var(--btn-secondary-text));
+  box-shadow: var(--btn-secondary-shadow-hover);
 }
 
 .sc-filter-pill.is-active {
   background: var(--text-primary);
   color: var(--bg-primary);
   border-color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.18);
 }
 
 .sc-catalog-layout {

@@ -72,6 +72,28 @@ export const PLAN_LIMIT_REACHED_TOOLTIP = 'Plan limit reached';
 /** In-app billing page deep-link to the upgrade plans grid. */
 export const BILLING_UPGRADE_HREF = '/settings/billing?upgrade=1#billing-plans';
 
+/**
+ * Ensure upgrade CTAs land on the plans section (not usage/consumption).
+ * Leaves non-billing URLs unchanged; appends `#billing-plans` when missing.
+ */
+export function normalizeBillingUpgradeHref(href: string | null | undefined): string {
+  const raw = href?.trim();
+  if (!raw) return BILLING_UPGRADE_HREF;
+
+  const isBillingPath =
+    raw === '/settings/billing' ||
+    raw.startsWith('/settings/billing?') ||
+    raw.startsWith('/settings/billing#') ||
+    /(?:^|\/\/)[^/]*\/settings\/billing(?:\?|#|$)/.test(raw);
+
+  if (!isBillingPath) return raw;
+  if (raw.includes('#billing-plans')) return raw;
+
+  const hashIndex = raw.indexOf('#');
+  const withoutHash = hashIndex >= 0 ? raw.slice(0, hashIndex) : raw;
+  return `${withoutHash}#billing-plans`;
+}
+
 /** CTA labels when a plan resource cap blocks Add/Create. */
 export const UPGRADE_TO_ADD_WORKSPACES_LABEL = 'Upgrade to add more workspaces';
 export const UPGRADE_TO_ADD_DATASOURCES_LABEL = 'Upgrade to add more datasources';

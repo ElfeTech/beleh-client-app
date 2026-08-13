@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { apiClient } from '../services/apiClient';
 import { useAuth } from '../context/useAuth';
@@ -7,6 +7,7 @@ import { DatasetPreviewGrid } from '../components/datasets/DatasetPreviewGrid';
 import type { DatasetTable, DatasetTablePreviewResponse } from '../types/api';
 import { useUiMemory } from '../hooks/useUiMemory';
 import { UI_KEYS, type UiMemoryScope } from '../lib/uiMemory';
+import { isAbortError } from '../utils/apiErrorMessage';
 import './DatasetPreviewPage.css';
 
 export const DatasetPreviewPage: React.FC = () => {
@@ -24,6 +25,7 @@ export const DatasetPreviewPage: React.FC = () => {
   const [dataLoading, setDataLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [previewSearch, setPreviewSearch] = useState('');
   const previewSizeScope: UiMemoryScope | null = user?.uid ? { kind: 'user', uid: user.uid } : null;
   const [pageSize, setPageSizeRaw] = useUiMemory(
     previewSizeScope,
@@ -33,7 +35,6 @@ export const DatasetPreviewPage: React.FC = () => {
   const setPageSize = (n: number) => setPageSizeRaw(n);
   const [showTableActionSheet, setShowTableActionSheet] = useState(false);
 
-  const isInitialLoadRef = useRef(true);
   const selectedTableMeta = tables.find((t) => t.table_name === selectedTable);
 
   const fetchDatasetInfo = useCallback(async () => {
@@ -46,31 +47,6 @@ export const DatasetPreviewPage: React.FC = () => {
       console.error('Failed to fetch dataset info:', err);
     }
   }, [user, datasetId]);
-
-  const fetchPreview = useCallback(
-    async (tableName: string, page: number, size: number) => {
-      if (!user || !tableName || !datasetId) return;
-      try {
-        setDataLoading(true);
-        const token = await user.getIdToken();
-        const response = await apiClient.getDatasetTablePreview(
-          token,
-          datasetId,
-          tableName,
-          page,
-          size,
-        );
-        setPreviewData(response);
-      } catch (err: unknown) {
-        console.error('Failed to fetch preview:', err);
-        const message = err instanceof Error ? err.message : 'Failed to load preview data.';
-        setError(message);
-      } finally {
-        setDataLoading(false);
-      }
-    },
-    [user, datasetId],
-  );
 
   const fetchTables = useCallback(async () => {
     if (!user || !datasetId) return;
@@ -97,8 +73,6 @@ export const DatasetPreviewPage: React.FC = () => {
         const firstTable = fromUrl ?? tables[0].table_name;
         setSelectedTable(firstTable);
         setLoading(false);
-        await fetchPreview(firstTable, 1, pageSize);
-        isInitialLoadRef.current = false;
       } else {
         setError('No tables found in this dataset.');
         setLoading(false);
@@ -109,7 +83,7 @@ export const DatasetPreviewPage: React.FC = () => {
       setError(message);
       setLoading(false);
     }
-  }, [user, datasetId, fetchPreview, initialTable, pageSize]);
+  }, [user, datasetId, initialTable]);
 
   useEffect(() => {
     setTables([]);
@@ -117,9 +91,15 @@ export const DatasetPreviewPage: React.FC = () => {
     setPreviewData(null);
     setError(null);
     setCurrentPage(1);
+    setPreviewSearch('');
     setLoading(true);
-    isInitialLoadRef.current = true;
   }, [datasetId]);
+
+  useEffect(() => {
+    setPreviewData(null);
+    setCurrentPage(1);
+    setPreviewSearch('');
+  }, [selectedTable]);
 
   useEffect(() => {
     if (datasetId) {
@@ -129,14 +109,43 @@ export const DatasetPreviewPage: React.FC = () => {
   }, [datasetId, fetchDatasetInfo, fetchTables]);
 
   useEffect(() => {
-    if (isInitialLoadRef.current) return;
-    if (loading || tables.length === 0) return;
+    if (!user || !datasetId || loading || tables.length === 0) return;
 
     const tableExists = tables.some((t) => t.table_name === selectedTable);
-    if (selectedTable && tableExists) {
-      fetchPreview(selectedTable, currentPage, pageSize);
-    }
-  }, [selectedTable, currentPage, pageSize, fetchPreview, tables, loading]);
+    if (!selectedTable || !tableExists) return;
+
+    const controller = new AbortController();
+
+    (async () => {
+      setDataLoading(true);
+      try {
+        const token = await user.getIdToken();
+        if (controller.signal.aborted) return;
+        const response = await apiClient.getDatasetTablePreview(
+          token,
+          datasetId,
+          selectedTable,
+          currentPage,
+          pageSize,
+          previewSearch,
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+        setPreviewData(response);
+      } catch (err: unknown) {
+        if (isAbortError(err) || controller.signal.aborted) return;
+        console.error('Failed to fetch preview:', err);
+        const message = err instanceof Error ? err.message : 'Failed to load preview data.';
+        setError(message);
+      } finally {
+        if (!controller.signal.aborted) setDataLoading(false);
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [user, datasetId, selectedTable, currentPage, pageSize, previewSearch, tables, loading]);
 
   const handleBack = () => {
     navigate(`/workspace/${workspaceId}/datasets`);
@@ -148,9 +157,15 @@ export const DatasetPreviewPage: React.FC = () => {
     onClick: () => {
       setSelectedTable(table.table_name);
       setCurrentPage(1);
+      setPreviewSearch('');
       setShowTableActionSheet(false);
     },
   }));
+
+  const handlePreviewSearchChange = (query: string) => {
+    setPreviewSearch(query);
+    setCurrentPage(1);
+  };
 
   return (
     <div className="preview-page app-page-root">
@@ -211,6 +226,8 @@ export const DatasetPreviewPage: React.FC = () => {
               setPageSize(size);
               setCurrentPage(1);
             }}
+            searchQuery={previewSearch}
+            onSearchChange={handlePreviewSearchChange}
           />
         ) : (
           <div className="preview-page-state">

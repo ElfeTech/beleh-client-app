@@ -5,7 +5,6 @@ import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ConnectorWidget } from './ConnectorWidget';
 import { ChatComposer } from './ChatComposer';
-import { ChatWorkspaceHeader } from './ChatWorkspaceHeader';
 import { AssistantAnalysisCard } from './AssistantAnalysisCard';
 import { ChartVisualization } from './ChartVisualization';
 import { SuggestedPrompts } from './SuggestedPrompts';
@@ -30,11 +29,13 @@ import { ApiRequestError, isQuotaExceededError } from '../../utils/apiErrorMessa
 import { formatQuotaExceededAction, formatQuotaExceededMessage } from '../../utils/quotaExceededUi';
 import { formatQuotaResetAt } from '../../utils/formatters';
 import {
+  BILLING_UPGRADE_HREF,
   canSendChat,
   canShowWorkspaceUpgradeCta,
   getChatQuotaBlockReason,
   isDatasourcesAtLimit,
   isUsageSoftWarn,
+  normalizeBillingUpgradeHref,
   PLAN_LIMIT_REACHED_TOOLTIP,
   PLAN_MANAGED_BY_OWNER_COPY,
   workspaceLimitUpgradeMessage,
@@ -99,7 +100,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     saveWorkspaceState,
     refreshConnectors,
     refreshDatasources,
-    refreshWorkspaces,
     refreshWorkspaceUsage,
     invalidateContextCache,
     loadWorkspaceContext,
@@ -130,8 +130,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   const sourceRequiredForChat = isFreePlanUser && !workspaceLoading && !hasWorkspaceSources;
   const showUpgrade = canShowWorkspaceUpgradeCta(currentRole);
   /** Always land on billing plans grid (query + hash) — do not use backend upgrade_url for in-app CTA. */
-  const billingUpgradeHref = '/settings/billing?upgrade=1#billing-plans';
-  const upgradeHref = workspaceUsage?.upgrade_url?.trim() || billingUpgradeHref;
+  const billingUpgradeHref = BILLING_UPGRADE_HREF;
+  const upgradeHref = normalizeBillingUpgradeHref(
+    workspaceUsage?.upgrade_url?.trim() || billingUpgradeHref,
+  );
   const dailyResetLabel = formatQuotaResetAt(workspaceUsage?.daily_reset_at);
 
   const chatLockBanner = useMemo(() => {
@@ -189,7 +191,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   ]);
 
   const [showConnectionPanel, setShowConnectionPanel] = useState(false);
-  const [headerRefreshing, setHeaderRefreshing] = useState(false);
 
   const refreshDemoStatus = useCallback(async () => {
     if (!user || !workspaceId) {
@@ -403,18 +404,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     return (parts[0]?.[0] ?? 'U').toUpperCase();
   }, [user?.displayName, user?.email]);
 
-  const handleHeaderRefresh = useCallback(async () => {
-    setHeaderRefreshing(true);
-    try {
-      await Promise.all([refreshWorkspaces(), refreshConnectors()]);
-      if (currentWorkspace?.id) {
-        await loadWorkspaceContext(currentWorkspace.id, true);
-      }
-    } finally {
-      setHeaderRefreshing(false);
-    }
-  }, [refreshWorkspaces, refreshConnectors, loadWorkspaceContext, currentWorkspace?.id]);
-
   useEffect(() => {
     if (!currentWorkspace?.id) return;
     // Avoid PATCH /state with localStorage ids before datasource lists have loaded
@@ -602,7 +591,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                 ? {
                     label: 'Upgrade',
                     onClick: () => {
-                      window.location.assign('/settings/billing?upgrade=1');
+                      window.location.assign(BILLING_UPGRADE_HREF);
                     },
                   }
                 : undefined,
@@ -973,30 +962,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
           ) : null}
         </div>
       )}
-      {sourceRequiredForChat && !chatQuotaBlocked && (
-        <div className="mb-3 flex flex-col items-center gap-2 rounded-xl border border-[color:var(--border-primary)] bg-[color:var(--ds-surface-muted)] px-4 py-3 text-center text-sm text-[color:var(--text-secondary)]">
-          <p>Connect your data or explore sample data to enable chat.</p>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            {showDemoCta ? (
-              <button
-                type="button"
-                className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
-                disabled={demoConnecting}
-                onClick={() => void handleStartDemo()}
-              >
-                Explore sample data
-              </button>
-            ) : null}
-            <button
-              type="button"
-              className="text-xs font-bold uppercase tracking-wider text-primary hover:underline"
-              onClick={() => setShowConnectionPanel(true)}
-            >
-              Add your data
-            </button>
-          </div>
-        </div>
-      )}
       {!selectedDatasourceId &&
         localMessages.length > 1 &&
         !chatQuotaBlocked &&
@@ -1054,24 +1019,11 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         showWelcomeScreen && 'chat-container--welcome-center',
       )}
     >
-      {workspaceId ? (
-        <ChatWorkspaceHeader
-          workspaceId={workspaceId}
-          selectedDatasourceId={selectedDatasourceId}
-          datasources={datasources}
-          connectors={connectors}
-          onRefresh={() => void handleHeaderRefresh()}
-          refreshing={headerRefreshing}
-          showUpgradeCta={isFreePlanUser && showUpgrade}
-          upgradeHref={billingUpgradeHref}
-        />
-      ) : null}
-
       {showWelcomeScreen ? (
         <div className="chat-empty-stage flex min-h-0 flex-1 flex-col items-center justify-center overflow-y-auto px-3 py-6 sm:px-4 md:px-6">
           <ChatWelcome
             onPromptClick={handleWelcomePrompt}
-            disabled={isWaiting || demoConnecting || sourceRequiredForChat}
+            disabled={isWaiting || demoConnecting}
             hasDatasources={hasDatasources}
             sourcesLoading={!sourcesReady || demoStatusLoading}
             onConnectDatasource={() => setShowConnectionPanel(true)}
@@ -1288,7 +1240,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       {showConnectionPanel && workspaceId && (
         <DatasourceConnectionPanel
           workspaceId={workspaceId}
-          hideFileSources
           onClose={() => {
             setShowConnectionPanel(false);
             void Promise.all([

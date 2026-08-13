@@ -14,3 +14,6 @@ export const INITIAL_PAGE = 1;
 
 /** Show client-side search once a list exceeds this count. */
 export const SEARCH_VISIBILITY_THRESHOLD = 10;
+
+/** Hide schema/table catalog search when the browse list is smaller than this. */
+export const TABLES_SEARCH_VISIBILITY_THRESHOLD = 5;

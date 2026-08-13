@@ -12,26 +12,13 @@ import { ConfirmDialog } from '../common/ConfirmDialog';
 import './SettingsShared.css';
 import './GeneralSection.css';
 
-type LanguageCode = 'en' | 'en-gb' | 'es' | 'fr' | 'de';
-type DateFormatCode = 'mdy' | 'dmy' | 'ymd';
-
 type SavedGeneralSettings = {
   displayName: string;
-  language: LanguageCode;
-  dateFormat: DateFormatCode;
   theme: ThemePreference;
 };
 
 function isThemePreference(v: unknown): v is ThemePreference {
   return v === 'system' || v === 'light' || v === 'dark';
-}
-
-function isLanguageCode(v: unknown): v is LanguageCode {
-  return v === 'en' || v === 'en-gb' || v === 'es' || v === 'fr' || v === 'de';
-}
-
-function isDateFormatCode(v: unknown): v is DateFormatCode {
-  return v === 'mdy' || v === 'dmy' || v === 'ymd';
 }
 
 export function GeneralSection() {
@@ -42,8 +29,6 @@ export function GeneralSection() {
   themePreferenceRef.current = themePreference;
 
   const [displayName, setDisplayName] = useState('');
-  const [language, setLanguage] = useState<LanguageCode>('en');
-  const [dateFormat, setDateFormat] = useState<DateFormatCode>('mdy');
   const [savedSettings, setSavedSettings] = useState<SavedGeneralSettings | null>(null);
 
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -77,18 +62,12 @@ export function GeneralSection() {
 
         const nextDisplayName = me.display_name?.trim() || u.displayName || '';
         const prefs = me.preferences || {};
-        const nextLanguage = isLanguageCode(prefs.language) ? prefs.language : 'en';
-        const nextDateFormat = isDateFormatCode(prefs.date_format) ? prefs.date_format : 'mdy';
         const nextTheme = isThemePreference(prefs.theme) ? prefs.theme : themePreferenceRef.current;
 
         setDisplayName(nextDisplayName);
-        setLanguage(nextLanguage);
-        setDateFormat(nextDateFormat);
         if (isThemePreference(prefs.theme)) setThemePreference(prefs.theme);
         setSavedSettings({
           displayName: nextDisplayName,
-          language: nextLanguage,
-          dateFormat: nextDateFormat,
           theme: nextTheme,
         });
       } catch (e) {
@@ -98,8 +77,6 @@ export function GeneralSection() {
           setDisplayName(fallbackName);
           setSavedSettings({
             displayName: fallbackName,
-            language: 'en',
-            dateFormat: 'mdy',
             theme: themePreferenceRef.current,
           });
         }
@@ -117,8 +94,6 @@ export function GeneralSection() {
   const hasChanges =
     savedSettings !== null &&
     (displayName.trim() !== savedSettings.displayName.trim() ||
-      language !== savedSettings.language ||
-      dateFormat !== savedSettings.dateFormat ||
       themePreference !== savedSettings.theme);
 
   const getInitials = (name: string) => {
@@ -150,8 +125,6 @@ export function GeneralSection() {
       const me = await apiClient.patchUserMe(token, {
         display_name: trimmed,
         preferences: {
-          language,
-          date_format: dateFormat,
           theme: themePreference,
         },
       });
@@ -170,8 +143,6 @@ export function GeneralSection() {
       setDisplayName(me.display_name?.trim() || trimmed);
       setSavedSettings({
         displayName: me.display_name?.trim() || trimmed,
-        language,
-        dateFormat,
         theme: themePreference,
       });
       setSaveSuccess(true);
@@ -229,7 +200,7 @@ export function GeneralSection() {
   const handleDeleteAccountConfirm = () => {
     setShowDeleteAccountConfirm(false);
     window.location.href =
-      'mailto:support@beleh.ai?subject=Account%20deletion%20request&body=Please%20delete%20my%20account%20(email%20below).%0A%0A';
+      'mailto:hello@yulona.co?subject=Account%20deletion%20request&body=Please%20delete%20my%20account%20(email%20below).%0A%0A';
   };
 
   return (
@@ -334,42 +305,6 @@ export function GeneralSection() {
             onChange={setThemePreference}
             disabled={isLoading || !firebaseUser}
           />
-        </div>
-
-        <div className="settings-row">
-          <div className="settings-row__text">
-            <h3>Language</h3>
-            <p>Interface language (stored for your account)</p>
-          </div>
-          <select
-            className="settings-select"
-            value={language}
-            onChange={(e) => setLanguage(e.target.value as LanguageCode)}
-            disabled={isLoading || !firebaseUser}
-          >
-            <option value="en">English (US)</option>
-            <option value="en-gb">English (UK)</option>
-            <option value="es">Español</option>
-            <option value="fr">Français</option>
-            <option value="de">Deutsch</option>
-          </select>
-        </div>
-
-        <div className="settings-row">
-          <div className="settings-row__text">
-            <h3>Date format</h3>
-            <p>How dates are shown in the app when formatted</p>
-          </div>
-          <select
-            className="settings-select"
-            value={dateFormat}
-            onChange={(e) => setDateFormat(e.target.value as DateFormatCode)}
-            disabled={isLoading || !firebaseUser}
-          >
-            <option value="mdy">MM/DD/YYYY</option>
-            <option value="dmy">DD/MM/YYYY</option>
-            <option value="ymd">YYYY-MM-DD</option>
-          </select>
         </div>
       </div>
 

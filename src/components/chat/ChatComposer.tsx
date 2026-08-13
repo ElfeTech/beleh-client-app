@@ -10,10 +10,11 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Check, ChevronDown, Search, Database, FileText, Send, Square } from 'lucide-react';
+import { Check, ChevronDown, Search, Database, Send, Square } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import type { DataSourceResponse, ConnectorResponse } from '../../types/api';
 import { BI_CHAT_MAX_CHARS } from '../../constants/chatLimits';
+import { formatSourceType, getSelectedSourceIcon, getSourceTypeIcon } from '../../utils/datasourceDisplay';
 
 export interface ChatComposerProps {
   workspaceId: string;
@@ -41,15 +42,6 @@ export interface ChatComposerProps {
 export type ChatComposerHandle = {
   openSourcePicker: () => void;
 };
-
-function formatSourceType(ds: DataSourceResponse): string {
-  const raw = (ds.type || ds.mime_type || 'DATA').toUpperCase();
-  if (raw.includes('POSTGRES') || raw === 'SQL') return 'POSTGRES';
-  if (raw.includes('EXCEL') || raw.includes('SPREADSHEET') || raw === 'XLSX') return 'EXCEL';
-  if (raw.includes('CSV')) return 'CSV';
-  if (raw.includes('MONGO')) return 'MONGODB';
-  return raw.replace(/\s+/g, '_').slice(0, 16);
-}
 
 const COMPOSER_MIN_ROWS = 2;
 /** Grow with content up to this many lines, then scroll. */
@@ -106,6 +98,10 @@ export function ChatComposer({
   const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
   const sourceTag = useMemo(
     () => tagLabel(selectedDatasourceId, datasources, connectors),
+    [selectedDatasourceId, datasources, connectors],
+  );
+  const TriggerIcon = useMemo(
+    () => getSelectedSourceIcon(selectedDatasourceId, datasources, connectors),
     [selectedDatasourceId, datasources, connectors],
   );
 
@@ -343,6 +339,13 @@ export function ChatComposer({
               const typeLabel = isDatasource
                 ? formatSourceType(s as DataSourceResponse)
                 : (s as ConnectorResponse).type.toUpperCase();
+              const RowIcon = getSourceTypeIcon({
+                kind: s.sourceKind,
+                type: isDatasource
+                  ? (s as DataSourceResponse).type
+                  : (s as ConnectorResponse).type,
+                mimeType: isDatasource ? (s as DataSourceResponse).mime_type : undefined,
+              });
 
               return (
                 <button
@@ -372,11 +375,7 @@ export function ChatComposer({
                       selected ? 'bg-white/20' : 'bg-[color:var(--ds-surface-muted)]',
                     )}
                   >
-                    {isDatasource ? (
-                      <FileText className="h-4 w-4" />
-                    ) : (
-                      <Database className="h-4 w-4" />
-                    )}
+                    <RowIcon className="h-4 w-4" />
                   </div>
 
                   <div className="min-w-0 flex-1 pt-0.5">
@@ -462,7 +461,7 @@ export function ChatComposer({
             onClick={() => setOpen((o) => !o)}
             title="Select data source"
           >
-            <Database className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2.25} />
+            <TriggerIcon className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={2.25} />
             <span className="truncate">{sourceTag.label}</span>
             {sourceTag.isDemo ? (
               <span className="hidden sm:inline shrink-0 rounded bg-[color-mix(in_srgb,var(--accent-teal-500)_18%,transparent)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-[color:var(--accent-teal-600)]">

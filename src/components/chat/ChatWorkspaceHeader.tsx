@@ -6,6 +6,7 @@ import type { ConnectorResponse, DataSourceResponse } from '../../types/api';
 import { getWorkspaceSourceContext } from '../../utils/datasourceDisplay';
 import { useAuth } from '../../context/useAuth';
 import { readChatHeaderCollapsed, writeChatHeaderCollapsed } from '../../lib/uiMemory';
+import { BILLING_UPGRADE_HREF } from '../../utils/workspaceAccess';
 import './ChatWorkspaceHeader.css';
 
 interface ChatWorkspaceHeaderProps {
@@ -28,7 +29,7 @@ export function ChatWorkspaceHeader({
   onRefresh,
   refreshing = false,
   showUpgradeCta = false,
-  upgradeHref = '/settings/billing?upgrade=1#billing-plans',
+  upgradeHref = BILLING_UPGRADE_HREF,
 }: ChatWorkspaceHeaderProps) {
   const { user } = useAuth();
   const uid = user?.uid ?? '';

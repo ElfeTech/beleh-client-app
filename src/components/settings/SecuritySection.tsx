@@ -83,16 +83,7 @@ export function SecuritySection() {
             </div>
           </div>
 
-          <button
-            type="button"
-            className="btn-gradient-primary btn-gradient-primary--sm tfa-toggle-btn"
-            disabled
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-            </svg>
-            Coming soon
-          </button>
+          <span className="settings-card__badge settings-card__badge--soon">Coming soon</span>
         </div>
 
         <div className="security-tips">
@@ -185,13 +176,7 @@ export function SecuritySection() {
             <div className="session-details">
               <div className="session-header">
                 <h4>iPhone • Safari</h4>
-                <button
-                  type="button"
-                  className="settings-text-btn settings-text-btn--small"
-                  disabled
-                >
-                  Coming soon
-                </button>
+                <span className="settings-card__badge settings-card__badge--soon">Coming soon</span>
               </div>
               <p>San Francisco, CA • Last active: 2 hours ago</p>
             </div>
@@ -199,9 +184,7 @@ export function SecuritySection() {
         </div>
 
         <div className="security-sessions-footer">
-          <button type="button" className="settings-text-btn settings-text-btn--danger" disabled>
-            Coming soon
-          </button>
+          <span className="settings-card__badge settings-card__badge--soon">Coming soon</span>
         </div>
       </div>
     </div>

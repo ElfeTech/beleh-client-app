@@ -118,27 +118,28 @@ export function InteractivePlotView({
   return (
     <div className="interactive-plot">
       <div className="interactive-plot__header">
-        <p className="interactive-plot__label">High-fidelity data plotting</p>
-        <p className="interactive-plot__subtitle">{subtitle}</p>
-      </div>
-
-      {plotTypes.length > 1 ? (
-        <div className="interactive-plot__chips" role="group" aria-label="Chart type">
-          {plotTypes.map((t) => (
-            <button
-              key={t}
-              type="button"
-              className={cn(
-                'interactive-plot__chip',
-                selectedType === t && 'interactive-plot__chip--active',
-              )}
-              onClick={() => setSelectedType(t)}
-            >
-              {t.replace('_', ' ')}
-            </button>
-          ))}
+        <div className="interactive-plot__header-text">
+          <p className="interactive-plot__label">High-fidelity data plotting</p>
+          <p className="interactive-plot__subtitle">{subtitle}</p>
         </div>
-      ) : null}
+        {plotTypes.length > 1 ? (
+          <div className="interactive-plot__chips" role="group" aria-label="Chart type">
+            {plotTypes.map((t) => (
+              <button
+                key={t}
+                type="button"
+                className={cn(
+                  'interactive-plot__chip',
+                  selectedType === t && 'interactive-plot__chip--active',
+                )}
+                onClick={() => setSelectedType(t)}
+              >
+                {t.replace('_', ' ')}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
 
       <div className="interactive-plot__chart-wrap">
         <ArtifactChart type={activeArtifactType} data={chartData} />

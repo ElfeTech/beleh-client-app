@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useUsage } from '../../context/UsageContext';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import {
+  BILLING_UPGRADE_HREF,
   canShowWorkspaceUpgradeCta,
   PLAN_MANAGED_BY_OWNER_COPY,
 } from '../../utils/workspaceAccess';
@@ -70,7 +71,7 @@ export function UsageWarningBanner() {
       </div>
       <div className="warning-actions">
         {showUpgrade && hasWarning('critical') && !isDailyCap && (
-          <Link to="/settings/billing?upgrade=1" className="upgrade-link">
+          <Link to={BILLING_UPGRADE_HREF} className="upgrade-link">
             Upgrade Plan
           </Link>
         )}

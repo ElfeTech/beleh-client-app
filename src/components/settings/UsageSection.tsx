@@ -662,19 +662,16 @@ export function UsageSection() {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          className="billing-stripe-portal-btn"
-          disabled={portalLoading || !hasStripeSub}
-          title={!hasStripeSub ? 'Available after you subscribe' : undefined}
-          onClick={() => void openPortal()}
-        >
-          {portalLoading
-            ? 'Opening…'
-            : hasStripeSub
-              ? 'Open billing portal'
-              : 'Subscribe to manage'}
-        </button>
+        {hasStripeSub ? (
+          <button
+            type="button"
+            className="billing-stripe-portal-btn"
+            disabled={portalLoading}
+            onClick={() => void openPortal()}
+          >
+            {portalLoading ? 'Opening…' : 'Open billing portal'}
+          </button>
+        ) : null}
       </section>
     </div>
   );

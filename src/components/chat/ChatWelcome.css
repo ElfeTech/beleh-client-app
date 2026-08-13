@@ -52,15 +52,16 @@
 
 .chat-welcome-connect__btn--secondary {
   border-radius: var(--radius-md, 0.625rem);
-  border: 1px solid var(--border-primary);
-  background: var(--panel-bg);
-  color: var(--text-primary);
-  box-shadow: none;
+  border: 1px solid var(--btn-secondary-border);
+  background: var(--btn-secondary-bg);
+  color: var(--btn-secondary-text);
+  box-shadow: var(--btn-secondary-shadow);
 }
 
 .chat-welcome-connect__btn--secondary:hover:not(:disabled) {
-  background: var(--bg-card-hover);
-  border-color: color-mix(in srgb, var(--accent-teal-500) 35%, var(--border-primary));
+  background: var(--btn-secondary-hover);
+  border-color: color-mix(in srgb, var(--btn-secondary-border) 70%, var(--btn-secondary-text));
+  box-shadow: var(--btn-secondary-shadow-hover);
 }
 
 .chat-welcome-connect__btn--secondary:disabled {

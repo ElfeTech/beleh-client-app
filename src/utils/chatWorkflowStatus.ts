@@ -14,6 +14,7 @@ import {
 } from './artifactAdapters';
 import { isQuotaExceededError } from './apiErrorMessage';
 import { formatQuotaResetAt, formatQuotaResetDate } from './formatters';
+import { normalizeBillingUpgradeHref } from './workspaceAccess';
 
 export interface WorkflowFailureInfo {
   title: string;
@@ -110,7 +111,7 @@ export function formatChatRequestError(err: unknown): WorkflowFailureInfo {
       detail: detailParts.join(' '),
       canRetry: false,
       quotaLimitType: err.quota.limit_type,
-      upgradeHref: err.quota.upgrade_url || '/settings/billing?upgrade=1',
+      upgradeHref: normalizeBillingUpgradeHref(err.quota.upgrade_url),
       // Daily cap is not upgrade-only; GenerativeChat may still override by role.
       showUpgradeCta: !isDaily,
     };

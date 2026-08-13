@@ -17,6 +17,8 @@ interface ConnectorTableDetailProps {
   pageSize: number;
   onPageChange: (page: number) => void;
   onPageSizeChange: (size: number) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export function ConnectorTableDetail({
@@ -30,6 +32,8 @@ export function ConnectorTableDetail({
   pageSize,
   onPageChange,
   onPageSizeChange,
+  searchQuery,
+  onSearchChange,
 }: Readonly<ConnectorTableDetailProps>) {
   const identity = parseTableIdentity(table);
   const columns = table.columns ?? [];
@@ -118,6 +122,8 @@ export function ConnectorTableDetail({
           pageSize={pageSize}
           onPageChange={onPageChange}
           onPageSizeChange={onPageSizeChange}
+          searchQuery={searchQuery}
+          onSearchChange={onSearchChange}
         />
       )}
     </div>
