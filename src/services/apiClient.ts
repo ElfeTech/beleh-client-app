@@ -220,6 +220,31 @@ class APIClient {
         }
       }
 
+      // Handle 403 Forbidden - often means token not yet accepted (e.g. right after login); retry once after delay with fresh token
+      if (response.status === 403 && !isRetry) {
+        try {
+          const { authService } = await import('./authService');
+          await new Promise((r) => setTimeout(r, 500));
+          const newToken = await authService.refreshToken();
+          if (newToken) {
+            const updatedHeaders = {
+              ...headers,
+              Authorization: `Bearer ${newToken}`,
+            };
+            return this.request<T>(
+              endpoint,
+              {
+                ...options,
+                headers: updatedHeaders,
+              },
+              true,
+            );
+          }
+        } catch {
+          // Fall through to normal error handling
+        }
+      }
+
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
         console.error('[API] Error response:', errorData);

@@ -361,6 +361,12 @@ html[data-theme='dark'] .sidebar-collapse-btn:hover {
   border-color: rgba(255, 255, 255, 0.15);
 }
 
+[data-theme='dark'] .workspace-dropdown {
+  /* Solid dark background for dark theme */
+  background: #0f172a;
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
 @keyframes slideDown {
   from {
     opacity: 0;
@@ -1156,6 +1162,11 @@ html[data-theme='dark'] .add-workspace-btn:active {
   color: rgba(255, 255, 255, 0.95);
 }
 
+/* Light mode: Ensure white text for contrast against dark sidebar */
+[data-theme='light'] .session-title {
+  color: rgba(255, 255, 255, 0.95);
+}
+
 .session-time {
   font-size: 0.625rem;
   color: rgba(255, 255, 255, 0.4);
@@ -1310,6 +1321,10 @@ html[data-theme='dark'] .add-workspace-btn:active {
   background: linear-gradient(180deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.8));
 }
 
+[data-theme='dark'] .sidebar-footer {
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.5), rgba(30, 41, 59, 0.8));
+}
+
 .sidebar-footer-actions {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1432,6 +1447,22 @@ html[data-theme='dark'] .add-workspace-btn:active {
   border-radius: var(--radius-lg);
   object-fit: contain;
   flex-shrink: 0;
+}
+
+.logo-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth-alpha-badge.header {
+  position: absolute;
+  top: 40px;
+  right: -40px;
+  font-size: 0.625rem;
+  padding: 2px 6px;
+  border-radius: 4px;
+  z-index: 5;
 }
 
 .logo-container {
