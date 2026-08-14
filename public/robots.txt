@@ -1,4 +1,4 @@
-# https://beleh.ai/robots.txt
+# https://beleh.yulona.co/robots.txt
 User-agent: *
 Allow: /
 Allow: /signin
@@ -10,4 +10,4 @@ Disallow: /invitations/
 Disallow: /auth/
 Disallow: /error
 
-Sitemap: https://beleh.ai/sitemap.xml
+Sitemap: https://beleh.yulona.co/sitemap.xml

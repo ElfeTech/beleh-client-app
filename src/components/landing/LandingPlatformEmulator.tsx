@@ -33,7 +33,14 @@ import {
 import './LandingPlatformEmulator.css';
 
 type Phase =
-  'idle' | 'composing' | 'sending' | 'thinking' | 'meta' | 'charts' | 'streaming' | 'done';
+  | 'idle'
+  | 'composing'
+  | 'sending'
+  | 'thinking'
+  | 'meta'
+  | 'charts'
+  | 'streaming'
+  | 'done';
 
 type CompletedTurn = {
   turn: EmulatorTurn;
@@ -883,7 +890,7 @@ export function LandingPlatformEmulator() {
                 <div className="lpe-side-user-avatar">JD</div>
                 <div className="lpe-side-user-meta">
                   <div className="lpe-side-user-name">Jone Deo</div>
-                  <div className="lpe-side-user-email">jone@beleh.ai</div>
+                  <div className="lpe-side-user-email">jone@yulona.co</div>
                 </div>
                 <span className="lpe-side-plan">STANDARD</span>
               </div>
