@@ -1,7 +1,7 @@
 import { isProductionAnalytics } from './analyticsEnvironment';
 
 /** Google Analytics 4 measurement ID */
-export const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID ?? 'G-GP3JJHFPJ1';
+export const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID ?? 'G-SE22WW34C9';
 
 /** Google Tag Manager container ID (e.g. GTM-XXXXXXX). Leave unset until you have a container. */
 export const GTM_CONTAINER_ID = import.meta.env.VITE_GTM_CONTAINER_ID ?? '';
