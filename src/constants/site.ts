@@ -1,5 +1,5 @@
 /** Public marketing / canonical site URL (no trailing slash). */
-export const SITE_URL = 'https://beleh.ai';
+export const SITE_URL = 'https://beleh.yulona.co';
 
 export const SITE_NAME = 'Beleh AI';
 export const SITE_NAME_AMHARIC = 'ብልህ';
