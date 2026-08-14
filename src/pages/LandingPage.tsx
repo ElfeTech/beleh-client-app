@@ -10,11 +10,13 @@ import { LandingProof } from '../components/landing/LandingProof';
 import { LandingPricing } from '../components/landing/LandingPricing';
 import { LandingFinalCta } from '../components/landing/LandingFinalCta';
 import { LandingFooter } from '../components/landing/LandingFooter';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 import './landing/landing.css';
 
 export default function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
   const { isLight, toggleTheme } = useLandingTheme();
+  useDocumentMeta({ path: '/' });
 
   useEffect(() => {
     const prev = document.documentElement.style.scrollBehavior;

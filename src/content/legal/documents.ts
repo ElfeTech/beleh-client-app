@@ -1,3 +1,5 @@
+import { COMPANY_NAME, COMPANY_URL, SITE_URL, SUPPORT_EMAIL } from '../../constants/site';
+
 export type LegalSection = {
   heading: string;
   paragraphs: string[];
@@ -14,11 +16,11 @@ export type LegalDocument = {
 
 export const LEGAL_UPDATED = '13 August 2026';
 
-const COMPANY = 'Yulona';
+const COMPANY = COMPANY_NAME;
 const PRODUCT = 'Beleh (ብልህ)';
-const SITE = 'https://beleh.ai';
-const COMPANY_SITE = 'https://www.yulona.co';
-const SUPPORT = 'hello@yulona.co';
+const SITE = SITE_URL;
+const COMPANY_SITE = COMPANY_URL;
+const SUPPORT = SUPPORT_EMAIL;
 const COMPANY_EMAIL = 'drop@yulona.co';
 
 export const LEGAL_DOCS: LegalDocument[] = [
