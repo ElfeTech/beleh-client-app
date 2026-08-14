@@ -1,0 +1,13 @@
+# https://beleh.ai/robots.txt
+User-agent: *
+Allow: /
+Allow: /signin
+Allow: /signup
+Allow: /legal/
+Disallow: /workspace/
+Disallow: /settings/
+Disallow: /invitations/
+Disallow: /auth/
+Disallow: /error
+
+Sitemap: https://beleh.ai/sitemap.xml

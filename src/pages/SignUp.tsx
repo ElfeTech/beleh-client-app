@@ -9,6 +9,8 @@ import { completePendingInviteAccept } from '../lib/completePendingInviteAccept'
 import { safeReturnPath } from '../lib/publicRoutes';
 import { AuthGatewayTransition } from '../components/auth/AuthGatewayTransition';
 import { AuthGoogleSplitPage } from '../components/auth/AuthGoogleSplitPage';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
+import { SITE_NAME } from '../constants/site';
 
 export function SignUp() {
   const [error, setError] = useState<string | null>(null);
@@ -16,6 +18,12 @@ export function SignUp() {
   const [searchParams] = useSearchParams();
   const { user, loading: authLoadingState, registerWithGoogle } = useAuth();
   const navigate = useNavigate();
+  useDocumentMeta({
+    title: `Start free trial | ${SITE_NAME}`,
+    description:
+      'Create a Beleh AI account and start your free 7-day trial. Ask your data in plain English.',
+    path: '/signup',
+  });
 
   useEffect(() => {
     const fromQuery = searchParams.get('invite_token')?.trim();

@@ -8,6 +8,8 @@ import { completePendingInviteAccept } from '../lib/completePendingInviteAccept'
 import { safeReturnPath } from '../lib/publicRoutes';
 import { AuthGatewayTransition } from '../components/auth/AuthGatewayTransition';
 import { AuthGoogleSplitPage } from '../components/auth/AuthGoogleSplitPage';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
+import { SITE_NAME } from '../constants/site';
 
 export function SignIn() {
   const [error, setError] = useState<string | null>(null);
@@ -15,6 +17,11 @@ export function SignIn() {
   const [searchParams] = useSearchParams();
   const { user, loading: authLoadingState, signInWithGoogle } = useAuth();
   const navigate = useNavigate();
+  useDocumentMeta({
+    title: `Sign in | ${SITE_NAME}`,
+    description: 'Sign in to Beleh AI to ask your data questions and explore workspaces.',
+    path: '/signin',
+  });
 
   useEffect(() => {
     const fromQuery = searchParams.get('invite_token')?.trim();

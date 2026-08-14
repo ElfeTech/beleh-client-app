@@ -1,12 +1,24 @@
 import { Link, Navigate, useParams } from 'react-router-dom';
 import { LEGAL_DOCS, getLegalDocument } from '../content/legal/documents';
 import { LegalDocumentView } from '../components/legal/LegalDocumentView';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
+import { SITE_NAME } from '../constants/site';
 import logo from '../assets/logo.webp';
 import './LegalPage.css';
 
 export function LegalPage() {
   const { slug } = useParams<{ slug: string }>();
   const doc = getLegalDocument(slug);
+
+  useDocumentMeta(
+    doc
+      ? {
+          title: `${doc.title} | ${SITE_NAME}`,
+          description: `${doc.title} for Beleh AI by Yulona.`,
+          path: `/legal/${doc.slug}`,
+        }
+      : { path: '/legal/terms' },
+  );
 
   if (!doc) {
     return <Navigate to="/legal/terms" replace />;
