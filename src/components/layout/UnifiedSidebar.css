@@ -181,6 +181,22 @@
   margin-bottom: var(--space-2);
 }
 
+.unified-sidebar__sessions-status {
+  margin: 0 var(--space-1) var(--space-2);
+  padding: 0.35rem 0.5rem;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--sidebar-panel) 80%, var(--sidebar-border));
+  color: var(--sidebar-text-muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.3;
+}
+
+.unified-sidebar__sessions-list--loading {
+  pointer-events: none;
+}
+
 .unified-sidebar__sessions-search {
   position: relative;
   margin: 0 var(--space-1) var(--space-2);

@@ -360,9 +360,13 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                         className="sidebar-icon-btn rounded-md p-1.5 disabled:opacity-40"
                         title="Refresh list"
                         aria-label="Refresh recent chats"
+                        aria-busy={sessionsLoading || refreshingChats}
                       >
                         <RefreshCw
-                          className={cn('h-3.5 w-3.5', refreshingChats && 'animate-spin')}
+                          className={cn(
+                            'h-3.5 w-3.5',
+                            (sessionsLoading || refreshingChats) && 'animate-spin',
+                          )}
                         />
                       </button>
                       <button
@@ -376,6 +380,15 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                       </button>
                     </div>
                   </div>
+                  {(sessionsLoading || refreshingChats) && (
+                    <p
+                      className="unified-sidebar__sessions-status"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      Loading chats…
+                    </p>
+                  )}
                   {sessions.length > SEARCH_VISIBILITY_THRESHOLD && (
                     <div className="unified-sidebar__sessions-search">
                       <Search
@@ -394,9 +407,17 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                       />
                     </div>
                   )}
-                  <div className="unified-sidebar__sessions-list no-scrollbar">
-                    {sessionsLoading && sessions.length === 0 ? (
-                      <SessionListSkeleton rows={5} />
+                  <div
+                    className={cn(
+                      'unified-sidebar__sessions-list no-scrollbar',
+                      (sessionsLoading || refreshingChats) &&
+                        'unified-sidebar__sessions-list--loading',
+                    )}
+                  >
+                    {sessionsLoading || refreshingChats ? (
+                      <SessionListSkeleton
+                        rows={sessions.length > 0 ? Math.min(sessions.length, 5) : 5}
+                      />
                     ) : filteredSessions.length > 0 ? (
                       <>
                         {filteredSessions.map((session) => (
@@ -466,8 +487,15 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                     disabled={sessionsLoading || refreshingChats}
                     className="sidebar-icon-btn rounded-md p-2 disabled:opacity-40"
                     title="Refresh chats"
+                    aria-label="Refresh recent chats"
+                    aria-busy={sessionsLoading || refreshingChats}
                   >
-                    <RefreshCw className={cn('h-4 w-4', refreshingChats && 'animate-spin')} />
+                    <RefreshCw
+                      className={cn(
+                        'h-4 w-4',
+                        (sessionsLoading || refreshingChats) && 'animate-spin',
+                      )}
+                    />
                   </button>
                   <button
                     type="button"
