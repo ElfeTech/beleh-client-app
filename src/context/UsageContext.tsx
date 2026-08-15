@@ -362,11 +362,32 @@ export function UsageProvider({ children }: { children: ReactNode }) {
     [user],
   );
 
-  // Initial fetch when user authenticates
+  // Account usage is peripheral on workspace chat (banner / sidebar). Defer past first paint
+  // so it does not contend with sessions/context/messages on the critical path.
   useEffect(() => {
-    if (user) {
-      refreshUsage();
+    if (!user) return;
+
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) void refreshUsage();
+    };
+
+    let idleId: number | null = null;
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
+    const ric = typeof window !== 'undefined' ? window.requestIdleCallback : undefined;
+    if (ric) {
+      idleId = ric(run, { timeout: 2500 });
+    } else {
+      timeoutId = setTimeout(run, 400);
     }
+
+    return () => {
+      cancelled = true;
+      if (idleId != null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId != null) clearTimeout(timeoutId);
+    };
   }, [user, refreshUsage]);
 
   // Set up periodic refresh

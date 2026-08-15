@@ -369,6 +369,15 @@ class APIClient {
     });
   }
 
+  async getWorkspace(authToken: string, workspaceId: string): Promise<WorkspaceResponse> {
+    return this.request<WorkspaceResponse>(`/api/workspaces/${workspaceId}`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
   async updateWorkspace(
     authToken: string,
     workspaceId: string,

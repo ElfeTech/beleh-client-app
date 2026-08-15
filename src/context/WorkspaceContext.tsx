@@ -39,7 +39,12 @@ import { LIST_PAGE_SIZE, MAX_LIST_PAGES } from '../constants/pagination';
 interface WorkspaceContextType {
   workspaces: WorkspaceResponse[];
   currentWorkspace: WorkspaceResponse | null;
-  setCurrentWorkspace: (workspace: WorkspaceResponse | null) => void;
+  setCurrentWorkspace: (
+    workspace:
+      | WorkspaceResponse
+      | null
+      | ((prev: WorkspaceResponse | null) => WorkspaceResponse | null),
+  ) => void;
   datasources: DataSourceResponse[];
   /** Set datasources directly (e.g. after hydration fetches them) so UI has data without waiting for context effect */
   setDatasources: (datasources: DataSourceResponse[]) => void;
@@ -190,10 +195,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       // Only set default workspace on initial load
       if (!isInitialized && fetchedWorkspaces.length > 0) {
+        const pathMatch =
+          typeof window !== 'undefined'
+            ? window.location.pathname.match(/^\/workspace\/([^/]+)/)
+            : null;
+        const urlWorkspaceId = pathMatch?.[1] && pathMatch[1] !== 'undefined' ? pathMatch[1] : null;
+
         const savedWorkspaceId = readActiveWorkspaceId();
         let workspaceToSet: WorkspaceResponse | null = null;
 
-        if (savedWorkspaceId) {
+        // Prefer deep-linked URL id so we don't bootstrap the wrong workspace first.
+        if (urlWorkspaceId) {
+          workspaceToSet =
+            fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === urlWorkspaceId) || null;
+        }
+
+        if (!workspaceToSet && savedWorkspaceId) {
           workspaceToSet =
             fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === savedWorkspaceId) || null;
         }
@@ -204,7 +221,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             fetchedWorkspaces[0];
         }
 
-        setCurrentWorkspace(workspaceToSet);
+        setCurrentWorkspace((prev) => {
+          // Keep an early URL-bound workspace if list hasn't caught up yet.
+          if (prev && urlWorkspaceId && prev.id === urlWorkspaceId) {
+            const fromList = fetchedWorkspaces.find((w) => w.id === urlWorkspaceId);
+            return fromList ?? prev;
+          }
+          return workspaceToSet;
+        });
         setIsInitialized(true);
       }
     } catch (error) {
@@ -405,15 +429,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
 
     loadedWorkspaceRef.current = currentWorkspace.id;
-    void (async () => {
-      try {
-        await Promise.all([refreshDatasources(), refreshConnectors()]);
-      } catch {
-        // Individual refresh paths already log; continue to load persisted UI state
-      }
-      await loadWorkspaceContext(currentWorkspace.id);
-      await refreshWorkspaceUsage();
-    })();
+    // Critical path: context (session/dataset restore) in parallel with source catalogs.
+    // Usage is peripheral (sidebar / soft lock) — never block restore on it.
+    void Promise.all([
+      refreshDatasources(),
+      refreshConnectors(),
+      loadWorkspaceContext(currentWorkspace.id),
+    ]).finally(() => {
+      void refreshWorkspaceUsage();
+    });
   }, [
     user,
     currentWorkspace,
