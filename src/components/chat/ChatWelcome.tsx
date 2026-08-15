@@ -88,7 +88,7 @@ export function ChatWelcome({
 
   return (
     <div
-      className={`chat-welcome chat-welcome--enterprise${showEmptyOnboarding ? ' chat-welcome--no-sources' : ''}${!showEmptyOnboarding ? ' chat-welcome--compact' : ''}`}
+      className={`chat-welcome chat-welcome--enterprise${showEmptyOnboarding ? ' chat-welcome--no-sources' : ''}${!showEmptyOnboarding ? ' chat-welcome--compact' : ''}${sourcesLoading ? ' chat-welcome--loading' : ''}`}
     >
       <div className="chat-welcome-hero">
         <div className="chat-welcome-icon-stack" aria-hidden>
@@ -105,9 +105,36 @@ export function ChatWelcome({
             </div>
           ) : null}
         </div>
-        <h2 className="chat-welcome-title font-display">{title}</h2>
-        <p className="chat-welcome-subtitle">{subtitle}</p>
+        {sourcesLoading ? (
+          <div className="chat-welcome-skeleton-copy" aria-hidden>
+            <div className="analytics-skeleton chat-welcome-skeleton-title" />
+            <div className="analytics-skeleton chat-welcome-skeleton-sub" />
+            <div className="analytics-skeleton chat-welcome-skeleton-sub chat-welcome-skeleton-sub--short" />
+          </div>
+        ) : (
+          <>
+            <h2 className="chat-welcome-title font-display">{title}</h2>
+            <p className="chat-welcome-subtitle">{subtitle}</p>
+          </>
+        )}
       </div>
+
+      {sourcesLoading ? (
+        <div
+          className="chat-welcome-skeleton-actions"
+          aria-busy="true"
+          aria-label="Loading workspace options"
+        >
+          <div className="analytics-skeleton chat-welcome-skeleton-btn" />
+          <div className="analytics-skeleton chat-welcome-skeleton-btn chat-welcome-skeleton-btn--secondary" />
+          <div className="chat-welcome-skeleton-chips">
+            <div className="analytics-skeleton chat-welcome-skeleton-chip" />
+            <div className="analytics-skeleton chat-welcome-skeleton-chip" />
+            <div className="analytics-skeleton chat-welcome-skeleton-chip" />
+          </div>
+          <span className="sr-only">Loading workspace…</span>
+        </div>
+      ) : null}
 
       {showDualCta ? (
         <div className="chat-welcome-connect chat-welcome-connect--dual">

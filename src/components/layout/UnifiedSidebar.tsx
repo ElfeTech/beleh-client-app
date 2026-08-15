@@ -36,6 +36,7 @@ import {
 } from '../../lib/uiMemory';
 import { useUiMemory } from '../../hooks/useUiMemory';
 import { SEARCH_VISIBILITY_THRESHOLD } from '../../constants/pagination';
+import { SessionListSkeleton } from '../workspace/WorkspaceLoadingSkeletons';
 import './UnifiedSidebar.css';
 
 function initialsFromUser(
@@ -361,10 +362,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                         aria-label="Refresh recent chats"
                       >
                         <RefreshCw
-                          className={cn(
-                            'h-3.5 w-3.5',
-                            (sessionsLoading || refreshingChats) && 'animate-spin',
-                          )}
+                          className={cn('h-3.5 w-3.5', refreshingChats && 'animate-spin')}
                         />
                       </button>
                       <button
@@ -397,7 +395,9 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                     </div>
                   )}
                   <div className="unified-sidebar__sessions-list no-scrollbar">
-                    {filteredSessions.length > 0 ? (
+                    {sessionsLoading && sessions.length === 0 ? (
+                      <SessionListSkeleton rows={5} />
+                    ) : filteredSessions.length > 0 ? (
                       <>
                         {filteredSessions.map((session) => (
                           <div
@@ -467,12 +467,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                     className="sidebar-icon-btn rounded-md p-2 disabled:opacity-40"
                     title="Refresh chats"
                   >
-                    <RefreshCw
-                      className={cn(
-                        'h-4 w-4',
-                        (sessionsLoading || refreshingChats) && 'animate-spin',
-                      )}
-                    />
+                    <RefreshCw className={cn('h-4 w-4', refreshingChats && 'animate-spin')} />
                   </button>
                   <button
                     type="button"
