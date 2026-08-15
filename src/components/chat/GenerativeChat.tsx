@@ -12,7 +12,6 @@ import { ChatWelcome } from './ChatWelcome';
 import { ChatThreadSkeleton } from './ChatThreadSkeleton';
 import { ThinkingShimmer } from './ThinkingShimmer';
 import { turnHasRichUi } from '../../utils/responseViewAvailability';
-import { countSchemaTables } from '../../utils/datasourceDisplay';
 import { ChatFailureCard } from './ChatFailureCard';
 import { getWorkflowFailure, formatChatRequestError } from '../../utils/chatWorkflowStatus';
 import type { WorkflowFailureInfo } from '../../utils/chatWorkflowStatus';
@@ -397,11 +396,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     invalidateContextCache,
     loadWorkspaceContext,
   ]);
-
-  const schemaTableCount = useMemo(
-    () => countSchemaTables(selectedDatasourceId, datasources, connectors),
-    [selectedDatasourceId, datasources, connectors],
-  );
 
   const userInitial = useMemo(() => {
     const name = user?.displayName?.trim() || user?.email?.split('@')[0] || 'U';
@@ -826,6 +820,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   // Empty active sessions (e.g. right after demo connect) still show ChatWelcome
   // so API suggested_prompts can be clicked as the first user message.
   // Gate until session list + restore + history settle so refresh never flashes welcome prompts.
+  // Do NOT wait on workspace context when the active session is already known (URL / localStorage)
+  // — context is only needed to restore last_active when we have no selection yet.
   const lastActiveSessionId = workspaceContext?.state?.last_active_session_id ?? null;
   const awaitingSessionRestore =
     sessionsReady &&
@@ -840,8 +836,13 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     Boolean(currentWorkspace?.id) &&
     (!workspaceContext || workspaceContext.workspace.id !== currentWorkspace?.id);
 
+  const needsContextForSessionPick = !isNewChatDraft && !activeSessionId;
+
   const sessionBootstrapPending =
-    !isNewChatDraft && (!sessionsReady || workspaceContextPending || awaitingSessionRestore);
+    !isNewChatDraft &&
+    (!sessionsReady ||
+      awaitingSessionRestore ||
+      (needsContextForSessionPick && workspaceContextPending));
 
   const historyPending =
     Boolean(activeSessionId) &&
@@ -959,13 +960,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     setInput(`I want to connect ${connectorId}`);
   };
 
-  const composerStatusLabel =
-    schemaTableCount != null && schemaTableCount > 0
-      ? ` · ${schemaTableCount} dataset${schemaTableCount === 1 ? '' : 's'} ready`
-      : selectedDatasourceId
-        ? ' · Data connected'
-        : '';
-
   const composerPanel = (
     <div className="relative mx-auto w-full max-w-3xl md:max-w-4xl">
       {chatQuotaBlocked && chatLockBanner && (
@@ -1024,9 +1018,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       )}
 
       <p className="mt-2.5 text-center text-[10px] text-[color:var(--text-muted)]">
-        Powered by Beleh
-        <span className="hidden md:inline"> · answers you can share with your team</span>
-        {composerStatusLabel}
+        Beleh is an AI platform and can make mistakes. Please verify the credibility of the data in
+        responses.
       </p>
     </div>
   );
