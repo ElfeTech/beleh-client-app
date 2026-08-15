@@ -1,4 +1,4 @@
-import { useState, useContext, useMemo, useEffect } from 'react';
+import { useState, useContext, useMemo, useEffect, useRef } from 'react';
 import {
   MessageSquare,
   Database,
@@ -117,6 +117,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   const [showRenamePrompt, setShowRenamePrompt] = useState(false);
   const [renameDefaultTitle, setRenameDefaultTitle] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
+  const deleteInFlightRef = useRef(false);
 
   const collapsed = !isDrawer && isCollapsed;
 
@@ -164,13 +165,14 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
 
   const handleDelete = async () => {
     const sessionId = actionSessionId;
-    if (!sessionId) return;
+    if (!sessionId || deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
     setIsDeleting(true);
+    setShowDeleteConfirm(false);
     try {
       const ok = await chatContext?.deleteSession(sessionId);
       if (ok) {
         toast.success('Chat deleted');
-        setShowDeleteConfirm(false);
         if (activeSessionId === sessionId && effectiveWorkspaceId) {
           navigate(workspaceChatPath(effectiveWorkspaceId), { replace: true });
         }
@@ -180,6 +182,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
     } catch {
       toast.error('Could not delete this chat. Please try again.');
     } finally {
+      deleteInFlightRef.current = false;
       setIsDeleting(false);
       setActionSessionId(null);
     }
