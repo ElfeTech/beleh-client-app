@@ -109,6 +109,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     activeSessionId,
     setActiveSessionId,
     addSession,
+    touchSession,
     isNewChatDraft,
     sessionsReady,
     sessions,
@@ -567,6 +568,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         setSourcePickerOpenRequest((n) => n + 1);
       }
 
+      if (activeSessionId) {
+        touchSession(activeSessionId);
+      }
+
       void refreshWorkspaceUsage().then((usage) => {
         if (!usage) return;
         const resetKey = usage.reset_at ?? usage.daily_reset_at ?? 'cycle';
@@ -599,7 +604,14 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         );
       });
     },
-    [refreshWorkspaceUsage, currentWorkspace?.id, workspaceId, showUpgrade],
+    [
+      refreshWorkspaceUsage,
+      currentWorkspace?.id,
+      workspaceId,
+      showUpgrade,
+      activeSessionId,
+      touchSession,
+    ],
   );
 
   const applyTurnFailure = useCallback(

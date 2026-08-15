@@ -14,10 +14,13 @@ import { useWorkspace } from './WorkspaceContext';
 import { useAuth } from './useAuth';
 import { readActiveSessionId, writeActiveSessionId, migrateLegacyUiMemory } from '../lib/uiMemory';
 import { INITIAL_PAGE, LIST_PAGE_SIZE } from '../constants/pagination';
+import { sortByUpdatedAtDesc } from '../utils/sortByUpdatedAt';
 
 interface ChatSessionContextType {
   sessions: ChatSessionRead[];
-  setSessions: (sessions: ChatSessionRead[]) => void;
+  setSessions: (
+    sessions: ChatSessionRead[] | ((prev: ChatSessionRead[]) => ChatSessionRead[]),
+  ) => void;
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
   /** True while user clicked New chat , no session in URL/context until first message or picking a thread. */
@@ -27,6 +30,8 @@ interface ChatSessionContextType {
   /** Clear active session and suppress auto-restore from workspace state (sidebar New chat). */
   startNewChat: () => void;
   addSession: (session: ChatSessionRead) => ChatSessionRead;
+  /** Bump a session to the top after new activity (uses current time when API does not return updated_at). */
+  touchSession: (sessionId: string) => void;
   removeSession: (sessionId: string) => void;
   deleteSession: (sessionId: string) => Promise<boolean>;
   renameSession: (sessionId: string, newTitle: string) => Promise<ChatSessionRead | null>;
@@ -51,7 +56,16 @@ export { ChatSessionContext };
 export function ChatSessionProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const { currentWorkspace, workspaceContext, saveWorkspaceState } = useWorkspace();
-  const [sessions, setSessions] = useState<ChatSessionRead[]>([]);
+  const [sessions, setSessionsState] = useState<ChatSessionRead[]>([]);
+  const setSessions = useCallback(
+    (next: ChatSessionRead[] | ((prev: ChatSessionRead[]) => ChatSessionRead[])) => {
+      setSessionsState((prev) => {
+        const resolved = typeof next === 'function' ? next(prev) : next;
+        return sortByUpdatedAtDesc(resolved);
+      });
+    },
+    [],
+  );
 
   // Initialize from localStorage if available, but filter out legacy mock IDs
   const [activeSessionId, setActiveSessionIdState] = useState<string | null>(() => {
@@ -161,8 +175,7 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
           force ? { ttl: 0 } : undefined,
         );
 
-        // Tolerate older cache entries that stored a bare session array.
-        const items = Array.isArray(data) ? data : (data.items ?? []);
+        const items = sortByUpdatedAtDesc(Array.isArray(data) ? data : (data.items ?? []));
         const hasNext = Array.isArray(data) ? false : Boolean(data.has_next);
 
         setSessions(items);
@@ -216,10 +229,19 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
         page: nextPage,
         page_size: LIST_PAGE_SIZE,
       });
-      const merged = [...sessions];
+      const byId = new Map<string, (typeof sessions)[number]>();
+      for (const item of sessions) byId.set(item.id, item);
       for (const item of response.items) {
-        if (!merged.some((s) => s.id === item.id)) merged.push(item);
+        const existing = byId.get(item.id);
+        if (!existing) {
+          byId.set(item.id, item);
+          continue;
+        }
+        const existingTime = Date.parse(existing.updated_at || existing.created_at || '') || 0;
+        const nextTime = Date.parse(item.updated_at || item.created_at || '') || 0;
+        byId.set(item.id, nextTime >= existingTime ? item : existing);
       }
+      const merged = sortByUpdatedAtDesc([...byId.values()]);
       setSessions(merged);
       setSessionsHasMore(Boolean(response.has_next));
       setSessionsPage(nextPage);
@@ -320,11 +342,10 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   const addSession = useCallback(
     (session: ChatSessionRead) => {
       setSessions((prev) => {
-        // Avoid duplicates
-        if (prev.some((s) => s.id === session.id)) {
-          return prev.map((s) => (s.id === session.id ? session : s));
-        }
-        return [session, ...prev];
+        const next = prev.some((s) => s.id === session.id)
+          ? prev.map((s) => (s.id === session.id ? session : s))
+          : [session, ...prev];
+        return sortByUpdatedAtDesc(next);
       });
 
       // Invalidate cache to keep it in sync with the new session
@@ -336,6 +357,13 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     },
     [currentWorkspace, invalidateWorkspaceSessions],
   );
+
+  const touchSession = useCallback((sessionId: string) => {
+    const now = new Date().toISOString();
+    setSessions((prev) =>
+      sortByUpdatedAtDesc(prev.map((s) => (s.id === sessionId ? { ...s, updated_at: now } : s))),
+    );
+  }, []);
 
   const removeSession = useCallback(
     (sessionId: string) => {
@@ -377,7 +405,17 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
 
         // Update local state
         setSessions((prev) =>
-          prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s)),
+          sortByUpdatedAtDesc(
+            prev.map((s) =>
+              s.id === sessionId
+                ? {
+                    ...s,
+                    ...updated,
+                    title: newTitle,
+                  }
+                : s,
+            ),
+          ),
         );
 
         // Invalidate cache
@@ -433,6 +471,7 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
         sessionsReady,
         startNewChat,
         addSession,
+        touchSession,
         removeSession,
         deleteSession,
         renameSession,
