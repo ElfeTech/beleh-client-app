@@ -462,6 +462,27 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     ): Promise<void> => {
       if (!user) return;
 
+      // Optimistically update local context so restore/404 effects don't keep re-PATCHing
+      setWorkspaceContext((prev) => {
+        if (prev?.workspace.id !== workspaceId) return prev;
+        const nextState = { ...prev.state };
+        if (datasetId !== undefined) {
+          nextState.last_active_dataset_id = datasetId;
+        }
+        if (sessionId !== undefined) {
+          nextState.last_active_session_id = isValidSessionIdForState(sessionId)
+            ? sessionId
+            : null;
+        }
+        if (
+          nextState.last_active_dataset_id === prev.state.last_active_dataset_id &&
+          nextState.last_active_session_id === prev.state.last_active_session_id
+        ) {
+          return prev;
+        }
+        return { ...prev, state: nextState };
+      });
+
       // Store the pending state (will be merged/overwritten with subsequent calls)
       pendingStateRef.current = {
         workspaceId,
