@@ -14,10 +14,13 @@ import { useWorkspace } from './WorkspaceContext';
 import { useAuth } from './useAuth';
 import { readActiveSessionId, writeActiveSessionId, migrateLegacyUiMemory } from '../lib/uiMemory';
 import { INITIAL_PAGE, LIST_PAGE_SIZE } from '../constants/pagination';
+import { sortByUpdatedAtDesc } from '../utils/sortByUpdatedAt';
 
 interface ChatSessionContextType {
   sessions: ChatSessionRead[];
-  setSessions: (sessions: ChatSessionRead[]) => void;
+  setSessions: (
+    sessions: ChatSessionRead[] | ((prev: ChatSessionRead[]) => ChatSessionRead[]),
+  ) => void;
   activeSessionId: string | null;
   setActiveSessionId: (id: string | null) => void;
   /** True while user clicked New chat , no session in URL/context until first message or picking a thread. */
@@ -27,6 +30,8 @@ interface ChatSessionContextType {
   /** Clear active session and suppress auto-restore from workspace state (sidebar New chat). */
   startNewChat: () => void;
   addSession: (session: ChatSessionRead) => ChatSessionRead;
+  /** Bump a session to the top after new activity (uses current time when API does not return updated_at). */
+  touchSession: (sessionId: string) => void;
   removeSession: (sessionId: string) => void;
   deleteSession: (sessionId: string) => Promise<boolean>;
   renameSession: (sessionId: string, newTitle: string) => Promise<ChatSessionRead | null>;
@@ -51,7 +56,16 @@ export { ChatSessionContext };
 export function ChatSessionProvider({ children }: { children: ReactNode }) {
   const { user, loading: authLoading } = useAuth();
   const { currentWorkspace, workspaceContext, saveWorkspaceState } = useWorkspace();
-  const [sessions, setSessions] = useState<ChatSessionRead[]>([]);
+  const [sessions, setSessionsState] = useState<ChatSessionRead[]>([]);
+  const setSessions = useCallback(
+    (next: ChatSessionRead[] | ((prev: ChatSessionRead[]) => ChatSessionRead[])) => {
+      setSessionsState((prev) => {
+        const resolved = typeof next === 'function' ? next(prev) : next;
+        return sortByUpdatedAtDesc(resolved);
+      });
+    },
+    [],
+  );
 
   // Initialize from localStorage if available, but filter out legacy mock IDs
   const [activeSessionId, setActiveSessionIdState] = useState<string | null>(() => {
@@ -70,12 +84,18 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   const activeSessionIdRef = useRef<string | null>(activeSessionId);
   activeSessionIdRef.current = activeSessionId;
   const suppressSessionRestoreRef = useRef(false);
+  /** Avoid repeated workspace-state clears for the same missing last_active_session_id. */
+  const clearedStaleSessionRef = useRef<string | null>(null);
+  /** Sessions removed intentionally — suppress GenerativeChat 404 toasts. */
+  const intentionallyDeletedIdsRef = useRef<Set<string>>(new Set());
   const workspaceContextRef = useRef(workspaceContext);
   workspaceContextRef.current = workspaceContext;
   const saveWorkspaceStateRef = useRef(saveWorkspaceState);
   saveWorkspaceStateRef.current = saveWorkspaceState;
 
   const sessionsReady = Boolean(currentWorkspace?.id && sessionsReadyForId === currentWorkspace.id);
+  const sessionsRef = useRef(sessions);
+  sessionsRef.current = sessions;
 
   useEffect(() => {
     migrateLegacyUiMemory(user?.uid);
@@ -161,8 +181,9 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
           force ? { ttl: 0 } : undefined,
         );
 
-        // Tolerate older cache entries that stored a bare session array.
-        const items = Array.isArray(data) ? data : (data.items ?? []);
+        const items = sortByUpdatedAtDesc(Array.isArray(data) ? data : (data.items ?? [])).filter(
+          (s) => !intentionallyDeletedIdsRef.current.has(s.id),
+        );
         const hasNext = Array.isArray(data) ? false : Boolean(data.has_next);
 
         setSessions(items);
@@ -216,10 +237,20 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
         page: nextPage,
         page_size: LIST_PAGE_SIZE,
       });
-      const merged = [...sessions];
+      const byId = new Map<string, (typeof sessions)[number]>();
+      for (const item of sessions) byId.set(item.id, item);
       for (const item of response.items) {
-        if (!merged.some((s) => s.id === item.id)) merged.push(item);
+        if (intentionallyDeletedIdsRef.current.has(item.id)) continue;
+        const existing = byId.get(item.id);
+        if (!existing) {
+          byId.set(item.id, item);
+          continue;
+        }
+        const existingTime = Date.parse(existing.updated_at || existing.created_at || '') || 0;
+        const nextTime = Date.parse(item.updated_at || item.created_at || '') || 0;
+        byId.set(item.id, nextTime >= existingTime ? item : existing);
       }
+      const merged = sortByUpdatedAtDesc([...byId.values()]);
       setSessions(merged);
       setSessionsHasMore(Boolean(response.has_next));
       setSessionsPage(nextPage);
@@ -270,14 +301,22 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     if (isNewChatDraft) return;
 
     const sid = workspaceContext.state.last_active_session_id;
-    if (!sid || sid === '1' || sid === 'undefined') return;
-
-    // Stale server pointer (another user's session, deleted, or cleared) , null it out.
-    if (!sessions.some((s) => s.id === sid)) {
-      const datasetId = workspaceContext.state.last_active_dataset_id;
-      void saveWorkspaceState(currentWorkspace.id, datasetId, null);
+    if (!sid || sid === '1' || sid === 'undefined') {
+      clearedStaleSessionRef.current = null;
       return;
     }
+
+    // Stale server pointer (another user's session, deleted, or cleared) — null it out once.
+    if (!sessions.some((s) => s.id === sid)) {
+      if (clearedStaleSessionRef.current !== sid) {
+        clearedStaleSessionRef.current = sid;
+        const datasetId = workspaceContext.state.last_active_dataset_id;
+        void saveWorkspaceState(currentWorkspace.id, datasetId, null);
+      }
+      return;
+    }
+
+    clearedStaleSessionRef.current = null;
 
     const currentValid = Boolean(activeSessionId && sessions.some((s) => s.id === activeSessionId));
     if (!currentValid) {
@@ -297,34 +336,19 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   /**
    * Invalidate cached sessions for a workspace
    */
-  const invalidateWorkspaceSessions = useCallback(
-    (workspaceId: string) => {
-      if (!user) return;
-
-      user
-        .getIdToken()
-        .then((token) => {
-          apiCacheManager.invalidate('workspace-sessions', [token, workspaceId]);
-          console.log(
-            '[ChatSessionContext] Invalidated sessions cache for workspace:',
-            workspaceId,
-          );
-        })
-        .catch((err) => {
-          console.error('[ChatSessionContext] Failed to invalidate sessions cache:', err);
-        });
-    },
-    [user],
-  );
+  const invalidateWorkspaceSessions = useCallback((workspaceId: string) => {
+    // Drop all session list entries so a token-keyed miss cannot revive a deleted chat.
+    apiCacheManager.invalidateAll('workspace-sessions');
+    console.log('[ChatSessionContext] Invalidated sessions cache for workspace:', workspaceId);
+  }, []);
 
   const addSession = useCallback(
     (session: ChatSessionRead) => {
       setSessions((prev) => {
-        // Avoid duplicates
-        if (prev.some((s) => s.id === session.id)) {
-          return prev.map((s) => (s.id === session.id ? session : s));
-        }
-        return [session, ...prev];
+        const next = prev.some((s) => s.id === session.id)
+          ? prev.map((s) => (s.id === session.id ? session : s))
+          : [session, ...prev];
+        return sortByUpdatedAtDesc(next);
       });
 
       // Invalidate cache to keep it in sync with the new session
@@ -337,31 +361,60 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     [currentWorkspace, invalidateWorkspaceSessions],
   );
 
+  const touchSession = useCallback((sessionId: string) => {
+    const now = new Date().toISOString();
+    setSessions((prev) =>
+      sortByUpdatedAtDesc(prev.map((s) => (s.id === sessionId ? { ...s, updated_at: now } : s))),
+    );
+  }, []);
+
   const removeSession = useCallback(
     (sessionId: string) => {
+      intentionallyDeletedIdsRef.current.add(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      if (activeSessionId === sessionId) {
+      if (activeSessionIdRef.current === sessionId) {
+        suppressSessionRestoreRef.current = true;
         setActiveSessionId(null);
+        const wid = currentWorkspace?.id;
+        if (wid && wid !== 'undefined') {
+          const datasetId =
+            workspaceContextRef.current?.workspace.id === wid
+              ? workspaceContextRef.current.state.last_active_dataset_id
+              : null;
+          void saveWorkspaceStateRef.current(wid, datasetId, null);
+        }
       }
 
-      // Invalidate cache
       if (currentWorkspace) {
         invalidateWorkspaceSessions(currentWorkspace.id);
       }
     },
-    [activeSessionId, currentWorkspace, invalidateWorkspaceSessions, setActiveSessionId],
+    [currentWorkspace, invalidateWorkspaceSessions, setActiveSessionId],
   );
 
   const deleteSession = useCallback(
     async (sessionId: string) => {
       if (!user) return false;
+
+      const snapshot = sessionsRef.current.find((s) => s.id === sessionId) ?? null;
+      // Optimistic UI + cache clear before the DELETE round-trip so refresh cannot revive it.
+      removeSession(sessionId);
+
       try {
         const token = await user.getIdToken();
         await apiClient.deleteChatSession(token, sessionId);
-        removeSession(sessionId);
         return true;
       } catch (err) {
         console.error('[ChatSessionContext] Failed to delete session:', err);
+        intentionallyDeletedIdsRef.current.delete(sessionId);
+        if (snapshot) {
+          suppressSessionRestoreRef.current = false;
+          setSessions((prev) =>
+            prev.some((s) => s.id === snapshot.id)
+              ? prev
+              : sortByUpdatedAtDesc([snapshot, ...prev]),
+          );
+        }
         return false;
       }
     },
@@ -377,7 +430,17 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
 
         // Update local state
         setSessions((prev) =>
-          prev.map((s) => (s.id === sessionId ? { ...s, title: newTitle } : s)),
+          sortByUpdatedAtDesc(
+            prev.map((s) =>
+              s.id === sessionId
+                ? {
+                    ...s,
+                    ...updated,
+                    title: newTitle,
+                  }
+                : s,
+            ),
+          ),
         );
 
         // Invalidate cache
@@ -433,6 +496,7 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
         sessionsReady,
         startNewChat,
         addSession,
+        touchSession,
         removeSession,
         deleteSession,
         renameSession,

@@ -1,4 +1,4 @@
-import { useState, useContext, useMemo, useEffect } from 'react';
+import { useState, useContext, useMemo, useEffect, useRef } from 'react';
 import {
   MessageSquare,
   Database,
@@ -36,6 +36,7 @@ import {
 } from '../../lib/uiMemory';
 import { useUiMemory } from '../../hooks/useUiMemory';
 import { SEARCH_VISIBILITY_THRESHOLD } from '../../constants/pagination';
+import { SessionListSkeleton } from '../workspace/WorkspaceLoadingSkeletons';
 import './UnifiedSidebar.css';
 
 function initialsFromUser(
@@ -116,6 +117,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
   const [showRenamePrompt, setShowRenamePrompt] = useState(false);
   const [renameDefaultTitle, setRenameDefaultTitle] = useState('');
   const [isRenaming, setIsRenaming] = useState(false);
+  const deleteInFlightRef = useRef(false);
 
   const collapsed = !isDrawer && isCollapsed;
 
@@ -163,13 +165,14 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
 
   const handleDelete = async () => {
     const sessionId = actionSessionId;
-    if (!sessionId) return;
+    if (!sessionId || deleteInFlightRef.current) return;
+    deleteInFlightRef.current = true;
     setIsDeleting(true);
+    setShowDeleteConfirm(false);
     try {
       const ok = await chatContext?.deleteSession(sessionId);
       if (ok) {
         toast.success('Chat deleted');
-        setShowDeleteConfirm(false);
         if (activeSessionId === sessionId && effectiveWorkspaceId) {
           navigate(workspaceChatPath(effectiveWorkspaceId), { replace: true });
         }
@@ -179,6 +182,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
     } catch {
       toast.error('Could not delete this chat. Please try again.');
     } finally {
+      deleteInFlightRef.current = false;
       setIsDeleting(false);
       setActionSessionId(null);
     }
@@ -359,6 +363,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                         className="sidebar-icon-btn rounded-md p-1.5 disabled:opacity-40"
                         title="Refresh list"
                         aria-label="Refresh recent chats"
+                        aria-busy={sessionsLoading || refreshingChats}
                       >
                         <RefreshCw
                           className={cn(
@@ -378,6 +383,15 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                       </button>
                     </div>
                   </div>
+                  {(sessionsLoading || refreshingChats) && (
+                    <p
+                      className="unified-sidebar__sessions-status"
+                      role="status"
+                      aria-live="polite"
+                    >
+                      Loading chats…
+                    </p>
+                  )}
                   {sessions.length > SEARCH_VISIBILITY_THRESHOLD && (
                     <div className="unified-sidebar__sessions-search">
                       <Search
@@ -396,8 +410,18 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                       />
                     </div>
                   )}
-                  <div className="unified-sidebar__sessions-list no-scrollbar">
-                    {filteredSessions.length > 0 ? (
+                  <div
+                    className={cn(
+                      'unified-sidebar__sessions-list no-scrollbar',
+                      (sessionsLoading || refreshingChats) &&
+                        'unified-sidebar__sessions-list--loading',
+                    )}
+                  >
+                    {sessionsLoading || refreshingChats ? (
+                      <SessionListSkeleton
+                        rows={sessions.length > 0 ? Math.min(sessions.length, 5) : 5}
+                      />
+                    ) : filteredSessions.length > 0 ? (
                       <>
                         {filteredSessions.map((session) => (
                           <div
@@ -466,6 +490,8 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                     disabled={sessionsLoading || refreshingChats}
                     className="sidebar-icon-btn rounded-md p-2 disabled:opacity-40"
                     title="Refresh chats"
+                    aria-label="Refresh recent chats"
+                    aria-busy={sessionsLoading || refreshingChats}
                   >
                     <RefreshCw
                       className={cn(

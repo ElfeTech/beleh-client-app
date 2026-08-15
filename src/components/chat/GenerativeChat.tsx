@@ -109,6 +109,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     activeSessionId,
     setActiveSessionId,
     addSession,
+    touchSession,
     isNewChatDraft,
     sessionsReady,
     sessions,
@@ -169,11 +170,17 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     refetch: refetchMessages,
   } = useMessages(activeSessionId);
 
-  // Invalid / foreign / deleted session , clear active id (URL hydrate strips ?session=).
+  // Invalid / foreign / deleted session — clear active id (URL hydrate strips ?session=).
   useEffect(() => {
     if (!messagesError || !activeSessionId) return;
     const status = messagesError instanceof ApiRequestError ? messagesError.status : undefined;
     if (status !== 404 && status !== 403) return;
+
+    // Intentional delete already removed the session from the list — stay quiet (no toast / no re-PATCH).
+    if (!sessions.some((s) => s.id === activeSessionId)) {
+      setActiveSessionId(null);
+      return;
+    }
 
     console.warn('[GenerativeChat] Session messages unavailable, clearing active session.', status);
     setActiveSessionId(null);
@@ -184,6 +191,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   }, [
     messagesError,
     activeSessionId,
+    sessions,
     setActiveSessionId,
     currentWorkspace?.id,
     selectedDatasourceId,
@@ -567,6 +575,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         setSourcePickerOpenRequest((n) => n + 1);
       }
 
+      if (activeSessionId) {
+        touchSession(activeSessionId);
+      }
+
       void refreshWorkspaceUsage().then((usage) => {
         if (!usage) return;
         const resetKey = usage.reset_at ?? usage.daily_reset_at ?? 'cycle';
@@ -599,7 +611,14 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
         );
       });
     },
-    [refreshWorkspaceUsage, currentWorkspace?.id, workspaceId, showUpgrade],
+    [
+      refreshWorkspaceUsage,
+      currentWorkspace?.id,
+      workspaceId,
+      showUpgrade,
+      activeSessionId,
+      touchSession,
+    ],
   );
 
   const applyTurnFailure = useCallback(

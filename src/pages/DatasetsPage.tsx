@@ -75,6 +75,7 @@ import {
   TABLES_PAGE_SIZE,
   TABLES_SEARCH_VISIBILITY_THRESHOLD,
 } from '../constants/pagination';
+import { sortByUpdatedAtDesc } from '../utils/sortByUpdatedAt';
 import './DatasetsPage.css';
 
 async function fetchAllDatasetTables(token: string, datasetId: string): Promise<DatasetTable[]> {
@@ -410,7 +411,12 @@ const DatasetsPage: React.FC = () => {
     datasources.forEach((datasource) =>
       rows.push({ kind: 'datasource', id: datasource.id, datasource }),
     );
-    return rows;
+    const keyed = rows.map((row) => ({
+      row,
+      updated_at: row.kind === 'connector' ? row.connector.updated_at : row.datasource.updated_at,
+      created_at: row.kind === 'connector' ? row.connector.created_at : row.datasource.created_at,
+    }));
+    return sortByUpdatedAtDesc(keyed).map((item) => item.row);
   }, [connectors, datasources]);
 
   const activeConnectionCount = useMemo(() => {

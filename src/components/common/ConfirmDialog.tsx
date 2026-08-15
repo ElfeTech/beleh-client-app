@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useRef } from 'react';
 import { handleBackdropClick, useModalDismiss } from './useModalDismiss';
 import './ConfirmDialog.css';
 
@@ -26,9 +27,19 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  useModalDismiss(isOpen, onCancel);
+  useModalDismiss(isOpen && !isLoading, onCancel);
+  const confirmInFlightRef = useRef(false);
 
-  if (!isOpen) return null;
+  if (!isOpen) {
+    confirmInFlightRef.current = false;
+    return null;
+  }
+
+  const handleConfirm = () => {
+    if (isLoading || confirmInFlightRef.current) return;
+    confirmInFlightRef.current = true;
+    onConfirm();
+  };
 
   const dialogContent = (
     <div
@@ -36,7 +47,7 @@ export function ConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
-      onMouseDown={(e) => handleBackdropClick(e, onCancel)}
+      onMouseDown={(e) => handleBackdropClick(e, isLoading ? () => undefined : onCancel)}
     >
       <div className="confirm-dialog-container">
         <div className={`confirm-dialog-icon ${variant}`}>
@@ -91,7 +102,7 @@ export function ConfirmDialog({
           <button
             type="button"
             className={`confirm-dialog-btn confirm-btn ${variant}`}
-            onClick={onConfirm}
+            onClick={handleConfirm}
             disabled={isLoading}
           >
             {isLoading ? 'Processing...' : confirmText}
