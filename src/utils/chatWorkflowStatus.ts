@@ -72,7 +72,7 @@ export function getWorkflowFailure(response: AssistantTurnResponse): WorkflowFai
     const { message } = asErrorData(errorArt.data);
     return {
       title: errorArt.title || 'Analysis could not be completed',
-      detail: message || 'The query failed on the server. Check your data source and try again.',
+      detail: message || 'The prompt failed on the server. Check your data source and try again.',
       canRetry: true,
     };
   }

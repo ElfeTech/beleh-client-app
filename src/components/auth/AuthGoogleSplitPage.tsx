@@ -1,3 +1,4 @@
+import { useId, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import logo from '../../assets/logo.webp';
@@ -139,6 +140,8 @@ function AuthBrandHeroWaves() {
   );
 }
 
+const LEGAL_CONSENT_ERROR = 'Please agree to the Terms of Use and Privacy Policy to create an account.';
+
 export function AuthGoogleSplitPage({
   mode,
   error,
@@ -148,6 +151,23 @@ export function AuthGoogleSplitPage({
   const footer = FOOTER_COPY[mode];
   const brand = AUTH_BRAND_PANEL;
   const form = AUTH_FORM_COPY[mode];
+  const consentId = useId();
+  const consentRef = useRef<HTMLInputElement>(null);
+  const [agreedToLegal, setAgreedToLegal] = useState(false);
+  const [needsLegalConsent, setNeedsLegalConsent] = useState(false);
+
+  const showLegalConsent = mode === 'signup';
+  const consentInvalid = showLegalConsent && needsLegalConsent && !agreedToLegal;
+  const displayedError = consentInvalid ? LEGAL_CONSENT_ERROR : error;
+
+  const handleGoogleClick = () => {
+    if (showLegalConsent && !agreedToLegal) {
+      setNeedsLegalConsent(true);
+      consentRef.current?.focus();
+      return;
+    }
+    onGoogleAuth();
+  };
 
   return (
     <div className="auth-split-page">
@@ -203,21 +223,68 @@ export function AuthGoogleSplitPage({
             <p className="form-subtitle form-subtitle--hint">{form.hint}</p>
           </div>
 
-          {error && (
-            <div className="auth-error-message">
+          {displayedError && (
+            <div
+              className="auth-error-message"
+              role="alert"
+              id={consentInvalid ? `${consentId}-error` : undefined}
+            >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
                 <line x1="12" y1="8" x2="12" y2="12" />
                 <line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
-              <p>{error}</p>
+              <p>{displayedError}</p>
             </div>
           )}
+
+          {showLegalConsent ? (
+            <div
+              className={
+                consentInvalid ? 'auth-legal-consent auth-legal-consent--invalid' : 'auth-legal-consent'
+              }
+            >
+              <input
+                ref={consentRef}
+                id={consentId}
+                type="checkbox"
+                checked={agreedToLegal}
+                aria-required="true"
+                aria-invalid={consentInvalid || undefined}
+                aria-describedby={consentInvalid ? `${consentId}-error` : undefined}
+                onChange={(e) => {
+                  setAgreedToLegal(e.target.checked);
+                  if (e.target.checked) setNeedsLegalConsent(false);
+                }}
+              />
+              <label htmlFor={consentId} className="auth-legal-consent__label">
+                I agree to the{' '}
+                <Link
+                  to="/legal/terms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Terms of Use
+                </Link>{' '}
+                and{' '}
+                <Link
+                  to="/legal/privacy"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Privacy Policy
+                </Link>
+                .
+              </label>
+            </div>
+          ) : null}
 
           <button
             type="button"
             className="auth-google-btn"
-            onClick={onGoogleAuth}
+            onClick={handleGoogleClick}
             disabled={authLoading}
           >
             {authLoading ? (

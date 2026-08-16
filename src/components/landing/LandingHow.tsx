@@ -43,7 +43,7 @@ export function LandingHow() {
             <h3>Ask in plain English</h3>
             <p>
               &quot;Which region churned the most last quarter?&quot; Type it like you&apos;d ask a
-              colleague. No query language required, ever.
+              colleague. No SQL required, ever.
             </p>
           </div>
           <div className="landing-step-card">

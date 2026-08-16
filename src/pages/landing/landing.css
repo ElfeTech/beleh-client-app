@@ -1409,7 +1409,8 @@ html[data-landing-theme='light'] .landing-btn-ghost-dark.landing-pricing-card__c
   margin-bottom: 14px;
 }
 
-.landing-foot-col a {
+.landing-foot-col a,
+.landing-foot-col button {
   display: block;
   font-size: 14px;
   color: var(--tx-68);
@@ -1423,7 +1424,8 @@ html[data-landing-theme='light'] .landing-btn-ghost-dark.landing-pricing-card__c
   text-align: left;
 }
 
-.landing-foot-col a:hover {
+.landing-foot-col a:hover,
+.landing-foot-col button:hover {
   color: var(--tx-100);
 }
 
@@ -1612,12 +1614,16 @@ html[data-landing-theme='light'] .landing-footer,
 }
 
 html[data-landing-theme='light'] .landing-foot-col a,
-.landing-page[data-theme='light'] .landing-foot-col a {
+.landing-page[data-theme='light'] .landing-foot-col a,
+html[data-landing-theme='light'] .landing-foot-col button,
+.landing-page[data-theme='light'] .landing-foot-col button {
   color: #3a4558;
 }
 
 html[data-landing-theme='light'] .landing-foot-col a:hover,
-.landing-page[data-theme='light'] .landing-foot-col a:hover {
+.landing-page[data-theme='light'] .landing-foot-col a:hover,
+html[data-landing-theme='light'] .landing-foot-col button:hover,
+.landing-page[data-theme='light'] .landing-foot-col button:hover {
   color: var(--ink);
 }
 

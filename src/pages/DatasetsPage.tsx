@@ -212,6 +212,7 @@ const DatasetsPage: React.FC = () => {
   /** Stashed drill-down prefs from uiMemory; applied once tables load for the restored source. */
   const pendingDrillRef = useRef<DatasetsPageViewState | null>(null);
   const appliedDrillKeyRef = useRef<string | null>(null);
+  const skipCloseRefreshRef = useRef(false);
 
   // Phase A: restore filter / search / source + stash drill prefs
   useEffect(() => {
@@ -469,7 +470,11 @@ const DatasetsPage: React.FC = () => {
     const row = unifiedSources.find(
       (r) => r.kind === selectedCatalogSource.kind && r.id === selectedCatalogSource.id,
     );
-    if (!row) return;
+    if (!row) {
+      setTablesLoading(true);
+      setCatalogTables([]);
+      return;
+    }
 
     if (row.kind === 'connector') {
       const meta = row.connector.metadata_status;
@@ -722,6 +727,11 @@ const DatasetsPage: React.FC = () => {
     setSelectedSchemaName(null);
     setSelectedTableName(null);
     setConnectorDetailTab('columns');
+    setCatalogTables([]);
+    setPreviewData(null);
+    setPreviewError(null);
+    setPreviewLoading(false);
+    setTablesLoading(true);
     if (ref.kind === 'connector') {
       setBrowseLevel('schemas');
       if (isMobile) setMobileCatalogPane('schemas');
@@ -879,10 +889,35 @@ const DatasetsPage: React.FC = () => {
     setDatasetToRename(null);
   };
 
-  const handleLiveSourceSuccess = async () => {
+  const handleLiveSourceSuccess = async (created?: ConnectorResponse) => {
+    skipCloseRefreshRef.current = true;
+    if (created) {
+      workspaceContext?.setConnectors([
+        created,
+        ...connectors.filter((connector) => connector.id !== created.id),
+      ]);
+      setSourceFilter('all');
+      setSearchQuery('');
+      setSelectedCatalogSource({ kind: 'connector', id: created.id });
+      setCatalogTables([]);
+      setTablesLoading(true);
+    }
+
     const demoId = findDemoDatasource(datasources)?.id ?? null;
     const hadDemo = Boolean(demoId) || datasources.some((d) => Boolean(d.is_demo));
     await refreshCatalogInBackground();
+    if (created?.id && workspaceContext?.refreshConnectors) {
+      for (const delay of [1200, 2000, 3000]) {
+        await new Promise((resolve) => {
+          window.setTimeout(resolve, delay);
+        });
+        const list = await workspaceContext.refreshConnectors({ silent: true });
+        const row = list.find((connector) => connector.id === created.id);
+        if (!row || row.metadata_status === 'COMPLETED' || row.metadata_status === 'FAILED') {
+          break;
+        }
+      }
+    }
     if (hadDemo && user && workspaceId) {
       try {
         const token = await user.getIdToken();
@@ -903,6 +938,10 @@ const DatasetsPage: React.FC = () => {
 
   const handleConnectionPanelClose = () => {
     setShowConnectionPanel(false);
+    if (skipCloseRefreshRef.current) {
+      skipCloseRefreshRef.current = false;
+      return;
+    }
     // Refetch even when dismissed via X (upload may already exist server-side).
     void refreshCatalogInBackground();
   };
@@ -1325,6 +1364,8 @@ const DatasetsPage: React.FC = () => {
                           ? row.datasource.status === 'FAILED'
                           : row.connector.status === 'FAILED';
                       const isDatasourcePending = row.kind === 'datasource' && !ready && !isFailed;
+                      const loadingLabel =
+                        row.kind === 'connector' ? 'Loading schemas…' : 'Loading tables…';
 
                       return (
                         <div
@@ -1336,6 +1377,7 @@ const DatasetsPage: React.FC = () => {
                             isSelected ? 'is-selected' : '',
                             isFailed ? 'is-failed' : '',
                             isDatasourcePending ? 'is-disabled' : '',
+                            isSelected && tablesLoading ? 'is-loading' : '',
                           ]
                             .filter(Boolean)
                             .join(' ')}
@@ -1388,10 +1430,15 @@ const DatasetsPage: React.FC = () => {
                                 <span className={`sc-status-dot ${statusDotClass(pill.className)}`}>
                                   {pill.label}
                                 </span>
-                                <span>{tableLabel}</span>
+                                <span>{isSelected && tablesLoading ? loadingLabel : tableLabel}</span>
                               </div>
                             </div>
                           </div>
+                          {isSelected && tablesLoading ? (
+                            <div className="sc-source-item__progress" aria-hidden>
+                              <span className="sc-source-item__progress-bar" />
+                            </div>
+                          ) : null}
                         </div>
                       );
                     })}
@@ -1431,21 +1478,10 @@ const DatasetsPage: React.FC = () => {
 
                 <div className="sc-panel__head">
                   {isConnectorSource && browseLevel === 'schemas'
-                    ? `Schemas (${
-                        selectedCatalogRow?.kind === 'connector' &&
-                        (selectedCatalogRow.connector.metadata_status === 'PENDING' ||
-                          selectedCatalogRow.connector.metadata_status === 'PROCESSING')
-                          ? ','
-                          : schemaGroups.length
-                      })`
+                    ? `Schemas (${tablesLoading ? '…' : schemaGroups.length})`
                     : isConnectorSource
-                      ? `Tables in ${selectedSchemaName ?? 'schema'} (${browseTables.length})`
-                      : `Sheets & tables (${
-                          selectedCatalogRow?.kind === 'datasource' &&
-                          selectedCatalogRow.datasource.status !== 'READY'
-                            ? ','
-                            : catalogTables.length
-                        })`}
+                      ? `Tables in ${selectedSchemaName ?? 'schema'} (${tablesLoading ? '…' : browseTables.length})`
+                      : `Sheets & tables (${tablesLoading ? '…' : catalogTables.length})`}
                 </div>
                 {showTablesSearch ? (
                   <div className="sc-tables-search">
@@ -1476,11 +1512,19 @@ const DatasetsPage: React.FC = () => {
                 ) : null}
                 <div className="sc-panel__body sc-panel__body--flush">
                   {tablesLoading ? (
-                    <>
+                    <div className="sc-catalog-progress" role="status" aria-live="polite">
+                      <div className="sc-catalog-progress__track">
+                        <span className="sc-catalog-progress__bar" />
+                      </div>
+                      <p className="sc-catalog-progress__label">
+                        {isConnectorSource && browseLevel === 'schemas'
+                          ? 'Loading schemas from this source…'
+                          : 'Loading tables from this source…'}
+                      </p>
                       <div className="sc-skeleton-row" />
                       <div className="sc-skeleton-row" />
                       <div className="sc-skeleton-row" />
-                    </>
+                    </div>
                   ) : selectedCatalogRow?.kind === 'connector' &&
                     (selectedCatalogRow.connector.metadata_status === 'PENDING' ||
                       selectedCatalogRow.connector.metadata_status === 'PROCESSING') ? (
@@ -1701,8 +1745,8 @@ const DatasetsPage: React.FC = () => {
         <DatasourceConnectionPanel
           workspaceId={workspaceId}
           onClose={handleConnectionPanelClose}
-          onSuccess={() => {
-            void handleLiveSourceSuccess();
+          onSuccess={(created) => {
+            void handleLiveSourceSuccess(created);
           }}
         />
       )}

@@ -39,7 +39,12 @@ import { LIST_PAGE_SIZE, MAX_LIST_PAGES } from '../constants/pagination';
 interface WorkspaceContextType {
   workspaces: WorkspaceResponse[];
   currentWorkspace: WorkspaceResponse | null;
-  setCurrentWorkspace: (workspace: WorkspaceResponse | null) => void;
+  setCurrentWorkspace: (
+    workspace:
+      | WorkspaceResponse
+      | null
+      | ((prev: WorkspaceResponse | null) => WorkspaceResponse | null),
+  ) => void;
   datasources: DataSourceResponse[];
   /** Set datasources directly (e.g. after hydration fetches them) so UI has data without waiting for context effect */
   setDatasources: (datasources: DataSourceResponse[]) => void;
@@ -52,9 +57,9 @@ interface WorkspaceContextType {
   loading: boolean;
   refreshWorkspaces: () => Promise<void>;
   /** Refetch datasources. Pass `{ silent: true }` to avoid flipping page-level loading. */
-  refreshDatasources: (options?: { silent?: boolean }) => Promise<void>;
+  refreshDatasources: (options?: { silent?: boolean }) => Promise<DataSourceResponse[]>;
   /** Refetch connectors. Pass `{ silent: true }` to avoid flipping page-level loading. */
-  refreshConnectors: (options?: { silent?: boolean }) => Promise<void>;
+  refreshConnectors: (options?: { silent?: boolean }) => Promise<ConnectorResponse[]>;
   refreshWorkspaceUsage: () => Promise<WorkspaceUsageResponse | null>;
   loadWorkspaceContext: (
     workspaceId: string,
@@ -102,6 +107,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const connectorsRef = useRef(connectors);
   const loadingRef = useRef(loading);
   const sanitizedServerStateRef = useRef<string | null>(null);
+  const datasourcesRefreshGen = useRef(0);
+  const connectorsRefreshGen = useRef(0);
 
   useEffect(() => {
     datasourcesRef.current = datasources;
@@ -190,10 +197,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
       // Only set default workspace on initial load
       if (!isInitialized && fetchedWorkspaces.length > 0) {
+        const pathMatch =
+          typeof window !== 'undefined'
+            ? window.location.pathname.match(/^\/workspace\/([^/]+)/)
+            : null;
+        const urlWorkspaceId = pathMatch?.[1] && pathMatch[1] !== 'undefined' ? pathMatch[1] : null;
+
         const savedWorkspaceId = readActiveWorkspaceId();
         let workspaceToSet: WorkspaceResponse | null = null;
 
-        if (savedWorkspaceId) {
+        // Prefer deep-linked URL id so we don't bootstrap the wrong workspace first.
+        if (urlWorkspaceId) {
+          workspaceToSet =
+            fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === urlWorkspaceId) || null;
+        }
+
+        if (!workspaceToSet && savedWorkspaceId) {
           workspaceToSet =
             fetchedWorkspaces.find((w: WorkspaceResponse) => w.id === savedWorkspaceId) || null;
         }
@@ -204,7 +223,14 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             fetchedWorkspaces[0];
         }
 
-        setCurrentWorkspace(workspaceToSet);
+        setCurrentWorkspace((prev) => {
+          // Keep an early URL-bound workspace if list hasn't caught up yet.
+          if (prev && urlWorkspaceId && prev.id === urlWorkspaceId) {
+            const fromList = fetchedWorkspaces.find((w) => w.id === urlWorkspaceId);
+            return fromList ?? prev;
+          }
+          return workspaceToSet;
+        });
         setIsInitialized(true);
       }
     } catch (error) {
@@ -217,24 +243,22 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   // Refresh datasources function using unified cache manager
   const refreshDatasources = useCallback(
-    async (options?: { silent?: boolean }) => {
+    async (options?: { silent?: boolean }): Promise<DataSourceResponse[]> => {
       if (!user || !currentWorkspace) {
         setDatasources([]);
-        return;
+        return [];
       }
 
       // Keep existing catalog visible during background refetch after add/close.
       const showLoading = !options?.silent;
+      const gen = ++datasourcesRefreshGen.current;
       try {
         if (showLoading) setLoading(true);
         const token = await user.getIdToken();
         if (!token || typeof token !== 'string' || token.length < 10) {
           console.warn('[WorkspaceContext] No valid token for datasources, skipping fetch');
-          return;
+          return datasourcesRef.current;
         }
-
-        // Always bypass stale cache so add/delete on other routes reflects immediately
-        apiCacheManager.invalidate('datasources', [token, currentWorkspace.id]);
 
         const data = await apiCacheManager.fetch(
           'datasources',
@@ -250,14 +274,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             );
           },
           [token, currentWorkspace.id],
+          { force: true, staleWhileRevalidate: false },
         );
 
-        setDatasources(data);
+        if (gen === datasourcesRefreshGen.current) {
+          setDatasources(data);
+        }
+        return data;
       } catch (error) {
         console.error('[WorkspaceContext] Failed to fetch datasources:', error);
-        setDatasources([]);
+        if (gen === datasourcesRefreshGen.current) {
+          setDatasources([]);
+        }
+        return [];
       } finally {
-        if (showLoading) setLoading(false);
+        if (showLoading && gen === datasourcesRefreshGen.current) setLoading(false);
       }
     },
     [user, currentWorkspace],
@@ -265,18 +296,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
   // Refresh connectors function
   const refreshConnectors = useCallback(
-    async (options?: { silent?: boolean }) => {
+    async (options?: { silent?: boolean }): Promise<ConnectorResponse[]> => {
       if (!user || !currentWorkspace) {
         setConnectors([]);
-        return;
+        return [];
       }
 
       const showLoading = !options?.silent;
+      const gen = ++connectorsRefreshGen.current;
       try {
         if (showLoading) setLoading(true);
         const token = await user.getIdToken();
-
-        apiCacheManager.invalidate('connectors', [token, currentWorkspace.id]);
 
         const data = await apiCacheManager.fetch(
           'connectors',
@@ -284,14 +314,21 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
             return apiClient.listConnectors(authToken, wId);
           },
           [token, currentWorkspace.id],
+          { force: true, staleWhileRevalidate: false },
         );
 
-        setConnectors(data);
+        if (gen === connectorsRefreshGen.current) {
+          setConnectors(data);
+        }
+        return data;
       } catch (error) {
         console.error('[WorkspaceContext] Failed to fetch connectors:', error);
-        setConnectors([]);
+        if (gen === connectorsRefreshGen.current) {
+          setConnectors([]);
+        }
+        return [];
       } finally {
-        if (showLoading) setLoading(false);
+        if (showLoading && gen === connectorsRefreshGen.current) setLoading(false);
       }
     },
     [user, currentWorkspace],
@@ -405,15 +442,15 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
 
     loadedWorkspaceRef.current = currentWorkspace.id;
-    void (async () => {
-      try {
-        await Promise.all([refreshDatasources(), refreshConnectors()]);
-      } catch {
-        // Individual refresh paths already log; continue to load persisted UI state
-      }
-      await loadWorkspaceContext(currentWorkspace.id);
-      await refreshWorkspaceUsage();
-    })();
+    // Critical path: context (session/dataset restore) in parallel with source catalogs.
+    // Usage is peripheral (sidebar / soft lock) — never block restore on it.
+    void Promise.all([
+      refreshDatasources(),
+      refreshConnectors(),
+      loadWorkspaceContext(currentWorkspace.id),
+    ]).finally(() => {
+      void refreshWorkspaceUsage();
+    });
   }, [
     user,
     currentWorkspace,

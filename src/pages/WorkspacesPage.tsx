@@ -196,7 +196,7 @@ export function WorkspacesPage() {
       return 'Shared with you from another team. You have member access under their subscription.';
     }
     if (workspace.is_default) {
-      return 'Primary workspace for schema catalogs, AI-assisted queries, and governance metadata.';
+      return 'Primary workspace for schema catalogs, AI-assisted prompts, and governance metadata.';
     }
     return 'Downloading database metadata updates locks zero reads/writes.';
   };

@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import logo from '../../assets/logo.webp';
+import { openCookiePreferences } from '../../lib/cookieConsent';
 
 const SOCIALS = [
   { label: 'Yulona on X', href: 'https://x.com/theyulona', icon: 'x' },
@@ -88,7 +89,11 @@ export function LandingFooter() {
               <Link to="/legal/terms">Terms of use</Link>
               <Link to="/legal/privacy">Privacy policy</Link>
               <Link to="/legal/cookies">Cookie policy</Link>
+              <button type="button" onClick={() => openCookiePreferences()}>
+                Cookie settings
+              </button>
               <Link to="/legal/dpa">Data processing</Link>
+              <Link to="/legal/aup">Acceptable use</Link>
             </div>
           </div>
         </div>

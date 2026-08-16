@@ -256,7 +256,7 @@ export function workspaceLimitUpgradeMessage(
     seats: 'member seats',
     datasources: 'datasets',
     workspaces: 'workspaces',
-    queries: 'monthly queries',
+    queries: 'monthly prompts',
     credits: 'credits',
     daily_credits: 'daily credits',
   } as const;

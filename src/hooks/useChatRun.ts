@@ -67,7 +67,7 @@ const DEFAULT_SHIMMER_PHRASES = [
 
 const PHASE_SHIMMER_LEAD: Record<ChatRunPhase, string> = {
   planning: 'Planning the analysis…',
-  querying: 'Querying your data…',
+  querying: 'Running your prompt…',
   analyzing: 'Analyzing results…',
   rendering: 'Preparing insights…',
 };
