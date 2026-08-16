@@ -8,6 +8,7 @@ import { SupabaseOrgsView } from './connector-panel/SupabaseOrgsView';
 import { SupabaseProjectsView } from './connector-panel/SupabaseProjectsView';
 import { invalidateProviderProjectsCache } from '../../lib/providerCache';
 import type { ProviderConnection } from '../../types/provider';
+import type { ConnectorResponse } from '../../types/api';
 import './DatasourceConnectionPanel.css';
 
 type PanelView =
@@ -21,7 +22,7 @@ export interface DatasourceConnectionPanelProps {
   workspaceId: string;
   onClose: () => void;
   /** Called after a successful connect (upload / postgres / supabase bind). */
-  onSuccess?: () => void;
+  onSuccess?: (created?: ConnectorResponse) => void;
   /** When true, hide file-based connectors (e.g. open from chat). */
   hideFileSources?: boolean;
 }
@@ -116,8 +117,8 @@ export function DatasourceConnectionPanel({
     else if (type === 'supabase') push({ id: 'supabase-orgs' });
   };
 
-  const handleFlowSuccess = () => {
-    onSuccess?.();
+  const handleFlowSuccess = (created?: ConnectorResponse) => {
+    onSuccess?.(created);
     onClose();
   };
 

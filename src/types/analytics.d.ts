@@ -4,7 +4,7 @@ interface DataLayerObject {
   [key: string]: unknown;
 }
 
-type GtagCommand = 'config' | 'event' | 'js' | 'set';
+type GtagCommand = 'config' | 'event' | 'js' | 'set' | 'consent';
 
 interface Window {
   dataLayer: Array<DataLayerObject | IArguments | unknown[]>;

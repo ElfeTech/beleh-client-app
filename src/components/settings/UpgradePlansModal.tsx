@@ -180,7 +180,7 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                             <polyline points="20 6 9 17 4 12" />
                           </svg>
                           <span>
-                            {plan.limits.monthly_query_limit.toLocaleString()} queries/month
+                            {plan.limits.monthly_query_limit.toLocaleString()} prompts/month
                           </span>
                         </div>
                       ) : null}

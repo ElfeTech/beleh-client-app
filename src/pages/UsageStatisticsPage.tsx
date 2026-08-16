@@ -182,7 +182,7 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
 
     return [
       {
-        label: 'Total Queries',
+        label: 'Total Prompts',
         value: String(history?.total_period?.total_queries ?? 0),
         detail: periodLabel,
         icon: Activity,
@@ -307,7 +307,7 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
               <div className="charts-layout analytics-fade-in analytics-stagger-5">
                 <div className="charts-layout__primary">
                   <ChartCard
-                    title="Query Volume"
+                    title="Prompt Volume"
                     subtitle="Daily analytical requests across this period"
                     icon={<Activity className="h-4 w-4" strokeWidth={2} />}
                     iconClassName="text-[color:var(--accent-teal-500)] bg-[color-mix(in_srgb,var(--accent-teal-500)_12%,transparent)]"
@@ -396,7 +396,7 @@ const UsageStatisticsPage: React.FC<UsageStatisticsPageProps> = ({ embedded = fa
             ) : (
               <div className="analytics-empty-charts analytics-fade-in analytics-stagger-5">
                 <p>No usage recorded for {periodLabel.toLowerCase()}.</p>
-                <p className="mt-2 text-xs">Run queries in Chat to populate this dashboard.</p>
+                <p className="mt-2 text-xs">Send prompts in Chat to populate this dashboard.</p>
               </div>
             )}
 

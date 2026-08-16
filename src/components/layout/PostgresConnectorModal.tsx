@@ -5,6 +5,7 @@ import { apiClient } from '../../services/apiClient';
 import { useAuth } from '../../context/useAuth';
 import { parsePostgresConnectionString } from '../../lib/parsePostgresConnectionString';
 import type { ParsedPostgresFields } from '../../lib/parsePostgresConnectionString';
+import { PostgresReadonlyAccessAlert } from './connector-panel/PostgresReadonlyAccessAlert';
 import '../settings/SettingsShared.css';
 import './UploadModal.css';
 import './ConnectorModals.css';
@@ -241,6 +242,7 @@ export function PostgresConnectorModal({
 
         <form onSubmit={handleSubmit} className="enterprise-pg-form">
           <div className="enterprise-pg-body">
+            <PostgresReadonlyAccessAlert />
             <section className="enterprise-pg-section">
               <div className="enterprise-pg-section-head">
                 <h3 className="enterprise-pg-section-label">Quick connect</h3>

@@ -609,6 +609,46 @@ html[data-theme='dark'] .connector-catalog-search-input {
   color: var(--text-secondary, var(--gray-600));
 }
 
+.enterprise-pg-readonly-alert {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--kpi-accent-amber, #f59e0b) 45%, var(--border-primary));
+  background: color-mix(in srgb, var(--kpi-accent-amber, #f59e0b) 12%, var(--panel-bg, #fff));
+  color: var(--text-primary);
+}
+
+.enterprise-pg-readonly-alert__icon {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+  color: var(--kpi-accent-amber, #d97706);
+}
+
+.enterprise-pg-readonly-alert__title {
+  margin: 0 0 0.25rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.enterprise-pg-readonly-alert__text {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: var(--text-secondary, #4b5563);
+}
+
+.enterprise-pg-readonly-alert__text code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.7rem;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  background: color-mix(in srgb, var(--kpi-accent-amber, #f59e0b) 14%, transparent);
+}
+
 /* Leave room for leading icon (18px) + gap; must beat .form-group input shorthand below */
 .enterprise-input-affix .enterprise-input.enterprise-input--indent {
   padding-left: 2.75rem;

@@ -51,8 +51,8 @@ export function NotificationsSection() {
   const [pushNotifications, setPushNotifications] = useState<NotificationSetting[]>([
     {
       id: 'query_complete',
-      title: 'Query Complete',
-      description: 'Notify when long-running queries finish',
+      title: 'Prompt Complete',
+      description: 'Notify when long-running prompts finish',
       enabled: true,
     },
     {

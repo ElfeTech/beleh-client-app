@@ -25,7 +25,7 @@ export function HelpSection() {
     {
       question: 'What types of questions can I ask about my data?',
       answer:
-        'You can ask natural language questions about your data such as "Show me total sales by region", "What was the average order value last month?", or "Create a chart showing trends over time". Our AI understands context and can generate SQL queries, visualizations, and insights.',
+        'You can ask natural language questions about your data such as "Show me total sales by region", "What was the average order value last month?", or "Create a chart showing trends over time". Our AI understands context and can generate SQL, visualizations, and insights.',
     },
     {
       question: 'How do I invite team members?',
@@ -33,9 +33,9 @@ export function HelpSection() {
         'Go to Settings > Members and enter their email to send an invite. Invites are for the Member role. They receive an email with an accept link; new users can sign up with that link, and existing users sign in with the same email to join. Only workspace owners can invite or remove members.',
     },
     {
-      question: 'What happens when I reach my query limit?',
+      question: 'What happens when I reach my prompt limit?',
       answer:
-        'When you reach your monthly query limit, you will need to upgrade your plan to continue making queries. Your existing data and visualizations will remain accessible. You can also wait until your billing cycle resets.',
+        'When you reach your monthly prompt limit, you will need to upgrade your plan to continue sending prompts. Your existing data and visualizations will remain accessible. You can also wait until your billing cycle resets.',
     },
     {
       question: 'Can I export my visualizations?',

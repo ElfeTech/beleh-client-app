@@ -183,13 +183,19 @@ class ApiCacheManager {
     endpoint: string,
     fetchFn: FetchFunction<T>,
     args: any[] = [],
-    options?: CacheConfig,
+    options?: CacheConfig & { force?: boolean },
   ): Promise<T> {
+    const { force, ...cacheOptions } = options ?? {};
     const config = {
       ...DEFAULT_CONFIG,
       ...this.configs.get(endpoint),
-      ...options,
+      ...cacheOptions,
     };
+
+    if (force) {
+      this.invalidate(endpoint, args);
+      this.dropPending(endpoint, args);
+    }
 
     const cacheKey = this.generateCacheKey(args);
 
@@ -244,15 +250,19 @@ class ApiCacheManager {
   ): Promise<T> {
     void this.createAbortController(endpoint, cacheKey);
 
-    const requestPromise = (async (): Promise<T> => {
+    let requestPromise!: Promise<T>;
+    requestPromise = (async (): Promise<T> => {
       try {
         // IMPORTANT: We only pass the args provided.
         // We don't automatically append the signal unless we refactor all call sites.
         // For now, most fetch functions in this app don't take a signal as the last arg.
         const data = await fetchFn(...args);
 
-        // Store in cache
-        this.setCache(endpoint, cacheKey, data, config.ttl);
+        // Don't let a superseded in-flight request overwrite a newer refresh.
+        const pending = this.getPendingRequest<T>(endpoint, cacheKey);
+        if (!pending || pending === requestPromise) {
+          this.setCache(endpoint, cacheKey, data, config.ttl);
+        }
 
         return data;
       } catch (error) {
@@ -264,7 +274,9 @@ class ApiCacheManager {
         }
         throw error;
       } finally {
-        this.removePendingRequest(endpoint, cacheKey);
+        if (this.getPendingRequest(endpoint, cacheKey) === requestPromise) {
+          this.removePendingRequest(endpoint, cacheKey);
+        }
         this.removeAbortController(endpoint, cacheKey);
       }
     })();
@@ -291,6 +303,20 @@ class ApiCacheManager {
     this.executeRequest(endpoint, fetchFn, args, cacheKey, config).catch((error) => {
       console.warn(`[ApiCacheManager] Background refresh failed for ${endpoint}:`, error);
     });
+  }
+
+  /**
+   * Drop an in-flight request so the next fetch cannot join a stale promise.
+   */
+  dropPending(endpoint: string, args: any[] = []): void {
+    const cacheKey = this.generateCacheKey(args);
+    this.removePendingRequest(endpoint, cacheKey);
+    const endpointControllers = this.abortControllers.get(endpoint);
+    const controller = endpointControllers?.get(cacheKey);
+    if (controller) {
+      controller.abort();
+      this.removeAbortController(endpoint, cacheKey);
+    }
   }
 
   /**
@@ -376,7 +402,7 @@ apiCacheManager.configure('workspaces', {
   deduplicate: true,
 });
 
-apiCacheManager.configure('datasources', {
+apiCacheManager.configure('connectors', {
   ttl: 5 * 60 * 1000, // 5 minutes
   staleWhileRevalidate: true,
   deduplicate: true,

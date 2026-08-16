@@ -29,6 +29,7 @@ import { RequireWorkspaceSources } from './components/routing/RequireWorkspaceSo
 import FeedbackModal from './components/common/FeedbackModal';
 import { ClarityInit } from './components/analytics/ClarityInit';
 import { GoogleAnalyticsInit } from './components/analytics/GoogleAnalyticsInit';
+import { CookieConsentBanner } from './components/cookies/CookieConsentBanner';
 
 function WorkspaceSessionsRedirect() {
   const { id } = useParams<{ id: string }>();
@@ -40,6 +41,7 @@ function App() {
     <BrowserRouter>
       <ClarityInit />
       <GoogleAnalyticsInit />
+      <CookieConsentBanner />
       <ThemeProvider>
         <AuthProvider>
           <AuthSessionWatcher />

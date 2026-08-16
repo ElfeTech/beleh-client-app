@@ -473,7 +473,7 @@ export function ChartRenderer({ data, visualization, columns }: ChartRendererPro
       case 'NONE':
         return (
           <div style={{ padding: '2rem', textAlign: 'center', color: '#6b7280' }}>
-            No visualization available for this query.
+            No visualization available for this prompt.
           </div>
         );
 

@@ -22,7 +22,7 @@ export function LandingProof() {
           <div className="landing-proof-stat">
             <div className="n">5×</div>
             <div className="l">
-              faster decisions once teams can query data themselves, no analyst queue
+              faster decisions once teams can prompt their data themselves, no analyst queue
             </div>
           </div>
           <div className="landing-proof-stat">
