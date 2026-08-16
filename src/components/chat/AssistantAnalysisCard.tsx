@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Clock, Database, Sparkles } from 'lucide-react';
 import type { AssistantTurnMeta, UiArtifact } from '../../types/api';
 import { findPanelViewArtifacts } from '../../utils/artifactAdapters';
 import { getPanelCount, getResponseViewAvailability } from '../../utils/responseViewAvailability';
+import { stripVizNotesFromText, uniqueVizNotes } from '../../utils/vizNotes';
 import { ResponseViewTabs } from './ResponseViewTabs';
 import { ArtifactRenderer, DATA_VIEW_ARTIFACT_TYPES } from './artifacts/artifactRegistry';
 import { ArtifactPanelGrid } from './artifacts/ArtifactPanelGrid';
@@ -36,6 +37,10 @@ export function AssistantAnalysisCard({
     ? panelViewArtifacts.length > 0
     : availability.availableViews.length > 0;
   const [filterValue, setFilterValue] = useState<string | null>(null);
+  const summaryText = useMemo(
+    () => stripVizNotesFromText(text, uniqueVizNotes(meta?.viz_notes)),
+    [meta?.viz_notes, text],
+  );
 
   const timeLabel = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -74,8 +79,12 @@ export function AssistantAnalysisCard({
           <p className="assistant-analysis-card__title">Beleh AI Analyst</p>
           <p className="assistant-analysis-card__time">{timeLabel}</p>
         </div>
-        {text.trim() ? (
-          <CopyTextButton text={text} label="response" className="assistant-analysis-card__copy" />
+        {summaryText ? (
+          <CopyTextButton
+            text={summaryText}
+            label="response"
+            className="assistant-analysis-card__copy"
+          />
         ) : null}
       </header>
 
@@ -96,9 +105,9 @@ export function AssistantAnalysisCard({
         </div>
       ) : null}
 
-      {text ? (
+      {summaryText ? (
         <div className="assistant-analysis-card__summary">
-          <MarkdownText>{text}</MarkdownText>
+          <MarkdownText>{summaryText}</MarkdownText>
         </div>
       ) : null}
 
@@ -119,14 +128,6 @@ export function AssistantAnalysisCard({
 
       {!isMultiPanel && hasDataViews ? (
         <ResponseViewTabs artifacts={artifacts} filterValue={filterValue} />
-      ) : null}
-
-      {meta?.viz_notes && meta.viz_notes.length > 0 ? (
-        <ul className="assistant-analysis-card__viz-notes" aria-label="Visualization notes">
-          {meta.viz_notes.map((note, i) => (
-            <li key={`${i}-${note.slice(0, 24)}`}>{note}</li>
-          ))}
-        </ul>
       ) : null}
 
       {kpis.length > 0 ? (

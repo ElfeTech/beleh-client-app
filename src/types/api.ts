@@ -137,7 +137,12 @@ export interface WorkspaceUsageResponse {
 }
 
 export type QuotaLimitType =
-  'queries' | 'credits' | 'daily_credits' | 'datasets' | 'members_per_workspace' | 'workspaces';
+  | 'queries'
+  | 'credits'
+  | 'daily_credits'
+  | 'datasets'
+  | 'members_per_workspace'
+  | 'workspaces';
 
 export interface QuotaExceededDetail {
   error: 'quota_exceeded';
@@ -437,7 +442,7 @@ export interface AssistantTurnMeta {
   /** SQL panels finalized; missing → treat as 1 for older messages */
   panel_count?: number | null;
   validation_warnings?: string[];
-  /** Optional viz remaps / notes; usually also covered in narrative text */
+  /** Optional viz remaps / notes; usually also covered in narrative text. Not shown in the UI. */
   viz_notes?: string[];
 }
 
@@ -471,7 +476,15 @@ export interface SortingConfig {
 /** Legacy chart encoding shape used by older chart components */
 export interface VisualizationRecommendation {
   type?:
-    'line' | 'multiline' | 'bar' | 'stacked_bar' | 'heatmap' | 'scatter' | 'pie' | 'table' | 'auto';
+    | 'line'
+    | 'multiline'
+    | 'bar'
+    | 'stacked_bar'
+    | 'heatmap'
+    | 'scatter'
+    | 'pie'
+    | 'table'
+    | 'auto';
   visualization_type?:
     | 'line'
     | 'multiline'
