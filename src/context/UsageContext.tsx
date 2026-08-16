@@ -166,14 +166,14 @@ export function UsageProvider({ children }: { children: ReactNode }) {
         if (!queriesUnlimited && queriesPercentage >= 100) {
           warnings.push({
             level: 'critical',
-            message: `You've used all ${qLimit} queries this month. Upgrade to continue.`,
+            message: `You've used all ${qLimit} prompts this month. Upgrade to continue.`,
             metric: 'queries',
             percentage: queriesPercentage,
           });
         } else if (!queriesUnlimited && queriesPercentage >= 80) {
           warnings.push({
             level: 'warning',
-            message: `You've used ${qUsed} of ${qLimit} queries (${queriesPercentage.toFixed(0)}%).`,
+            message: `You've used ${qUsed} of ${qLimit} prompts (${queriesPercentage.toFixed(0)}%).`,
             metric: 'queries',
             percentage: queriesPercentage,
           });

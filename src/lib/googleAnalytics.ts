@@ -1,7 +1,14 @@
 import { isProductionAnalytics } from './analyticsEnvironment';
+import {
+  applyGoogleConsentMode,
+  ensureGoogleConsentDefaults,
+  ensureGtagQueue,
+  isAnalyticsConsentGranted,
+} from './cookieConsent';
 
 /** Google Analytics 4 measurement ID */
-export const GA_MEASUREMENT_ID = import.meta.env.VITE_GA_MEASUREMENT_ID ?? 'G-SE22WW34C9';
+export const GA_MEASUREMENT_ID =
+  (import.meta.env.VITE_GA_MEASUREMENT_ID as string | undefined)?.trim() || 'G-SE22WW34C9';
 
 /** Google Tag Manager container ID (e.g. GTM-XXXXXXX). Leave unset until you have a container. */
 export const GTM_CONTAINER_ID = import.meta.env.VITE_GTM_CONTAINER_ID ?? '';
@@ -16,6 +23,7 @@ function ensureDataLayer(): void {
 /** Push arbitrary data for GTM tags/triggers (call from app code or custom events). */
 export function pushDataLayer(data: Record<string, unknown>): void {
   if (!isProductionAnalytics() || typeof window === 'undefined') return;
+  if (!isAnalyticsConsentGranted()) return;
   ensureDataLayer();
   window.dataLayer.push(data);
 }
@@ -36,43 +44,49 @@ function loadScript(src: string): Promise<void> {
   });
 }
 
-/** Load gtag.js and configure GA4 (matches Google's recommended snippet). */
+/** Load gtag.js and configure GA4. Requires analytics cookie consent. */
 export async function initGoogleAnalytics(): Promise<void> {
   if (
     !isProductionAnalytics() ||
     gaInitialized ||
     typeof window === 'undefined' ||
-    !GA_MEASUREMENT_ID
+    !GA_MEASUREMENT_ID ||
+    !isAnalyticsConsentGranted()
   )
     return;
 
-  ensureDataLayer();
+  ensureGtagQueue();
+  ensureGoogleConsentDefaults();
+  applyGoogleConsentMode(true);
 
-  window.gtag = function gtag(...args: unknown[]) {
-    window.dataLayer.push(args);
-  };
-
-  window.gtag('js', new Date());
-  window.gtag('config', GA_MEASUREMENT_ID, {
+  window.gtag?.('js', new Date());
+  window.gtag?.('config', GA_MEASUREMENT_ID, {
     send_page_view: false,
+    anonymize_ip: true,
   });
 
-  await loadScript(`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`);
-
-  gaInitialized = true;
+  try {
+    await loadScript(`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`);
+    gaInitialized = true;
+  } catch (error) {
+    console.warn('[GA] Failed to load gtag.js', error);
+  }
 }
 
-/** Load GTM container when VITE_GTM_CONTAINER_ID is set. */
+/** Load GTM container when VITE_GTM_CONTAINER_ID is set. Requires analytics consent. */
 export function initGoogleTagManager(): void {
   if (
     !isProductionAnalytics() ||
     gtmInitialized ||
     typeof window === 'undefined' ||
-    !GTM_CONTAINER_ID
+    !GTM_CONTAINER_ID ||
+    !isAnalyticsConsentGranted()
   )
     return;
 
   ensureDataLayer();
+  ensureGoogleConsentDefaults();
+  applyGoogleConsentMode(true);
   pushDataLayer({
     'gtm.start': Date.now(),
     event: 'gtm.js',
@@ -96,9 +110,10 @@ export function initGoogleTagManager(): void {
   gtmInitialized = true;
 }
 
-/** SPA page view , use on route changes. */
+/** SPA page view — use on route changes. */
 export function trackPageView(pagePath: string, pageTitle?: string): void {
   if (!isProductionAnalytics() || typeof window === 'undefined') return;
+  if (!isAnalyticsConsentGranted()) return;
 
   const title = pageTitle ?? document.title;
 
@@ -112,12 +127,13 @@ export function trackPageView(pagePath: string, pageTitle?: string): void {
     window.gtag('event', 'page_view', {
       page_path: pagePath,
       page_title: title,
+      page_location: window.location.href,
     });
   }
 }
 
 export function trackEvent(eventName: string, params?: Record<string, unknown>): void {
-  if (!isProductionAnalytics()) return;
+  if (!isProductionAnalytics() || !isAnalyticsConsentGranted()) return;
   pushDataLayer({ event: eventName, ...params });
   if (window.gtag) {
     window.gtag('event', eventName, params);
@@ -125,7 +141,13 @@ export function trackEvent(eventName: string, params?: Record<string, unknown>):
 }
 
 export function setAnalyticsUserId(userId: string | null): void {
-  if (!isProductionAnalytics() || !window.gtag || !GA_MEASUREMENT_ID) return;
+  if (
+    !isProductionAnalytics() ||
+    !isAnalyticsConsentGranted() ||
+    !window.gtag ||
+    !GA_MEASUREMENT_ID
+  )
+    return;
   window.gtag('config', GA_MEASUREMENT_ID, {
     user_id: userId ?? undefined,
   });

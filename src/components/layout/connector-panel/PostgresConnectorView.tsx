@@ -4,12 +4,14 @@ import { apiClient } from '../../../services/apiClient';
 import { useAuth } from '../../../context/useAuth';
 import { parsePostgresConnectionString } from '../../../lib/parsePostgresConnectionString';
 import type { ParsedPostgresFields } from '../../../lib/parsePostgresConnectionString';
+import type { ConnectorResponse } from '../../../types/api';
+import { PostgresReadonlyAccessAlert } from './PostgresReadonlyAccessAlert';
 import '../../settings/SettingsShared.css';
 import '../ConnectorModals.css';
 
 interface PostgresConnectorViewProps {
   workspaceId: string;
-  onSuccess: () => void;
+  onSuccess: (created?: ConnectorResponse) => void;
   onCancel: () => void;
 }
 
@@ -175,7 +177,7 @@ export function PostgresConnectorView({
 
     try {
       const token = await user.getIdToken();
-      await apiClient.createPostgresConnector(token, workspaceId, {
+      const created = await apiClient.createPostgresConnector(token, workspaceId, {
         name: formData.name,
         type: 'postgresql',
         config: {
@@ -187,7 +189,7 @@ export function PostgresConnectorView({
           ssl: formData.ssl,
         },
       });
-      onSuccess();
+      onSuccess(created);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create connector');
     } finally {
@@ -199,6 +201,7 @@ export function PostgresConnectorView({
     <div className="ds-conn-embed ds-conn-panel__body">
       <form onSubmit={handleSubmit} className="enterprise-pg-form">
         <div className="enterprise-pg-body">
+          <PostgresReadonlyAccessAlert />
           <section className="enterprise-pg-section">
             <div className="enterprise-pg-section-head">
               <h3 className="enterprise-pg-section-label">Quick connect</h3>

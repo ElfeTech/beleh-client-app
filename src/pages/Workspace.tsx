@@ -10,7 +10,8 @@ export function Workspace() {
   const { id: workspaceId } = useParams<{ id: string }>();
   const location = useLocation();
   const { user } = useAuth();
-  const { workspaces, currentWorkspace, setCurrentWorkspace, refreshDatasources } = useWorkspace();
+  const { workspaces, currentWorkspace, setCurrentWorkspace, refreshDatasources, refreshConnectors } =
+    useWorkspace();
   const earlyBindAttemptedRef = useRef<string | null>(null);
 
   useSessionInUrl(workspaceId);
@@ -61,11 +62,11 @@ export function Workspace() {
         prev.includes(`/workspace/${workspaceId}/datasets`) ||
         (prev.includes('/datasets') && prev.includes(workspaceId));
       if (fromDatasets) {
-        void refreshDatasources();
+        void Promise.all([refreshDatasources({ silent: true }), refreshConnectors({ silent: true })]);
       }
     }
     sessionStorage.setItem(NAV_PATH_KEY, location.pathname);
-  }, [location.pathname, workspaceId, refreshDatasources]);
+  }, [location.pathname, workspaceId, refreshDatasources, refreshConnectors]);
 
   return (
     <div className="flex flex-col h-full min-h-0 overflow-hidden">

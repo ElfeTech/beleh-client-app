@@ -129,8 +129,8 @@ function buildWorkspaceMetrics(
     const queriesUsed = usage.queries_used ?? 0;
     cards.push({
       key: 'queries',
-      label: 'Monthly queries',
-      caption: `${queriesLimit.toLocaleString()} queries / month`,
+      label: 'Monthly prompts',
+      caption: `${queriesLimit.toLocaleString()} prompts / month`,
       used: queriesUsed,
       limit: queriesLimit,
       remaining: resolveRemaining(undefined, queriesUsed, queriesLimit),
@@ -205,8 +205,8 @@ function buildPersonalMetrics(
   if (!isUnlimitedLimit(limits.queries)) {
     cards.push({
       key: 'queries',
-      label: 'Query quota',
-      caption: `${limits.queries.toLocaleString()} queries allocated / month`,
+      label: 'Prompt quota',
+      caption: `${limits.queries.toLocaleString()} prompts allocated / month`,
       used: used.queries,
       limit: limits.queries,
       remaining: resolveRemaining(remaining?.queries, used.queries, limits.queries),

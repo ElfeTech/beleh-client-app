@@ -46,17 +46,39 @@
 .settings-compliance-footer {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--space-4) var(--space-6);
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
   margin-top: var(--space-6);
   padding-top: var(--space-4);
   border-top: 1px solid var(--border-primary);
-  font-family: var(--font-mono);
   font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
   color: var(--text-muted);
 }
 
-.settings-compliance-footer span {
-  white-space: nowrap;
+.settings-compliance-footer__sep {
+  color: var(--text-muted);
+  opacity: 0.55;
+  user-select: none;
+}
+
+.settings-compliance-footer__link {
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.settings-compliance-footer__button {
+  appearance: none;
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings-compliance-footer__link:hover {
+  color: var(--text-secondary);
 }
 
 .settings-sticky-footer {

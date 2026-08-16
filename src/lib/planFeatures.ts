@@ -65,7 +65,7 @@ function limitLines(plan: BillingCatalogPlan): PlanFeatureLine[] {
   if (typeof queryLimit === 'number' && queryLimit > 0) {
     lines.push({
       key: 'limit-queries',
-      label: `${queryLimit.toLocaleString()} queries per month`,
+      label: `${queryLimit.toLocaleString()} prompts per month`,
       source: 'limit',
     });
   }

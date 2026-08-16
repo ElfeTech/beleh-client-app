@@ -418,6 +418,51 @@
   flex-shrink: 0;
 }
 
+/* Sign-up legal consent */
+.auth-legal-consent {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+.auth-legal-consent input {
+  margin-top: 0.2rem;
+  width: 1rem;
+  height: 1rem;
+  flex-shrink: 0;
+  accent-color: var(--primary-600, #2563eb);
+  cursor: pointer;
+}
+
+.auth-legal-consent input:focus-visible {
+  outline: 2px solid var(--primary-500, #3b82f6);
+  outline-offset: 2px;
+}
+
+.auth-legal-consent__label {
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.auth-legal-consent__label a {
+  color: var(--text-link);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth-legal-consent__label a:hover {
+  color: var(--text-link-hover);
+}
+
+.auth-legal-consent--invalid input {
+  outline: 2px solid var(--error);
+  outline-offset: 2px;
+}
+
 /* Error Message */
 .auth-error-message {
   background: var(--error-light);

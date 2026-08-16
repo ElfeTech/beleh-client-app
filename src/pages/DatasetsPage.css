@@ -203,6 +203,8 @@
   padding: var(--space-3);
   background: transparent;
   cursor: pointer;
+  position: relative;
+  overflow: hidden;
 }
 
 .sc-source-item.is-selected {
@@ -840,6 +842,60 @@
   );
   background-size: 200% 100%;
   animation: sc-shimmer 1.2s ease-in-out infinite;
+}
+
+.sc-source-item__progress {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--primary-500, #3b82f6) 18%, transparent);
+}
+
+.sc-source-item__progress-bar,
+.sc-catalog-progress__bar {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: var(--primary-500, #3b82f6);
+  animation: sc-progress-indeterminate 1.1s ease-in-out infinite;
+}
+
+.sc-source-item.is-selected .sc-source-item__progress-bar {
+  background: #5eead4;
+}
+
+.sc-catalog-progress {
+  padding: var(--space-3) var(--space-2) var(--space-2);
+}
+
+.sc-catalog-progress__track {
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--primary-500, #3b82f6) 16%, var(--bg-secondary));
+}
+
+.sc-catalog-progress__bar {
+  width: 35%;
+}
+
+.sc-catalog-progress__label {
+  margin: var(--space-2) var(--space-2) var(--space-1);
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+@keyframes sc-progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
 }
 
 @keyframes sc-shimmer {

@@ -150,7 +150,7 @@ export function asFilterBarData(data: Record<string, unknown>): FilterBarData {
 
 export function asEmptyStateData(data: Record<string, unknown>): EmptyStateData {
   return {
-    message: data.message != null ? String(data.message) : 'No data returned for this query.',
+    message: data.message != null ? String(data.message) : 'No data returned for this prompt.',
   };
 }
 

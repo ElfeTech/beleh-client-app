@@ -7,7 +7,7 @@ const FEATURES = [
   },
   {
     title: 'Zero SQL, ever',
-    body: 'Everyone on the team can query the business, not just the two people who know the schema.',
+    body: 'Everyone on the team can prompt the business, not just the two people who know the schema.',
   },
   {
     title: 'Enterprise-ready security',
