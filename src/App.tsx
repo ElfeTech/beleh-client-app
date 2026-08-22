@@ -24,12 +24,14 @@ import { ProviderOAuthCallback } from './pages/ProviderOAuthCallback';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { ServerErrorPage } from './pages/ServerErrorPage';
 import { LegalPage } from './pages/LegalPage';
+import PricingPage from './pages/PricingPage';
 import { MainLayout } from './components/layout/MainLayout';
 import { RequireWorkspaceSources } from './components/routing/RequireWorkspaceSources';
 import FeedbackModal from './components/common/FeedbackModal';
 import { ClarityInit } from './components/analytics/ClarityInit';
 import { GoogleAnalyticsInit } from './components/analytics/GoogleAnalyticsInit';
 import { CookieConsentBanner } from './components/cookies/CookieConsentBanner';
+import { TourProvider } from './tours/TourProvider';
 
 function WorkspaceSessionsRedirect() {
   const { id } = useParams<{ id: string }>();
@@ -50,84 +52,90 @@ function App() {
               <DatasourceProvider>
                 <ChatSessionProvider>
                   <FeedbackProvider>
-                    <Toaster
-                      position="top-center"
-                      richColors
-                      closeButton
-                      toastOptions={{
-                        style: {
-                          background: 'var(--card-background)',
-                          color: 'var(--text-primary)',
-                          border: '1px solid var(--border-primary)',
-                        },
-                      }}
-                    />
-                    <ErrorBoundary>
-                      <Routes>
-                        {/* Public routes , allowlisted in src/lib/publicRoutes.ts */}
-                        <Route path="/" element={<RootRoute />} />
-                        <Route path="/signin" element={<SignIn />} />
-                        <Route path="/signup" element={<SignUp />} />
-                        <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
-                        <Route path="/auth/provider/callback" element={<ProviderOAuthCallback />} />
-                        <Route path="/error" element={<ServerErrorPage />} />
-                        <Route path="/legal" element={<Navigate to="/legal/terms" replace />} />
-                        <Route path="/legal/:slug" element={<LegalPage />} />
+                    <TourProvider>
+                      <Toaster
+                        position="top-center"
+                        richColors
+                        closeButton
+                        toastOptions={{
+                          style: {
+                            background: 'var(--card-background)',
+                            color: 'var(--text-primary)',
+                            border: '1px solid var(--border-primary)',
+                          },
+                        }}
+                      />
+                      <ErrorBoundary>
+                        <Routes>
+                          {/* Public routes , allowlisted in src/lib/publicRoutes.ts */}
+                          <Route path="/" element={<RootRoute />} />
+                          <Route path="/signin" element={<SignIn />} />
+                          <Route path="/signup" element={<SignUp />} />
+                          <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
+                          <Route
+                            path="/auth/provider/callback"
+                            element={<ProviderOAuthCallback />}
+                          />
+                          <Route path="/error" element={<ServerErrorPage />} />
+                          <Route path="/legal" element={<Navigate to="/legal/terms" replace />} />
+                          <Route path="/legal/:slug" element={<LegalPage />} />
+                        <Route path="/pricing" element={<PricingPage />} />
 
-                        {/* All other app routes require session validation */}
-                        <Route
-                          element={
-                            <AuthSessionGate>
-                              <MainLayout />
-                            </AuthSessionGate>
-                          }
-                        >
-                          <Route path="/workspace/:id" element={<Workspace />} />
+                          {/* All other app routes require session validation */}
                           <Route
-                            path="/workspace/:id/datasets"
                             element={
-                              <RequireWorkspaceSources>
-                                <DatasetsPage />
-                              </RequireWorkspaceSources>
+                              <AuthSessionGate>
+                                <MainLayout />
+                              </AuthSessionGate>
                             }
-                          />
-                          <Route
-                            path="/workspace/:id/datasets/:datasetId/preview"
-                            element={
-                              <RequireWorkspaceSources>
-                                <DatasetPreviewPage />
-                              </RequireWorkspaceSources>
-                            }
-                          />
-                          <Route
-                            path="/workspace/:id/sessions"
-                            element={<WorkspaceSessionsRedirect />}
-                          />
-                          <Route
-                            path="/workspace/:id/statistics"
-                            element={<Navigate to="/settings/usage" replace />}
-                          />
-                          <Route path="/settings" element={<SettingsPage />} />
-                          <Route path="/settings/general" element={<SettingsPage />} />
-                          <Route path="/settings/security" element={<SettingsPage />} />
-                          <Route path="/settings/usage" element={<SettingsPage />} />
-                          <Route path="/settings/billing" element={<SettingsPage />} />
-                          <Route
-                            path="/settings/billing/success"
-                            element={<BillingSuccessPage />}
-                          />
-                          <Route path="/settings/notifications" element={<SettingsPage />} />
-                          <Route path="/settings/workspaces" element={<SettingsPage />} />
-                          <Route path="/settings/members" element={<SettingsPage />} />
-                          <Route path="/settings/help" element={<SettingsPage />} />
-                          <Route path="/settings/about" element={<SettingsPage />} />
-                        </Route>
+                          >
+                            <Route path="/workspace/:id" element={<Workspace />} />
+                            <Route
+                              path="/workspace/:id/datasets"
+                              element={
+                                <RequireWorkspaceSources>
+                                  <DatasetsPage />
+                                </RequireWorkspaceSources>
+                              }
+                            />
+                            <Route
+                              path="/workspace/:id/datasets/:datasetId/preview"
+                              element={
+                                <RequireWorkspaceSources>
+                                  <DatasetPreviewPage />
+                                </RequireWorkspaceSources>
+                              }
+                            />
+                            <Route
+                              path="/workspace/:id/sessions"
+                              element={<WorkspaceSessionsRedirect />}
+                            />
+                            <Route
+                              path="/workspace/:id/statistics"
+                              element={<Navigate to="/settings/usage" replace />}
+                            />
+                            <Route path="/settings" element={<SettingsPage />} />
+                            <Route path="/settings/general" element={<SettingsPage />} />
+                            <Route path="/settings/security" element={<SettingsPage />} />
+                            <Route path="/settings/usage" element={<SettingsPage />} />
+                            <Route path="/settings/billing" element={<SettingsPage />} />
+                            <Route
+                              path="/settings/billing/success"
+                              element={<BillingSuccessPage />}
+                            />
+                            <Route path="/settings/notifications" element={<SettingsPage />} />
+                            <Route path="/settings/workspaces" element={<SettingsPage />} />
+                            <Route path="/settings/members" element={<SettingsPage />} />
+                            <Route path="/settings/help" element={<SettingsPage />} />
+                            <Route path="/settings/about" element={<SettingsPage />} />
+                          </Route>
 
-                        {/* Unknown paths → dedicated 404 (public) */}
-                        <Route path="*" element={<NotFoundPage />} />
-                      </Routes>
-                    </ErrorBoundary>
-                    <FeedbackModal />
+                          {/* Unknown paths → dedicated 404 (public) */}
+                          <Route path="*" element={<NotFoundPage />} />
+                        </Routes>
+                      </ErrorBoundary>
+                      <FeedbackModal />
+                    </TourProvider>
                   </FeedbackProvider>
                 </ChatSessionProvider>
               </DatasourceProvider>

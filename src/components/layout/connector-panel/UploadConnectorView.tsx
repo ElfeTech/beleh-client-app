@@ -7,7 +7,11 @@ import { useWorkspace } from '../../../context/WorkspaceContext';
 import { apiClient } from '../../../services/apiClient';
 import { authService } from '../../../services/authService';
 import type { DataSourceResponse, ExcelSheet, SheetRecoveryConfig } from '../../../types/api';
-import { extractApiErrorDetail, formatDatasourceError } from '../../../utils/apiErrorMessage';
+import {
+  ApiRequestError,
+  extractApiErrorDetail,
+  formatDatasourceError,
+} from '../../../utils/apiErrorMessage';
 import {
   isDatasourcesAtLimit,
   PLAN_LIMIT_REACHED_TOOLTIP,
@@ -16,6 +20,18 @@ import {
 import { StepIndicator } from '../../upload/StepIndicator';
 import { SheetSelection } from '../../upload/SheetSelection';
 import { HeaderRowPicker } from '../../upload/HeaderSelection';
+import {
+  formatSpreadsheetFileSize,
+  spreadsheetUploadHint,
+  validateSpreadsheetUpload,
+} from '../../../utils/spreadsheetUpload';
+import {
+  clearUploadDraft,
+  loadDraftFile,
+  loadUploadDraft,
+  saveDraftFile,
+  saveUploadDraft,
+} from '../../../utils/uploadDraftStore';
 import '../UploadModal.css';
 
 export interface UploadConnectorViewProps {
@@ -99,6 +115,16 @@ export function UploadConnectorView({
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pollIntervalRef = useRef<number | null>(null);
+  // The poll callback lives inside setInterval; refs keep it reading live state.
+  const phaseRef = useRef<WizardPhase>('upload');
+  phaseRef.current = phase;
+  const successFiredRef = useRef(false);
+  const pollFailuresRef = useRef(0);
+  const importStartedAtRef = useRef<number | null>(null);
+  const [slowImport, setSlowImport] = useState(false);
+  const restoreAttemptedRef = useRef(false);
+  /** Import runs longer than this → show "taking longer than usual" note. */
+  const SLOW_IMPORT_AFTER_MS = 75_000;
 
   const clearPoll = () => {
     if (pollIntervalRef.current) {
@@ -107,9 +133,56 @@ export function UploadConnectorView({
     }
   };
 
+  const startPoll = (datasetId: string) => {
+    clearPoll();
+    pollFailuresRef.current = 0;
+    if (importStartedAtRef.current == null) {
+      importStartedAtRef.current = Date.now();
+    }
+    pollIntervalRef.current = setInterval(() => {
+      void pollDatasetStatus(datasetId);
+    }, 2000);
+    void pollDatasetStatus(datasetId);
+  };
+
+  const fireSuccessOnce = () => {
+    if (successFiredRef.current) return;
+    successFiredRef.current = true;
+    onSuccess();
+  };
+
   useEffect(() => {
     return () => clearPoll();
   }, []);
+
+  // Refresh-survival: restore where the user left off after a full page reload.
+  // 'form' drafts re-attach the file from IndexedDB; 'active' drafts resume the
+  // server-side import (polling re-derives sheets/headers/importing state).
+  useEffect(() => {
+    if (restoreAttemptedRef.current || !user) return;
+    restoreAttemptedRef.current = true;
+    const draft = loadUploadDraft(workspaceId);
+    if (!draft) return;
+
+    if (draft.stage === 'active' && draft.datasourceId) {
+      setName(draft.name);
+      setUploadStatus('PENDING');
+      setPhase('importing');
+      setProgress(33);
+      importStartedAtRef.current = Date.now();
+      startPoll(draft.datasourceId);
+      return;
+    }
+
+    if (draft.stage === 'form') {
+      if (draft.name) setName(draft.name);
+      void loadDraftFile(workspaceId).then((storedFile) => {
+        if (storedFile) setFile(storedFile);
+      });
+    }
+    // Restore effect intentionally runs once; helpers are stable per mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, workspaceId]);
 
   const runRecoveryRef = useRef<
     (
@@ -155,17 +228,49 @@ export function UploadConnectorView({
     }
   };
 
+  const registerPollFailure = (reason: unknown) => {
+    console.error('Error polling dataset status:', reason);
+    pollFailuresRef.current += 1;
+    // Keep polling (transient blips recover), but stop pretending after a while.
+    if (pollFailuresRef.current === 5) {
+      setError(
+        'Lost connection while tracking the import. It continues on the server — ' +
+          'we keep retrying; you can also close this panel and check the catalog.',
+      );
+    }
+  };
+
   const pollDatasetStatus = async (datasetId: string) => {
     try {
-      const token = authService.getAuthToken();
-      if (!token) return;
+      // Cached token first; fall back to a refreshed one so polling never
+      // dies silently on token expiry.
+      let token = authService.getAuthToken();
+      if (!token) {
+        token = await authService.getValidIdToken(true);
+      }
+      if (!token) {
+        registerPollFailure('No auth token available for status poll');
+        return;
+      }
 
       const dataset = await apiClient.getDatasource(token, datasetId);
       setDatasource(dataset);
+      if (pollFailuresRef.current >= 5) setError(null);
+      pollFailuresRef.current = 0;
 
-      if (needsUserInput(dataset) && phase !== 'headers' && phase !== 'sheets') {
+      const livePhase = phaseRef.current;
+      if (needsUserInput(dataset) && livePhase !== 'headers' && livePhase !== 'sheets') {
         enterNeedsInputFlow(dataset);
         return;
+      }
+
+      const stillRunning = dataset.status === 'PENDING' || dataset.status === 'PROCESSING';
+      if (
+        stillRunning &&
+        importStartedAtRef.current != null &&
+        Date.now() - importStartedAtRef.current > SLOW_IMPORT_AFTER_MS
+      ) {
+        setSlowImport(true);
       }
 
       if (dataset.status === 'PENDING') {
@@ -180,21 +285,36 @@ export function UploadConnectorView({
         setUploadStatus('READY');
         setPhase('importing');
         setProgress(100);
+        setSlowImport(false);
         clearPoll();
+        clearUploadDraft(workspaceId);
         trackDatasetUpload();
         refreshUsageAfterAction();
         setTimeout(() => {
-          onSuccess();
+          fireSuccessOnce();
         }, 1000);
       } else if (dataset.status === 'FAILED' && !needsUserInput(dataset)) {
         setUploadStatus('FAILED');
         setPhase('upload');
         setProgress(0);
+        setSlowImport(false);
         setError(formatDatasourceError(dataset));
         clearPoll();
+        clearUploadDraft(workspaceId);
       }
     } catch (err) {
-      console.error('Error polling dataset status:', err);
+      // The datasource is gone (cancelled elsewhere / cleaned up): stop
+      // polling a dead id and hand the user a fresh form.
+      if (err instanceof ApiRequestError && err.status === 404) {
+        clearPoll();
+        clearUploadDraft(workspaceId);
+        setUploadStatus('IDLE');
+        setPhase('upload');
+        setProgress(0);
+        setDatasource(null);
+        return;
+      }
+      registerPollFailure(err);
     }
   };
 
@@ -223,10 +343,8 @@ export function UploadConnectorView({
 
       if (result.ingestion_started) {
         setUploadStatus('PENDING');
-        pollIntervalRef.current = setInterval(() => {
-          void pollDatasetStatus(result.datasource_id);
-        }, 2000);
-        void pollDatasetStatus(result.datasource_id);
+        importStartedAtRef.current = Date.now();
+        startPoll(result.datasource_id);
       } else {
         setUploadStatus('NEEDS_INPUT');
         setError(
@@ -252,10 +370,25 @@ export function UploadConnectorView({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      const baseName = selectedFile.name.replace(/\.[^/.]+$/, '');
-      setName(baseName.slice(0, 23));
+    if (!selectedFile) return;
+
+    const validationError = validateSpreadsheetUpload(selectedFile);
+    setFile(selectedFile);
+    const baseName = selectedFile.name.replace(/\.[^/.]+$/, '');
+    const nextName = baseName.slice(0, 23);
+    setName(nextName);
+    setError(validationError);
+    e.target.value = '';
+
+    // Refresh-survival: keep the attachment so a reload restores it.
+    if (!validationError) {
+      saveUploadDraft(workspaceId, {
+        stage: 'form',
+        name: nextName,
+        fileMeta: { name: selectedFile.name, size: selectedFile.size, type: selectedFile.type },
+        datasourceId: null,
+      });
+      void saveDraftFile(workspaceId, selectedFile);
     }
   };
 
@@ -264,6 +397,11 @@ export function UploadConnectorView({
     if (!file || !user || !name.trim()) return;
     if (datasourcesAtLimit) {
       setError(workspaceLimitUpgradeMessage(currentRole, 'datasources'));
+      return;
+    }
+    const validationError = validateSpreadsheetUpload(file);
+    if (validationError) {
+      setError(validationError);
       return;
     }
 
@@ -278,6 +416,15 @@ export function UploadConnectorView({
       await refreshWorkspaceUsage();
       setDatasource(dataset);
 
+      // Server owns the upload now; a reload can resume from the datasource id
+      // (covers importing AND the sheets/headers needs-input flow).
+      saveUploadDraft(workspaceId, {
+        stage: 'active',
+        name,
+        fileMeta: { name: file.name, size: file.size, type: file.type },
+        datasourceId: dataset.id,
+      });
+
       if (needsUserInput(dataset)) {
         enterNeedsInputFlow(dataset);
         return;
@@ -287,17 +434,15 @@ export function UploadConnectorView({
         setUploadStatus('FAILED');
         setProgress(0);
         setError(formatDatasourceError(dataset));
+        clearUploadDraft(workspaceId);
         return;
       }
 
       setUploadStatus(dataset.status);
       setPhase('importing');
       setProgress(25);
-
-      pollIntervalRef.current = setInterval(() => {
-        void pollDatasetStatus(dataset.id);
-      }, 2000);
-      void pollDatasetStatus(dataset.id);
+      importStartedAtRef.current = Date.now();
+      startPoll(dataset.id);
     } catch (err) {
       console.error('Upload failed:', err);
       setError(
@@ -341,6 +486,7 @@ export function UploadConnectorView({
 
   const leaveUpload = async () => {
     clearPoll();
+    clearUploadDraft(workspaceId);
     await cleanupFailedDatasource();
     onCancel();
   };
@@ -399,7 +545,7 @@ export function UploadConnectorView({
       return;
     }
     if (phase === 'importing' && uploadStatus === 'READY') {
-      onSuccess();
+      fireSuccessOnce();
     }
   };
 
@@ -483,7 +629,13 @@ export function UploadConnectorView({
     if (phase === 'sheets') return !sheets.some((s) => s.selected);
     if (phase === 'headers') return !headerRowSelected;
     if (phase === 'importing') return isBusy;
-    return !file || !name.trim() || isBusy || datasourcesAtLimit;
+    return (
+      !file ||
+      Boolean(validateSpreadsheetUpload(file)) ||
+      !name.trim() ||
+      isBusy ||
+      datasourcesAtLimit
+    );
   })();
 
   return (
@@ -509,11 +661,13 @@ export function UploadConnectorView({
             </label>
             <button
               type="button"
-              className={`upload-dropzone ${file ? 'has-file' : ''} ${controlsLocked ? 'is-locked' : ''}`}
+              className={`upload-dropzone ${file ? 'has-file' : ''} ${controlsLocked ? 'is-locked' : ''} ${file && validateSpreadsheetUpload(file) ? 'is-invalid' : ''}`}
               onClick={() => !controlsLocked && fileInputRef.current?.click()}
               disabled={controlsLocked}
               title={datasourcesAtLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
-              aria-describedby="upload-file-hint-panel"
+              aria-describedby={
+                error ? 'upload-file-error-panel' : 'upload-file-hint-panel'
+              }
             >
               <input
                 id="upload-file-input-panel"
@@ -532,7 +686,7 @@ export function UploadConnectorView({
                   <div className="upload-dropzone-file-meta">
                     <span className="upload-dropzone-file-name">{file.name}</span>
                     <span className="upload-dropzone-file-size">
-                      {(file.size / 1024).toFixed(1)} KB
+                      {formatSpreadsheetFileSize(file.size)}
                     </span>
                   </div>
                   {!controlsLocked && <span className="upload-dropzone-replace">Replace file</span>}
@@ -544,7 +698,7 @@ export function UploadConnectorView({
                   </div>
                   <p className="upload-dropzone-title">Drop a file here or click to browse</p>
                   <p id="upload-file-hint-panel" className="upload-dropzone-hint">
-                    Secure upload · CSV and Excel supported.
+                    Secure upload · {spreadsheetUploadHint()}
                   </p>
                   <div className="upload-dropzone-badges">
                     <span>.csv</span>
@@ -565,7 +719,18 @@ export function UploadConnectorView({
               type="text"
               className="upload-modal-input"
               value={name}
-              onChange={(e) => setName(e.target.value.slice(0, 23))}
+              onChange={(e) => {
+                const next = e.target.value.slice(0, 23);
+                setName(next);
+                if (file) {
+                  saveUploadDraft(workspaceId, {
+                    stage: 'form',
+                    name: next,
+                    fileMeta: { name: file.name, size: file.size, type: file.type },
+                    datasourceId: null,
+                  });
+                }
+              }}
               placeholder="e.g. Q4 Sales pipeline"
               maxLength={23}
               required
@@ -594,7 +759,11 @@ export function UploadConnectorView({
             </div>
           )}
 
-          {error ? <div className="form-error upload-modal-error">{error}</div> : null}
+          {error ? (
+            <div id="upload-file-error-panel" className="form-error upload-modal-error upload-file-error" role="alert">
+              {error}
+            </div>
+          ) : null}
 
           <div className="modal-actions upload-modal-actions">
             <button
@@ -700,7 +869,9 @@ export function UploadConnectorView({
                 ? 'Your dataset is ready.'
                 : hasFailed
                   ? error || 'Import failed. You can close and try again.'
-                  : 'Importing the full sheets you selected…'}
+                  : slowImport
+                    ? 'Still importing — this is taking longer than usual. You can keep this open or close the panel; the import continues on the server.'
+                    : 'Importing the full sheets you selected…'}
             </p>
           </div>
           <div className="modal-actions upload-modal-actions">

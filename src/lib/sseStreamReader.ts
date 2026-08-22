@@ -21,6 +21,11 @@ export interface ReadSseResult {
   lastEventId: string | null;
 }
 
+/** SSE spec: strip at most ONE leading space after the field colon (not all whitespace). */
+function stripFieldSpace(value: string): string {
+  return value.startsWith(' ') ? value.slice(1) : value;
+}
+
 /**
  * Generic SSE reader over fetch (EventSource cannot POST or set Authorization).
  * Parses `event:` / `data:` / `id:` lines per the SSE spec.
@@ -136,7 +141,7 @@ export async function readSseRequest(options: ReadSseRequestOptions): Promise<Re
         if (line.startsWith('event:')) {
           eventName = line.slice(6).trim() || 'message';
         } else if (line.startsWith('data:')) {
-          dataLines.push(line.slice(5).trimStart());
+          dataLines.push(stripFieldSpace(line.slice(5)));
         } else if (line.startsWith('id:')) {
           eventId = line.slice(3).trim();
         }
@@ -147,7 +152,7 @@ export async function readSseRequest(options: ReadSseRequestOptions): Promise<Re
     if (buffer.trim()) {
       const line = buffer.replace(/\r$/, '');
       if (line.startsWith('data:')) {
-        dataLines.push(line.slice(5).trimStart());
+        dataLines.push(stripFieldSpace(line.slice(5)));
       } else if (line.startsWith('id:')) {
         eventId = line.slice(3).trim();
       }

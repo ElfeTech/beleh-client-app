@@ -4,12 +4,16 @@
  */
 export const PUBLIC_EXACT_PATHS = new Set([
   '/',
+  '/pricing',
   '/signin',
   '/signup',
   '/invitations/accept',
   '/auth/provider/callback',
   '/error',
 ]);
+
+/** Public paths that may still be used as post-auth `?next=` return targets. */
+const RETURN_ALLOWED_PUBLIC_PATHS = new Set(['/pricing']);
 
 /** Prefixes that remain public (OAuth / provider callbacks). */
 export const PUBLIC_PATH_PREFIXES = ['/auth/', '/legal'] as const;
@@ -32,6 +36,7 @@ export function safeReturnPath(candidate: string | null | undefined): string | n
   if (trimmed.includes('://')) return null;
 
   const pathOnly = trimmed.split('?')[0] || '/';
+  if (RETURN_ALLOWED_PUBLIC_PATHS.has(pathOnly)) return trimmed;
   if (isPublicPath(pathOnly)) return null;
   // Avoid sending users back into a bare catch-all loop target.
   if (pathOnly === '*') return null;

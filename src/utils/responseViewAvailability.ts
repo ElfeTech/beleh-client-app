@@ -3,11 +3,15 @@ import type {
   ChartArtifactType,
   ChartData,
   ChatMessageMetadata,
+  HeatmapData,
+  MapData,
   ScatterData,
   UiArtifact,
 } from '../types/api';
 import {
   asChartData,
+  asHeatmapData,
+  asMapData,
   asScatterData,
   asTableData,
   findChartArtifacts,
@@ -15,8 +19,12 @@ import {
   getArtifactReactKey,
   isCategoryChartType,
   isChartArtifactType,
+  isHeatmapArtifactType,
+  isMapArtifactType,
   isScatterArtifactType,
   isValidCategoryChartData,
+  isValidHeatmapData,
+  isValidMapData,
   isValidScatterData,
   tableRowsToRecords,
 } from './artifactAdapters';
@@ -28,10 +36,14 @@ export interface ResponseViewChart {
   id: string;
   key: string;
   type: ChartArtifactType;
-  /** Category charts only; null for scatter. */
+  /** Category charts only; null for other payload shapes. */
   data: ChartData | null;
-  /** Scatter only; null for category charts. */
+  /** Scatter only; null for other chart types. */
   scatterData: ScatterData | null;
+  /** Heatmap only; null for other chart types. */
+  heatmapData: HeatmapData | null;
+  /** Map only; null for other chart types. */
+  mapData: MapData | null;
   title: string;
 }
 
@@ -50,6 +62,8 @@ export interface ResponseViewAvailability {
   chartType: ChartArtifactType | null;
   chartData: ChartData | null;
   scatterData: ScatterData | null;
+  heatmapData: HeatmapData | null;
+  mapData: MapData | null;
   chartTitle: string;
 }
 
@@ -64,30 +78,39 @@ function artifactChartToPlotType(type: ChartArtifactType): ChartType {
 function toResponseViewChart(
   a: UiArtifact & { type: ChartArtifactType },
 ): ResponseViewChart | null {
+  const base = {
+    id: a.id,
+    key: getArtifactReactKey(a),
+    type: a.type,
+    data: null,
+    scatterData: null,
+    heatmapData: null,
+    mapData: null,
+    title: a.title || '',
+  };
+
   if (isScatterArtifactType(a.type)) {
     const scatterData = asScatterData(a.data);
     if (!isValidScatterData(scatterData)) return null;
-    return {
-      id: a.id,
-      key: getArtifactReactKey(a),
-      type: a.type,
-      data: null,
-      scatterData,
-      title: a.title || '',
-    };
+    return { ...base, scatterData };
+  }
+
+  if (isHeatmapArtifactType(a.type)) {
+    const heatmapData = asHeatmapData(a.data);
+    if (!isValidHeatmapData(heatmapData)) return null;
+    return { ...base, heatmapData };
+  }
+
+  if (isMapArtifactType(a.type)) {
+    const mapData = asMapData(a.data);
+    if (!isValidMapData(mapData)) return null;
+    return { ...base, mapData };
   }
 
   if (!isCategoryChartType(a.type)) return null;
   const data = asChartData(a.data);
   if (!isValidCategoryChartData(data)) return null;
-  return {
-    id: a.id,
-    key: getArtifactReactKey(a),
-    type: a.type,
-    data,
-    scatterData: null,
-    title: a.title || '',
-  };
+  return { ...base, data };
 }
 
 /** SQL panels finalized; missing → 1 for older stored messages. */
@@ -121,11 +144,19 @@ export function getResponseViewAvailability(artifacts: UiArtifact[]): ResponseVi
   const chartType = first?.type ?? null;
   const chartData = first?.data ?? null;
   const scatterData = first?.scatterData ?? null;
+  const heatmapData = first?.heatmapData ?? null;
+  const mapData = first?.mapData ?? null;
   const chartTitle = first?.title ?? '';
   const originalChartType: ChartType = first ? artifactChartToPlotType(first.type) : 'column';
   const compatiblePlotTypes: ChartType[] = (() => {
     if (!plot) return [];
-    if (originalChartType === 'scatter') return ['scatter'];
+    if (
+      originalChartType === 'scatter' ||
+      originalChartType === 'heatmap' ||
+      originalChartType === 'map'
+    ) {
+      return [originalChartType];
+    }
     if (PLOT_SWITCH_TYPES.includes(originalChartType)) return [...PLOT_SWITCH_TYPES];
     return [originalChartType];
   })();
@@ -154,6 +185,8 @@ export function getResponseViewAvailability(artifacts: UiArtifact[]): ResponseVi
     chartType,
     chartData,
     scatterData,
+    heatmapData,
+    mapData,
     chartTitle,
   };
 }

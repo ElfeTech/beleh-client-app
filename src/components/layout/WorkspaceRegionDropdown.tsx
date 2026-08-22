@@ -192,6 +192,7 @@ export function WorkspaceRegionDropdown() {
         disabled={workspaces.length === 0}
         aria-expanded={isOpen}
         aria-haspopup="listbox"
+        data-tour="workspace-switcher"
       >
         <span className="ws-region__trigger-icon" aria-hidden>
           <Building2 size={18} strokeWidth={1.75} />

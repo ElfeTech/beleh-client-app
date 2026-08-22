@@ -1,22 +1,14 @@
 import type { ComponentType } from 'react';
-import type { ArtifactType, ChartArtifactType, UiArtifact } from '../../../types/api';
-import {
-  asChartData,
-  asScatterData,
-  asTableData,
-  isCategoryChartType,
-  tableRowsToRecords,
-} from '../../../utils/artifactAdapters';
+import type { ArtifactType, UiArtifact } from '../../../types/api';
+import { asTableData, tableRowsToRecords } from '../../../utils/artifactAdapters';
 import { TableSchemaView } from '../TableSchemaView';
-import { ArtifactChart } from './ArtifactChart';
-import { ArtifactScatterChart } from './ArtifactScatterChart';
+import { ArtifactChartCard } from './ArtifactChartCard';
 import { ArtifactKpi } from './ArtifactKpi';
 import { ArtifactInsight } from './ArtifactInsight';
 import { ArtifactActionGroup } from './ArtifactActionGroup';
 import { ArtifactFilterBar } from './ArtifactFilterBar';
 import { ArtifactEmptyState } from './ArtifactEmptyState';
 import { ArtifactError } from './ArtifactError';
-import { ChartCard } from '../charts/ChartCard';
 
 export interface ArtifactRenderContext {
   onAsk?: (prompt: string) => void;
@@ -51,23 +43,7 @@ function ArtifactTableStandalone({ artifact, context }: ArtifactComponentProps) 
 
 function ArtifactChartStandalone({ artifact, context }: ArtifactComponentProps) {
   if (context?.skipDataViews) return null;
-  if (!isCategoryChartType(artifact.type)) return null;
-  const chart = asChartData(artifact.data);
-  return (
-    <ChartCard title={artifact.title || undefined}>
-      <ArtifactChart type={artifact.type as Exclude<ChartArtifactType, 'scatter'>} data={chart} />
-    </ChartCard>
-  );
-}
-
-function ArtifactScatterStandalone({ artifact, context }: ArtifactComponentProps) {
-  if (context?.skipDataViews) return null;
-  const scatter = asScatterData(artifact.data);
-  return (
-    <ChartCard title={artifact.title || undefined}>
-      <ArtifactScatterChart data={scatter} />
-    </ChartCard>
-  );
+  return <ArtifactChartCard artifact={artifact} />;
 }
 
 function ArtifactKpiWrap({ artifact }: ArtifactComponentProps) {
@@ -121,7 +97,9 @@ export const artifactRegistry: Record<ArtifactType, ComponentType<ArtifactCompon
   area: ArtifactChartStandalone,
   doughnut: ArtifactChartStandalone,
   pie: ArtifactChartStandalone,
-  scatter: ArtifactScatterStandalone,
+  scatter: ArtifactChartStandalone,
+  heatmap: ArtifactChartStandalone,
+  map: ArtifactChartStandalone,
   insight: ArtifactInsightWrap,
   action_group: ArtifactActionGroupWrap,
   filter_bar: ArtifactFilterBarWrap,
@@ -139,6 +117,8 @@ export const DATA_VIEW_ARTIFACT_TYPES = new Set<ArtifactType>([
   'doughnut',
   'pie',
   'scatter',
+  'heatmap',
+  'map',
 ]);
 
 export function ArtifactRenderer({

@@ -25,8 +25,19 @@
   }
 }
 
+/* Click-anywhere-outside dismiss layer, sits behind the container */
+.expanded-chart-modal-dismiss {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: default;
+}
+
 /* Modal Container */
 .expanded-chart-modal-container {
+  position: relative;
   background: var(--card-background, #ffffff);
   border-radius: 16px;
   border: 1px solid var(--border-primary, #e5e7eb);

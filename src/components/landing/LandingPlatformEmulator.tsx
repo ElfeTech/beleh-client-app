@@ -491,10 +491,6 @@ function AssistantBlock({
               <ClockIcon />
               Execution Time: <strong>{turn.executionTime}</strong>
             </span>
-            <span className="lpe-meta-item">
-              <DbIcon />
-              Rows scanned: <strong>{turn.rowsScanned}</strong>
-            </span>
           </div>
         ) : null}
 
