@@ -58,7 +58,9 @@ export function PostgresConnectorView({
   onCancel,
 }: PostgresConnectorViewProps) {
   const { user } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isTesting, setIsTesting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const isLoading = isTesting || isSaving;
   const [testStatus, setTestStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [connectionStringInput, setConnectionStringInput] = useState('');
@@ -141,7 +143,7 @@ export function PostgresConnectorView({
 
   const handleTestConnection = async () => {
     if (!user) return;
-    setIsLoading(true);
+    setIsTesting(true);
     setError(null);
     setTestStatus(null);
 
@@ -165,14 +167,14 @@ export function PostgresConnectorView({
         message: err instanceof Error ? err.message : 'Connection test failed',
       });
     } finally {
-      setIsLoading(false);
+      setIsTesting(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    setIsLoading(true);
+    setIsSaving(true);
     setError(null);
 
     try {
@@ -193,7 +195,7 @@ export function PostgresConnectorView({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to create connector');
     } finally {
-      setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -423,7 +425,7 @@ export function PostgresConnectorView({
               onClick={handleTestConnection}
               disabled={isLoading || !formData.host || !formData.database}
             >
-              {isLoading ? 'Testing…' : 'Test connection'}
+              {isTesting ? 'Testing…' : 'Test connection'}
             </button>
             <button
               type="submit"
@@ -432,7 +434,7 @@ export function PostgresConnectorView({
               title={!testStatus?.success ? 'Run a successful connection test first' : undefined}
             >
               <Database size={16} strokeWidth={2} aria-hidden />
-              {isLoading ? 'Saving…' : 'Initialize connection'}
+              {isSaving ? 'Saving…' : 'Initialize connection'}
             </button>
           </div>
         </footer>

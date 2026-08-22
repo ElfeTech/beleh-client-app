@@ -17,6 +17,7 @@ import { getWorkflowFailure, formatChatRequestError } from '../../utils/chatWork
 import type { WorkflowFailureInfo } from '../../utils/chatWorkflowStatus';
 import { BI_CHAT_MAX_CHARS } from '../../constants/chatLimits';
 import { DatasourceConnectionPanel } from '../layout/DatasourceConnectionPanel';
+import { pollConnectorSyncUntilSettled } from '../../utils/pollConnectorSync';
 import { useWorkspace } from '../../context/WorkspaceContext';
 import { useDatasource } from '../../context/DatasourceContext';
 import { useChatSession } from '../../context/ChatSessionContext';
@@ -24,7 +25,12 @@ import { useAuth } from '../../context/useAuth';
 import { useMessages } from '../../hooks/useApiData';
 import { useChatRun } from '../../hooks/useChatRun';
 import { apiClient } from '../../services/apiClient';
-import { ApiRequestError, isQuotaExceededError } from '../../utils/apiErrorMessage';
+import {
+  ApiRequestError,
+  isNetworkFetchError,
+  isQuotaExceededError,
+  NETWORK_ERROR_MESSAGE,
+} from '../../utils/apiErrorMessage';
 import { formatQuotaExceededAction, formatQuotaExceededMessage } from '../../utils/quotaExceededUi';
 import { formatQuotaResetAt } from '../../utils/formatters';
 import {
@@ -82,6 +88,81 @@ interface Message {
   status?: 'sending' | 'sent' | 'error';
   failure?: WorkflowFailureInfo;
   retryPrompt?: string;
+}
+
+function mapServerMessage(m: ChatMessageRead): Message {
+  return {
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    metadata: m.message_metadata,
+    timestamp: new Date(m.created_at),
+    status: 'sent',
+  };
+}
+
+/**
+ * Merge refetched history into the visible thread WITHOUT replacing it.
+ *
+ * The optimistic user bubble and the just-streamed assistant turn carry local
+ * ids; a wholesale swap to server UUIDs changes React keys, so AnimatePresence
+ * unmounts/remounts every message and the whole thread visibly "refreshes"
+ * (charts re-animate, tab state resets). Instead: match server rows to
+ * existing local messages (by id, then role+content) and keep the local object
+ * — stable key, same reference — adopting server data only for genuinely new
+ * or changed rows. Unmatched local tail (in-flight sends, failure cards that
+ * are never persisted) is preserved. Returns `prev` itself when nothing
+ * changed so downstream effects (auto-scroll) do not fire.
+ */
+function reconcileServerMessages(prev: Message[], serverItems: ChatMessageRead[]): Message[] {
+  const mapped = serverItems
+    .map(mapServerMessage)
+    .sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+  const byId = new Map<string, Message>();
+  const byRoleContent = new Map<string, Message[]>();
+  for (const m of prev) {
+    if (m.id === 'welcome') continue;
+    byId.set(m.id, m);
+    const key = `${m.role}\u0000${m.content.trim()}`;
+    const pool = byRoleContent.get(key);
+    if (pool) pool.push(m);
+    else byRoleContent.set(key, [m]);
+  }
+
+  const consumed = new Set<Message>();
+  const next: Message[] = mapped.map((server) => {
+    let local = byId.get(server.id);
+    if (!local || consumed.has(local)) {
+      const pool = byRoleContent.get(`${server.role}\u0000${server.content.trim()}`);
+      local = pool?.find((candidate) => !consumed.has(candidate));
+    }
+    if (local && !consumed.has(local)) {
+      consumed.add(local);
+      if (local.content === server.content && local.status === 'sent' && !local.failure) {
+        return local; // identical row: keep identity — no remount, no re-render
+      }
+      return { ...server, id: local.id }; // updated row: new data, stable key
+    }
+    return server;
+  });
+
+  // Local messages the server does not know about yet (optimistic sends,
+  // failure cards, a turn whose persistence the refetch raced ahead of).
+  const lastServerTime = mapped.length > 0 ? mapped[mapped.length - 1].timestamp.getTime() : 0;
+  for (const m of prev) {
+    if (m.id === 'welcome' || consumed.has(m)) continue;
+    const isNewerThanServer = m.timestamp.getTime() >= lastServerTime;
+    if (m.failure || m.status === 'sending' || m.status === 'error' || isNewerThanServer) {
+      next.push(m);
+    }
+  }
+
+  // No-op fast path: hand back the same array so nothing downstream reacts.
+  if (next.length === prev.length && next.every((m, i) => m === prev[i])) {
+    return prev;
+  }
+  return next;
 }
 
 export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?: string }) {
@@ -360,6 +441,15 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     currentRole,
   ]);
 
+  // Stops in-flight schema-sync polling when the chat unmounts.
+  const syncPollAbortRef = useRef(false);
+  useEffect(() => {
+    syncPollAbortRef.current = false;
+    return () => {
+      syncPollAbortRef.current = true;
+    };
+  }, []);
+
   const handleLiveSourceConnected = useCallback(async () => {
     const wid = currentWorkspace?.id ?? workspaceId;
     if (!user || !wid) return;
@@ -471,19 +561,12 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     requestAnimationFrame(apply);
   }, []);
 
-  // Sync API messages to local state
+  // Sync API messages to local state. Reconcile in place (never wholesale
+  // replace): swapping the array with fresh ids remounts every message and the
+  // whole thread visibly "refreshes" after each turn.
   useEffect(() => {
     if (apiMessages && apiMessages.length > 0) {
-      const mapped: Message[] = apiMessages.map((m: ChatMessageRead) => ({
-        id: m.id,
-        role: m.role,
-        content: m.content,
-        metadata: m.message_metadata,
-        timestamp: new Date(m.created_at),
-        status: 'sent',
-      }));
-      // Sort by timestamp ascending for display
-      setLocalMessages(mapped.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime()));
+      setLocalMessages((prev) => reconcileServerMessages(prev, apiMessages as ChatMessageRead[]));
     } else if (!loadingHistory) {
       // Empty sessions use ChatWelcome (incl. demo suggested_prompts chips).
       // Do not inject a placeholder assistant bubble that would compete with it.
@@ -497,9 +580,17 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     }
   }, [apiMessages, loadingHistory, activeSessionId]);
 
+  // Leaving a chat clears the thread; switching to ANOTHER chat clears it too
+  // (so its skeleton shows instead of the stale thread) — but never mid-send,
+  // when a session is created for the optimistic bubble that must stay visible.
+  const isWaitingRef = useRef(false);
   useEffect(() => {
     if (!activeSessionId) {
       setLocalMessages([]);
+      return;
+    }
+    if (!isWaitingRef.current) {
+      setLocalMessages((prev) => (prev.length > 0 ? [] : prev));
     }
   }, [activeSessionId]);
 
@@ -685,6 +776,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     },
     historyReady: !loadingHistory,
   });
+  isWaitingRef.current = isWaiting;
 
   // Restore optimistic user bubble when resuming a pending turn after refresh
   useEffect(() => {
@@ -844,23 +936,55 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       awaitingSessionRestore ||
       (needsContextForSessionPick && workspaceContextPending));
 
+  const hasRealLocalThread = useMemo(
+    () =>
+      localMessages.some(
+        (m) => m.id !== 'welcome' && (m.role === 'user' || m.role === 'assistant'),
+      ),
+    [localMessages],
+  );
+
+  // Skeleton only for the INITIAL history load. A refetch after a completed
+  // turn (or while a turn streams) must never blank the visible thread —
+  // that skeleton swap is what made every response look like a full refresh.
   const historyPending =
     Boolean(activeSessionId) &&
     activeSessionId !== 'undefined' &&
     activeSessionId !== '1' &&
-    loadingHistory;
+    loadingHistory &&
+    !isWaiting &&
+    !hasRealLocalThread;
 
   const chatBodyPending = sessionBootstrapPending || historyPending;
 
+  // History fetch failed for an existing chat (transient / server error — 404/403 are
+  // handled above by clearing the session). Never render the welcome screen over it:
+  // that would present a broken load as an empty conversation.
+  const historyErrorStatus =
+    messagesError instanceof ApiRequestError ? messagesError.status : undefined;
+  const historyLoadFailed =
+    Boolean(messagesError) &&
+    Boolean(activeSessionId) &&
+    !isWaiting &&
+    historyErrorStatus !== 404 &&
+    historyErrorStatus !== 403;
+  const historyErrorDetail = !messagesError
+    ? ''
+    : isNetworkFetchError(messagesError)
+      ? NETWORK_ERROR_MESSAGE
+      : messagesError.message?.trim() ||
+        'Something went wrong while loading this conversation. Please try again.';
+
+  /** Nothing renderable locally — the failed history fetch is the whole story. */
+  const showHistoryErrorCard = historyLoadFailed && !hasRealLocalThread;
+
   const showWelcomeScreen = useMemo(() => {
     if (chatBodyPending) return false;
+    if (historyLoadFailed) return false;
     if (isWaiting) return false;
     if ((apiMessages?.length ?? 0) > 0) return false;
-    const hasRealThread = localMessages.some(
-      (m) => m.id !== 'welcome' && (m.role === 'user' || m.role === 'assistant'),
-    );
-    return !hasRealThread;
-  }, [chatBodyPending, isWaiting, apiMessages, localMessages]);
+    return !hasRealLocalThread;
+  }, [chatBodyPending, historyLoadFailed, isWaiting, apiMessages, hasRealLocalThread]);
 
   const hasDatasources = hasWorkspaceSources;
   // Avoid flashing the empty-state CTA before the first datasource/connector fetch settles.
@@ -897,7 +1021,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     const remaining = demoPromptPool.filter((p) => !used.has(p.trim()));
     return shuffleArray(remaining);
     // latestAssistantId intentionally triggers a fresh shuffle per response
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reshuffle when turn or used set changes
   }, [selectedIsDemo, latestAssistantId, demoPromptPool, usedDemoPrompts]);
 
   const demoSuggestionsExhausted =
@@ -1048,7 +1171,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             preferDemoPrompts={selectedIsDemo}
             usedPrompts={usedDemoPrompts}
           />
-          <div className="chat-composer-dock chat-composer-dock--float relative z-30 w-full shrink-0 overflow-visible pt-4 md:pt-6">
+          <div data-tour="composer" className="chat-composer-dock chat-composer-dock--float relative z-30 w-full shrink-0 overflow-visible pt-4 md:pt-6">
             {composerPanel}
           </div>
         </div>
@@ -1061,6 +1184,17 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 xl:max-w-[96rem] 2xl:max-w-[110rem] md:gap-8">
               {chatBodyPending ? (
                 <ChatThreadSkeleton />
+              ) : showHistoryErrorCard ? (
+                <div className="flex w-full justify-start">
+                  <div className="chat-message-width--assistant">
+                    <ChatFailureCard
+                      title="Couldn't load this conversation"
+                      detail={historyErrorDetail}
+                      canRetry
+                      onRetry={() => void refetchMessages()}
+                    />
+                  </div>
+                </div>
               ) : (
                 <>
                   <AnimatePresence initial={false}>
@@ -1243,7 +1377,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             </div>
           </div>
 
-          <div className="chat-composer-dock chat-composer-dock--float relative z-30 shrink-0 overflow-visible px-3 pb-3 pt-2 md:px-6 md:pb-4">
+          <div data-tour="composer" className="chat-composer-dock chat-composer-dock--float relative z-30 shrink-0 overflow-visible px-3 pb-3 pt-2 md:px-6 md:pb-4">
             {composerPanel}
           </div>
         </>
@@ -1259,9 +1393,23 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
               refreshDatasources({ silent: true }),
             ]);
           }}
-          onSuccess={async () => {
+          onSuccess={async (created, source) => {
             await handleLiveSourceConnected();
-            toast.success('Datasource connected successfully.');
+            // Supabase binds already toast "Connected {project}" in the flow.
+            if (source !== 'supabase') {
+              toast.success('Datasource connected successfully.');
+            }
+            // Follow schema sync so the sidebar status and the analyst's schema
+            // are ready without a manual refresh.
+            const outcome = await pollConnectorSyncUntilSettled(refreshConnectors, {
+              connectorId: created?.id,
+              isCancelled: () => syncPollAbortRef.current,
+            });
+            if (outcome === 'completed') {
+              toast.success('Schema sync complete — ready to query.');
+            } else if (outcome === 'failed') {
+              toast.error('Schema sync failed. Open the connector to retry or reconnect.');
+            }
           }}
         />
       )}

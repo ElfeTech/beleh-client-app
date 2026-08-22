@@ -12,6 +12,7 @@ export type ChartType =
   | 'stacked_bar'
   | 'scatter'
   | 'heatmap'
+  | 'map'
   | 'table';
 
 export interface ChartTypeOption {
@@ -264,6 +265,7 @@ export function getChartTypeIcon(type: ChartType): string {
     stacked_bar: 'M18 20V10M12 20V4M6 20v-6M18 10V4M12 4v4M6 14V8',
     scatter: 'M6 6h.01M6 18h.01M12 12h.01M18 6h.01M18 18h.01M9 9h.01M15 15h.01',
     heatmap: 'M3 3h7v7H3zM14 3h7v7h-7zM14 14h7v7h-7zM3 14h7v7H3z',
+    map: 'M12 21c4-4.5 7-8.2 7-11.5A7 7 0 0 0 5 9.5C5 12.8 8 16.5 12 21zM12 12a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5z',
     table: 'M3 3h18v18H3zM3 9h18M3 15h18M9 3v18M15 3v18',
   };
   return icons[type] || icons.table;
@@ -282,6 +284,7 @@ export function chartTypeToBackendFormat(type: ChartType): string {
     stacked_bar: 'stacked_bar',
     scatter: 'scatter',
     heatmap: 'heatmap',
+    map: 'map',
     table: 'table',
   };
   return mapping[type] || 'table';
@@ -311,6 +314,10 @@ export function backendToChartType(backendType: string): ChartType {
     SCATTER_PLOT: 'scatter',
     heatmap: 'heatmap',
     HEATMAP: 'heatmap',
+    map: 'map',
+    MAP: 'map',
+    choropleth: 'map',
+    CHOROPLETH_MAP: 'map',
     table: 'table',
     TABLE: 'table',
   };

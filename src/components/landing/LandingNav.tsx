@@ -1,19 +1,19 @@
 import { useLayoutEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useTheme, type Theme } from '../../context/ThemeContext';
 import logo from '../../assets/logo.webp';
 
 interface LandingNavProps {
-  isScrolled: boolean;
-  isLight: boolean;
-  onToggleTheme: () => void;
+  readonly isScrolled: boolean;
+  readonly isLight: boolean;
+  readonly onToggleTheme: () => void;
 }
 
-const NAV_LINKS = [
-  { href: '#how', label: 'How it works' },
-  { href: '#savings', label: 'Your savings' },
-  { href: '#proof', label: 'Results' },
-  { href: '#pricing', label: 'Pricing' },
+const NAV_SECTIONS = [
+  { section: 'how', label: 'How it works' },
+  { section: 'savings', label: 'Your savings' },
+  { section: 'proof', label: 'Results' },
+  { section: 'pricing', label: 'Pricing', isPricing: true },
 ] as const;
 
 function SunIcon() {
@@ -43,8 +43,43 @@ function MoonIcon() {
   );
 }
 
+function NavSectionLink({
+  section,
+  label,
+  isPricing,
+  onPricingPage,
+}: Readonly<{
+  section: string;
+  label: string;
+  isPricing?: boolean;
+  onPricingPage: boolean;
+}>) {
+  if (isPricing) {
+    if (onPricingPage) {
+      return <a href="/pricing">{label}</a>;
+    }
+    return <Link to="/pricing">{label}</Link>;
+  }
+
+  if (onPricingPage) {
+    return <Link to={{ pathname: '/', hash: section }}>{label}</Link>;
+  }
+
+  return <a href={`#${section}`}>{label}</a>;
+}
+
 export function LandingNav({ isScrolled, isLight, onToggleTheme }: LandingNavProps) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const onPricingPage = location.pathname === '/pricing';
+
+  const handleBrandClick = () => {
+    if (onPricingPage) {
+      navigate('/');
+      return;
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   return (
     <header className={`landing-header ${isScrolled ? 'scrolled' : ''}`}>
@@ -53,17 +88,21 @@ export function LandingNav({ isScrolled, isLight, onToggleTheme }: LandingNavPro
           <button
             type="button"
             className="landing-brand"
-            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onClick={handleBrandClick}
             aria-label="Beleh home"
           >
             <img src={logo} alt="Beleh" className="landing-brand__logo" />
           </button>
 
           <div className="landing-nav-links">
-            {NAV_LINKS.map((link) => (
-              <a key={link.href} href={link.href}>
-                {link.label}
-              </a>
+            {NAV_SECTIONS.map((link) => (
+              <NavSectionLink
+                key={link.section}
+                section={link.section}
+                label={link.label}
+                isPricing={'isPricing' in link ? link.isPricing : false}
+                onPricingPage={onPricingPage}
+              />
             ))}
           </div>
 

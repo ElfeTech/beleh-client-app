@@ -32,6 +32,11 @@ const DEFAULT_CONFIG: Required<CacheConfig> = {
   deduplicate: true,
 };
 
+/** Cache diagnostics are dev-only; production consoles stay clean. */
+const debugLog: (...args: unknown[]) => void = import.meta.env.DEV
+  ? (...args) => console.log(...args)
+  : () => {};
+
 class ApiCacheManager {
   // Cache storage: endpoint -> cacheKey -> data
   private cache = new Map<string, Map<string, CacheEntry<any>>>();
@@ -207,13 +212,13 @@ class ApiCacheManager {
 
       if (!isStale) {
         // Data is fresh, return immediately
-        console.log(`[ApiCacheManager] Cache HIT (fresh) for ${endpoint}`, { cacheKey });
+        debugLog(`[ApiCacheManager] Cache HIT (fresh) for ${endpoint}`, { cacheKey });
         return cached.data;
       }
 
       if (config.staleWhileRevalidate && isStale) {
         // Data is stale but we'll return it and refresh in background
-        console.log(`[ApiCacheManager] Cache HIT (stale, revalidating) for ${endpoint}`, {
+        debugLog(`[ApiCacheManager] Cache HIT (stale, revalidating) for ${endpoint}`, {
           cacheKey,
         });
 
@@ -228,13 +233,13 @@ class ApiCacheManager {
     if (config.deduplicate) {
       const pending = this.getPendingRequest<T>(endpoint, cacheKey);
       if (pending) {
-        console.log(`[ApiCacheManager] Request DEDUPLICATED for ${endpoint}`, { cacheKey });
+        debugLog(`[ApiCacheManager] Request DEDUPLICATED for ${endpoint}`, { cacheKey });
         return pending;
       }
     }
 
     // No cache hit and no pending request - make new request
-    console.log(`[ApiCacheManager] Cache MISS for ${endpoint}, fetching...`, { cacheKey });
+    debugLog(`[ApiCacheManager] Cache MISS for ${endpoint}, fetching...`, { cacheKey });
     return this.executeRequest(endpoint, fetchFn, args, cacheKey, config);
   }
 
@@ -268,7 +273,7 @@ class ApiCacheManager {
       } catch (error) {
         // If request was aborted, don't log as error
         if (error instanceof Error && error.name === 'AbortError') {
-          console.log(`[ApiCacheManager] Request aborted for ${endpoint}`, { cacheKey });
+          debugLog(`[ApiCacheManager] Request aborted for ${endpoint}`, { cacheKey });
         } else {
           console.error(`[ApiCacheManager] Request failed for ${endpoint}:`, error);
         }
@@ -327,7 +332,7 @@ class ApiCacheManager {
     const endpointCache = this.cache.get(endpoint);
     if (endpointCache) {
       endpointCache.delete(cacheKey);
-      console.log(`[ApiCacheManager] Cache invalidated for ${endpoint}`, { cacheKey });
+      debugLog(`[ApiCacheManager] Cache invalidated for ${endpoint}`, { cacheKey });
     }
   }
 
@@ -336,7 +341,7 @@ class ApiCacheManager {
    */
   invalidateAll(endpoint: string): void {
     this.cache.delete(endpoint);
-    console.log(`[ApiCacheManager] All cache invalidated for ${endpoint}`);
+    debugLog(`[ApiCacheManager] All cache invalidated for ${endpoint}`);
   }
 
   /**
@@ -347,7 +352,7 @@ class ApiCacheManager {
     if (endpointControllers) {
       endpointControllers.forEach((controller) => controller.abort());
       this.abortControllers.delete(endpoint);
-      console.log(`[ApiCacheManager] Cancelled pending requests for ${endpoint}`);
+      debugLog(`[ApiCacheManager] Cancelled pending requests for ${endpoint}`);
     }
   }
 
@@ -364,7 +369,7 @@ class ApiCacheManager {
     });
     this.abortControllers.clear();
 
-    console.log('[ApiCacheManager] All cache and pending requests cleared');
+    debugLog('[ApiCacheManager] All cache and pending requests cleared');
   }
 
   /**

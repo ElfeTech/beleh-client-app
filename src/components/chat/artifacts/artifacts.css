@@ -19,23 +19,58 @@
   margin-top: var(--space-5);
 }
 
+/* Balanced KPI grid: --kpi-cols is computed per response (max 4 per row) so
+   4 cards sit in one row, 6 render as 2×3, 5 as 3+2, 7 as 4+3, and so on. */
 .artifact-kpi__grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(var(--kpi-cols, 4), minmax(0, 1fr));
   align-items: stretch;
   gap: var(--space-3);
-  /* Prefer wrapping cards to the next row over clipping figures mid-number. */
-  overflow-x: auto;
 }
 
 .artifact-kpi__item {
-  flex: 0 0 auto;
-  width: max-content;
-  max-width: 100%;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* A lone metric should read as a stat card, not a full-width banner. */
+.artifact-kpi[data-kpi-count='1'] .artifact-kpi__grid {
+  max-width: 22rem;
 }
 
 .artifact-kpi__item .label-widget-card {
   height: 100%;
+  width: 100%;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Cards share the row width; long labels/figures wrap instead of overflowing. */
+.artifact-kpi__item .label-widget-card__label,
+.artifact-kpi__item .label-widget-card__value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .artifact-kpi__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .artifact-kpi[data-kpi-count='1'] .artifact-kpi__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 420px) {
+  .artifact-kpi__grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .artifact-kpi[data-kpi-count='1'] .artifact-kpi__grid {
+    max-width: none;
+  }
 }
 
 .artifact-kpi__meta {
@@ -130,4 +165,183 @@
   .artifact-panel-grid--multi {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
   }
+}
+
+/* ---------- Heatmap (dimension × dimension intensity matrix) ---------- */
+
+.artifact-heatmap {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2) 0;
+}
+
+.artifact-heatmap__grid {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Each row lives in the same grid so label + cells share column tracks. */
+.artifact-heatmap__row {
+  display: contents;
+}
+
+.artifact-heatmap__y-label {
+  font-size: var(--text-2xs, 0.72rem);
+  color: var(--text-secondary, #475569);
+  align-self: center;
+  justify-self: end;
+  padding-right: var(--space-2);
+  max-width: 9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifact-heatmap__cell {
+  aspect-ratio: auto;
+  min-height: 30px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+  transition:
+    transform 0.1s ease,
+    box-shadow 0.1s ease;
+}
+
+.artifact-heatmap__cell[data-empty='true'] {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--bg-tertiary, #f1f5f9),
+    var(--bg-tertiary, #f1f5f9) 4px,
+    transparent 4px,
+    transparent 8px
+  );
+}
+
+.artifact-heatmap__cell:hover {
+  transform: scale(1.06);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.25);
+  z-index: 1;
+}
+
+.artifact-heatmap__x-label {
+  font-size: var(--text-2xs, 0.72rem);
+  color: var(--text-secondary, #475569);
+  text-align: center;
+  overflow: hidden;
+  min-width: 0;
+  padding-top: var(--space-1);
+}
+
+.artifact-heatmap__x-label span {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artifact-heatmap__x-label--rotated {
+  height: 3.6rem;
+}
+
+.artifact-heatmap__x-label--rotated span {
+  transform: rotate(-45deg) translateX(-0.4rem);
+  transform-origin: top right;
+  max-width: 3.4rem;
+}
+
+.artifact-heatmap__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.artifact-heatmap__axis-titles {
+  display: flex;
+  gap: var(--space-1);
+  font-size: var(--text-2xs, 0.72rem);
+  color: var(--text-muted);
+}
+
+.artifact-heatmap__legend,
+.artifact-map__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-2xs, 0.72rem);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.artifact-heatmap__legend-ramp,
+.artifact-map__legend-ramp {
+  display: inline-block;
+  width: 96px;
+  height: 8px;
+  border-radius: 999px;
+}
+
+.artifact-heatmap__tooltip,
+.artifact-map__tooltip {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+}
+
+/* ---------- Map (world choropleth) ---------- */
+
+.artifact-map {
+  width: 100%;
+  min-width: 0;
+  padding: var(--space-2) 0;
+}
+
+.artifact-map__svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.artifact-map__loading {
+  padding: var(--space-6);
+  text-align: center;
+  font-size: var(--text-sm, 0.85rem);
+  color: var(--text-muted);
+}
+
+.artifact-map__country {
+  stroke: var(--border-primary, #e2e8f0);
+  stroke-width: 0.5;
+  transition: opacity 0.1s ease;
+}
+
+.artifact-map__country--data:hover {
+  opacity: 0.82;
+  stroke: var(--text-secondary, #475569);
+  stroke-width: 1;
+}
+
+.artifact-map__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.artifact-map__note {
+  font-size: var(--text-2xs, 0.72rem);
+  color: var(--text-muted);
+  margin: 0;
 }

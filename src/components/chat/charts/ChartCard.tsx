@@ -1,4 +1,5 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
+import { downloadElementAsPng } from '../../../utils/downloadChartPng';
 import './ChartCard.css';
 
 interface ChartCardProps {
@@ -7,7 +8,10 @@ interface ChartCardProps {
   children: ReactNode;
   onExpand?: () => void;
   onDownloadCSV?: () => void;
+  /** Custom PNG handler; when omitted the card exports its own content. */
   onDownloadPNG?: () => void;
+  /** Set false to hide the built-in PNG export. */
+  enablePngDownload?: boolean;
   onViewData?: () => void;
   onClose?: () => void;
 }
@@ -19,10 +23,27 @@ export function ChartCard({
   onExpand,
   onDownloadCSV,
   onDownloadPNG,
+  enablePngDownload = true,
   onViewData,
   onClose,
 }: ChartCardProps) {
   const [isHovered, setIsHovered] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleDownloadPng =
+    onDownloadPNG ??
+    (enablePngDownload
+      ? async () => {
+          if (isExporting) return;
+          setIsExporting(true);
+          try {
+            await downloadElementAsPng(contentRef.current, title);
+          } finally {
+            setIsExporting(false);
+          }
+        }
+      : undefined);
 
   return (
     <div
@@ -30,9 +51,9 @@ export function ChartCard({
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Header */}
-      {(title || description) && (
-        <div className="chart-card-header">
+      {/* Header (also rendered title-less so chart actions stay reachable) */}
+      {(title || description || handleDownloadPng || onExpand || onDownloadCSV || onViewData) && (
+        <div className={`chart-card-header ${title || description ? '' : 'chart-card-header--bare'}`}>
           <div className="chart-card-title-section">
             {title && <h3 className="chart-card-title">{title}</h3>}
             {description && <p className="chart-card-description">{description}</p>}
@@ -80,19 +101,21 @@ export function ChartCard({
                 <span className="action-label">CSV</span>
               </button>
             )}
-            {onDownloadPNG && (
+            {handleDownloadPng && (
               <button
                 className="chart-action-btn"
-                onClick={onDownloadPNG}
-                title="Download PNG"
-                aria-label="Download PNG"
+                onClick={() => void handleDownloadPng()}
+                disabled={isExporting}
+                title="Download as PNG"
+                aria-label="Download chart as PNG"
+                aria-busy={isExporting}
               >
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <polyline points="21 15 16 10 5 21" />
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                <span className="action-label">PNG</span>
+                <span className="action-label">{isExporting ? 'Saving…' : 'PNG'}</span>
               </button>
             )}
             {onViewData && (
@@ -116,7 +139,9 @@ export function ChartCard({
       )}
 
       {/* Chart Content */}
-      <div className="chart-card-content">{children}</div>
+      <div ref={contentRef} className="chart-card-content">
+        {children}
+      </div>
     </div>
   );
 }

@@ -108,14 +108,38 @@ export function extractApiErrorCode(data: unknown): string | null {
   return typeof code === 'string' && code.trim() ? code.trim() : null;
 }
 
+/** Friendly fallback copy per HTTP status when the body has no usable detail. */
+function fallbackMessageForStatus(status: number): string {
+  if (status === 401) return 'Your session has expired. Please sign in again.';
+  if (status === 403) return "You don't have permission to perform this action.";
+  if (status === 404) return 'The requested resource could not be found.';
+  if (status === 408 || status === 504) return 'The request timed out. Please try again.';
+  if (status === 410) return 'This invite has expired or been revoked. Request a new invite.';
+  if (status === 429) return 'Too many requests. Please wait a moment and try again.';
+  if (status >= 500) return 'Something went wrong on our end. Please try again shortly.';
+  return 'The request could not be completed. Please try again.';
+}
+
 export function formatApiErrorMessage(data: unknown, status?: number): string {
   const detail = extractApiErrorDetail(data);
   if (detail) return detail;
   if (status === 410) {
     return 'This invite has expired or been revoked. Request a new invite.';
   }
-  if (status != null) return `HTTP error! status: ${status}`;
-  return 'Request failed';
+  if (status != null) return fallbackMessageForStatus(status);
+  return 'The request could not be completed. Please try again.';
+}
+
+/** User-facing copy when fetch cannot reach the server at all. */
+export const NETWORK_ERROR_MESSAGE =
+  'Unable to reach the server. Check your internet connection and try again.';
+
+/**
+ * True when fetch failed before receiving a response (offline, DNS, CORS, dropped
+ * connection). Browsers surface these as TypeError ("Failed to fetch" / "Load failed").
+ */
+export function isNetworkFetchError(error: unknown): boolean {
+  return error instanceof TypeError;
 }
 
 /** Friendly toast copy for stable provider error codes. */

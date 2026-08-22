@@ -27,6 +27,8 @@ interface ChatSessionContextType {
   isNewChatDraft: boolean;
   /** True after sessions have been fetched for the current workspace (including empty list). */
   sessionsReady: boolean;
+  /** True when the last session-list fetch failed (list may be stale or empty). */
+  sessionsLoadError: boolean;
   /** Clear active session and suppress auto-restore from workspace state (sidebar New chat). */
   startNewChat: () => void;
   addSession: (session: ChatSessionRead) => ChatSessionRead;
@@ -73,6 +75,7 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionsLoadError, setSessionsLoadError] = useState(false);
   const [isLoadingMoreSessions, setIsLoadingMoreSessions] = useState(false);
   const [sessionsHasMore, setSessionsHasMore] = useState(false);
   const [sessionsPage, setSessionsPage] = useState(INITIAL_PAGE);
@@ -157,7 +160,9 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     async (workspaceId: string, force = false) => {
       if (!user || !workspaceId || workspaceId === 'undefined') return [];
 
+      const previousWorkspaceId = sessionsWorkspaceIdRef.current;
       setIsLoading(true);
+      setSessionsLoadError(false);
       setSessionsReadyForId(null);
       setSessionsHasMore(false);
       setSessionsPage(INITIAL_PAGE);
@@ -212,8 +217,15 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
         return items;
       } catch (err) {
         console.error('[ChatSessionContext] Failed to load workspace sessions:', err);
-        setSessions([]);
+        setSessionsLoadError(true);
+        // Keep the previous list when it belongs to this workspace so a transient
+        // failure doesn't blank the sidebar; clear it when switching workspaces.
+        if (previousWorkspaceId !== workspaceId) {
+          setSessions([]);
+        }
         setSessionsHasMore(false);
+        // Explicit refreshes must not report success on failure.
+        if (force) throw err;
         return [];
       } finally {
         setSessionsReadyForId(workspaceId);
@@ -297,6 +309,8 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     if (!currentWorkspace?.id) return;
     if (!workspaceContext || workspaceContext.workspace.id !== currentWorkspace.id) return;
     if (!sessionsReady) return;
+    // A failed list fetch proves nothing about the server pointer — never treat it as stale.
+    if (sessionsLoadError) return;
     if (suppressSessionRestoreRef.current) return;
     if (isNewChatDraft) return;
 
@@ -327,6 +341,7 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     workspaceContext,
     sessions,
     sessionsReady,
+    sessionsLoadError,
     activeSessionId,
     setActiveSessionId,
     isNewChatDraft,
@@ -336,10 +351,10 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   /**
    * Invalidate cached sessions for a workspace
    */
-  const invalidateWorkspaceSessions = useCallback((workspaceId: string) => {
-    // Drop all session list entries so a token-keyed miss cannot revive a deleted chat.
+  // Workspace id is accepted by the interface but unused: all session list entries are
+  // dropped so a token-keyed miss cannot revive a deleted chat.
+  const invalidateWorkspaceSessions = useCallback<(workspaceId: string) => void>(() => {
     apiCacheManager.invalidateAll('workspace-sessions');
-    console.log('[ChatSessionContext] Invalidated sessions cache for workspace:', workspaceId);
   }, []);
 
   const addSession = useCallback(
@@ -494,6 +509,7 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
         setActiveSessionId,
         isNewChatDraft,
         sessionsReady,
+        sessionsLoadError,
         startNewChat,
         addSession,
         touchSession,

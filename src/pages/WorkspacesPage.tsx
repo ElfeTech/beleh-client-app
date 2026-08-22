@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Briefcase, Building2, Search } from 'lucide-react';
+import { Briefcase, Building2, MoreVertical, Search } from 'lucide-react';
 import { SettingsSectionHeader } from '../components/settings/SettingsSectionHeader';
 import '../components/settings/SettingsShared.css';
 import { toast } from 'sonner';
 import { useWorkspace } from '../context/WorkspaceContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
+import { ApiRequestError } from '../utils/apiErrorMessage';
 import { writeActiveWorkspaceId, UI_KEYS, type UiMemoryScope } from '../lib/uiMemory';
 import { useUiMemory } from '../hooks/useUiMemory';
 import { ContextMenu, type ContextMenuItem } from '../components/common/ContextMenu';
@@ -120,7 +121,11 @@ export function WorkspacesPage() {
         const remainingWorkspaces = workspaces.filter((w) => w.id !== selectedWorkspace.id);
         if (remainingWorkspaces.length > 0) {
           setCurrentWorkspace(remainingWorkspaces[0]);
+          writeActiveWorkspaceId(remainingWorkspaces[0].id);
           navigate(`/workspace/${remainingWorkspaces[0].id}`);
+        } else {
+          setCurrentWorkspace(null);
+          navigate('/settings/workspaces');
         }
       }
 
@@ -129,7 +134,12 @@ export function WorkspacesPage() {
       toast.success('Workspace deleted successfully');
     } catch (err) {
       console.error('Failed to delete workspace:', err);
-      toast.error('Failed to delete workspace. Please try again.');
+      // Surface the server reason (e.g. default-workspace guard, permissions).
+      toast.error(
+        err instanceof ApiRequestError && err.message.trim()
+          ? err.message
+          : 'Failed to delete workspace. Please try again.',
+      );
     } finally {
       setIsDeleting(false);
     }
@@ -214,9 +224,19 @@ export function WorkspacesPage() {
     );
   };
 
+  /** Role for a specific row; falls back to context role only for the active workspace. */
+  const resolveWorkspaceRole = (workspace: WorkspaceResponse | null) => {
+    if (!workspace) return null;
+    const resolved = ownership.role(workspace);
+    if (resolved) return resolved;
+    return workspace.id === currentWorkspace?.id ? currentRole : null;
+  };
+
   const getMenuItems = (): ContextMenuItem[] | ActionSheetItem[] => {
-    const canRename = canRenameWorkspace(currentRole);
-    const canDelete = canDeleteWorkspace(currentRole, selectedWorkspace, user?.uid);
+    // Gate on the selected row's role, not the active workspace's role.
+    const selectedRole = resolveWorkspaceRole(selectedWorkspace);
+    const canRename = canRenameWorkspace(selectedRole);
+    const canDelete = canDeleteWorkspace(selectedRole, selectedWorkspace);
     return [
       {
         id: 'edit',
@@ -408,6 +428,18 @@ export function WorkspacesPage() {
                       >
                         {reindexingId === workspace.id ? 'Indexing…' : 'Re-index tables'}
                       </button>
+                      {!workspace.is_default && (
+                        <button
+                          type="button"
+                          className="ws-settings-more-btn"
+                          onClick={(e) => handleMoreClick(e, workspace)}
+                          aria-haspopup="menu"
+                          aria-label={`Options for ${workspace.name}`}
+                          title="Workspace options"
+                        >
+                          <MoreVertical size={16} strokeWidth={2} aria-hidden />
+                        </button>
+                      )}
                     </div>
                   </li>
                 );

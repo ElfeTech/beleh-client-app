@@ -8,6 +8,9 @@ import type {
   UserResponse,
   UserMeResponse,
   UserMePatch,
+  TourStateEntry,
+  TourStatus,
+  UserToursResponse,
   WorkspaceCreate,
   WorkspaceInvitation,
   WorkspaceInvitationCreate,
@@ -60,6 +63,8 @@ import {
   extractQuotaExceededDetail,
   formatApiErrorMessage,
   isAbortError,
+  isNetworkFetchError,
+  NETWORK_ERROR_MESSAGE,
   QuotaExceededError,
 } from '../utils/apiErrorMessage';
 import type {
@@ -131,35 +136,15 @@ class APIClient {
     };
 
     try {
-      let response = await fetch(url, config);
-
-      // Simulation for clarification logic verification
-      if (endpoint.includes('/messages') && options.method === 'POST') {
-        const body = JSON.parse(options.body as string);
-        if (body.prompt === 'VERIFY_CLARIFICATION') {
-          response = new Response(
-            JSON.stringify({
-              intent: {
-                clarification_needed: true,
-                clarification_message:
-                  'VERIFIED: Only this clarification message should be visible. Insight summary and limitations must be hidden because execution status is FAILED.',
-              },
-              execution: {
-                status: 'FAILED',
-                row_count: 0,
-                message: 'Execution Error (Hidden)',
-              },
-              insight: {
-                summary: 'Insight Summary (Hidden)',
-                limitations: 'Insight Limitations (Hidden)',
-              },
-            }),
-            {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' },
-            },
-          );
+      let response: Response;
+      try {
+        response = await fetch(url, config);
+      } catch (fetchError) {
+        if (isAbortError(fetchError) || options.signal?.aborted) throw fetchError;
+        if (isNetworkFetchError(fetchError)) {
+          throw new ApiRequestError(NETWORK_ERROR_MESSAGE, { status: 0 });
         }
+        throw fetchError;
       }
 
       // Handle 401 Unauthorized - attempt one token refresh, then let callers / AuthSessionGate handle auth loss.
@@ -176,7 +161,6 @@ class APIClient {
         }
 
         if (newToken) {
-          console.log('[API] Token refreshed successfully, retrying request...');
           return this.request<T>(
             endpoint,
             {
@@ -193,31 +177,6 @@ class APIClient {
         throw new ApiRequestError('Authentication session expired. Please sign in again.', {
           status: 401,
         });
-      }
-
-      // Handle 403 Forbidden - often means token not yet accepted (e.g. right after login); retry once after delay with fresh token
-      if (response.status === 403 && !isRetry) {
-        try {
-          const { authService } = await import('./authService');
-          await new Promise((r) => setTimeout(r, 500));
-          const newToken = await authService.refreshToken();
-          if (newToken) {
-            const updatedHeaders = {
-              ...headers,
-              Authorization: `Bearer ${newToken}`,
-            };
-            return this.request<T>(
-              endpoint,
-              {
-                ...options,
-                headers: updatedHeaders,
-              },
-              true,
-            );
-          }
-        } catch {
-          // Fall through to normal error handling
-        }
       }
 
       // Handle 403 Forbidden - often means token not yet accepted (e.g. right after login); retry once after delay with fresh token
@@ -317,6 +276,34 @@ class APIClient {
       },
       body: JSON.stringify(body),
     });
+  }
+
+  /** Feature tours this user has interacted with (never shown again). */
+  async getMyTours(authToken: string): Promise<UserToursResponse> {
+    return this.request<UserToursResponse>('/api/users/me/tours', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  /** Record a tour interaction (completed / dismissed) — idempotent upsert. */
+  async recordTourState(
+    authToken: string,
+    tourId: string,
+    body: { status: TourStatus; last_step?: number | null },
+  ): Promise<TourStateEntry> {
+    return this.request<TourStateEntry>(
+      `/api/users/me/tours/${encodeURIComponent(tourId)}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify(body),
+      },
+    );
   }
 
   async getDefaultWorkspace(authToken: string): Promise<WorkspaceResponse> {
@@ -1292,6 +1279,23 @@ class APIClient {
         Authorization: `Bearer ${authToken}`,
       },
     });
+  }
+
+  /** Re-run schema metadata sync for a connector (recovery after FAILED). */
+  async syncConnector(
+    authToken: string,
+    workspaceId: string,
+    connectorId: string,
+  ): Promise<ConnectorResponse> {
+    return this.request<ConnectorResponse>(
+      `/api/connectors/workspaces/${workspaceId}/${connectorId}/sync`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
   }
 
   async listConnectorTables(

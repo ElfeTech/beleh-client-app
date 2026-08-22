@@ -15,6 +15,11 @@ import {
   PLAN_LIMIT_REACHED_TOOLTIP,
   workspaceLimitUpgradeMessage,
 } from '../../utils/workspaceAccess';
+import {
+  formatSpreadsheetFileSize,
+  spreadsheetUploadHint,
+  validateSpreadsheetUpload,
+} from '../../utils/spreadsheetUpload';
 import './UploadModal.css';
 
 interface DatasourceModalProps {
@@ -35,12 +40,6 @@ const STEP_SUBTITLES: Record<number, string> = {
   3: 'Tap the row that has the column titles. Preview is a sliced sample.',
   4: 'Importing the full sheets you selected.',
 };
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 function buildHeaderQueue(sheets: ExcelSheet[]): ExcelSheet[] {
   return sheets.filter((s) => s.selected && s.needs_user_input);
@@ -195,13 +194,16 @@ export function DatasourceModal({
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
-    if (selectedFile) {
-      setFile(selectedFile);
-      if (mode === 'add') {
-        const baseName = selectedFile.name.replace(/\.[^/.]+$/, '');
-        setName(baseName.slice(0, 23));
-      }
+    if (!selectedFile) return;
+
+    const validationError = validateSpreadsheetUpload(selectedFile);
+    setFile(selectedFile);
+    if (mode === 'add') {
+      const baseName = selectedFile.name.replace(/\.[^/.]+$/, '');
+      setName(baseName.slice(0, 23));
     }
+    setError(validationError);
+    e.target.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -211,6 +213,13 @@ export function DatasourceModal({
     if (datasourcesAtLimit) {
       setError(workspaceLimitUpgradeMessage(currentRole, 'datasources'));
       return;
+    }
+    if (file) {
+      const validationError = validateSpreadsheetUpload(file);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
     }
 
     try {
@@ -511,9 +520,10 @@ export function DatasourceModal({
                 </label>
                 <button
                   type="button"
-                  className={`upload-dropzone ${file ? 'has-file' : ''} ${isStepLocked ? 'is-locked' : ''}`}
+                  className={`upload-dropzone ${file ? 'has-file' : ''} ${isStepLocked ? 'is-locked' : ''} ${file && validateSpreadsheetUpload(file) ? 'is-invalid' : ''}`}
                   onClick={() => !isStepLocked && fileInputRef.current?.click()}
                   disabled={isStepLocked}
+                  aria-describedby={error ? 'upload-file-error-modal' : undefined}
                 >
                   <input
                     id="ds-file-input"
@@ -532,7 +542,7 @@ export function DatasourceModal({
                       <div className="upload-dropzone-file-meta">
                         <span className="upload-dropzone-file-name">{file.name}</span>
                         <span className="upload-dropzone-file-size">
-                          {formatFileSize(file.size)}
+                          {formatSpreadsheetFileSize(file.size)}
                         </span>
                       </div>
                       {!isStepLocked && (
@@ -546,7 +556,7 @@ export function DatasourceModal({
                       </div>
                       <p className="upload-dropzone-title">Drop a file here or click to browse</p>
                       <p className="upload-dropzone-hint">
-                        Secure upload · CSV and Excel supported
+                        Secure upload · {spreadsheetUploadHint()}
                       </p>
                       <div className="upload-dropzone-badges">
                         <span>.csv</span>
@@ -657,7 +667,15 @@ export function DatasourceModal({
             {workspaceLimitUpgradeMessage(currentRole, 'datasources')}
           </div>
         )}
-        {error && <div className="form-error upload-modal-error dataset-wizard-error">{error}</div>}
+        {error && (
+          <div
+            id="upload-file-error-modal"
+            className="form-error upload-modal-error dataset-wizard-error"
+            role="alert"
+          >
+            {error}
+          </div>
+        )}
 
         <div className="dataset-wizard-body">
           {currentStep > 1 && mode === 'add' && (
@@ -686,6 +704,7 @@ export function DatasourceModal({
                     disabled={
                       datasourcesAtLimit ||
                       (mode === 'add' && !file) ||
+                      Boolean(file && validateSpreadsheetUpload(file)) ||
                       !name.trim() ||
                       uploadStatus !== 'IDLE'
                     }

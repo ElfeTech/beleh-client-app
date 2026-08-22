@@ -64,6 +64,8 @@ export function ResponseViewTabs({ artifacts, filterValue }: ResponseViewTabsPro
             chartType={availability.chartType}
             chartData={availability.chartData}
             scatterData={availability.scatterData}
+            heatmapData={availability.heatmapData}
+            mapData={availability.mapData}
             title={availability.chartTitle}
             compatiblePlotTypes={availability.compatiblePlotTypes}
             initialChartType={availability.originalChartType}

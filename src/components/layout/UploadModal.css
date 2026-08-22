@@ -165,6 +165,17 @@
   box-shadow: 0 0 0 3px var(--primary-50);
 }
 
+.upload-dropzone.is-invalid .upload-dropzone-empty,
+.upload-dropzone.is-invalid .upload-dropzone-file {
+  border-color: #f87171;
+  box-shadow: 0 0 0 3px #fecaca;
+}
+
+.upload-file-error {
+  margin: 0.55rem 0 0;
+  padding: 0.65rem 0.85rem;
+}
+
 .upload-dropzone.has-file .upload-dropzone-file {
   border-style: solid;
   border-color: color-mix(in srgb, var(--primary-500) 45%, var(--gray-200));
@@ -532,10 +543,9 @@ html[data-theme='dark'] .stage-dot {
   border-color: #4b5563;
 }
 
-html[data-theme='dark'] .form-error {
-  background: rgba(239, 68, 68, 0.15);
-  border-color: rgba(239, 68, 68, 0.3);
-  color: #fca5a5;
+html[data-theme='dark'] .upload-dropzone.is-invalid .upload-dropzone-empty,
+html[data-theme='dark'] .upload-dropzone.is-invalid .upload-dropzone-file {
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.28);
 }
 
 html[data-theme='dark'] .upload-modal-container {
