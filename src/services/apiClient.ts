@@ -26,6 +26,7 @@ import type {
   PaginationParams,
   DataSourceRecoveryRequest,
   DataSourceRecoveryResponse,
+  DatasourceUploadTicket,
   DatasetTablesResponse,
   DatasetTablePreviewResponse,
   ConnectorCreate,
@@ -294,16 +295,13 @@ class APIClient {
     tourId: string,
     body: { status: TourStatus; last_step?: number | null },
   ): Promise<TourStateEntry> {
-    return this.request<TourStateEntry>(
-      `/api/users/me/tours/${encodeURIComponent(tourId)}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-        body: JSON.stringify(body),
+    return this.request<TourStateEntry>(`/api/users/me/tours/${encodeURIComponent(tourId)}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
       },
-    );
+      body: JSON.stringify(body),
+    });
   }
 
   async getDefaultWorkspace(authToken: string): Promise<WorkspaceResponse> {
@@ -640,7 +638,77 @@ class APIClient {
     });
   }
 
-  async createDatasource(
+  /**
+   * Ask the backend for a presigned bucket URL + the token that registers the
+   * uploaded file. Pass datasourceId when the file replaces an existing one.
+   */
+  private async requestDatasourceUploadTicket(
+    authToken: string,
+    workspaceId: string,
+    file: File,
+    datasourceId?: string,
+  ): Promise<DatasourceUploadTicket> {
+    return this.request<DatasourceUploadTicket>(`/api/datasets/workspaces/${workspaceId}/uploads`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        filename: file.name,
+        size_bytes: file.size,
+        content_type: file.type || null,
+        datasource_id: datasourceId ?? null,
+      }),
+    });
+  }
+
+  /**
+   * PUT the file bytes straight to the bucket. XHR instead of fetch so large
+   * uploads report real progress. No auth header — the URL itself is signed.
+   */
+  private putFileToBucket(
+    ticket: DatasourceUploadTicket,
+    file: File,
+    onProgress?: (fraction: number) => void,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(ticket.method || 'PUT', ticket.upload_url);
+      if (file.type) {
+        xhr.setRequestHeader('Content-Type', file.type);
+      }
+      xhr.upload.onprogress = (event) => {
+        if (onProgress && event.lengthComputable && event.total > 0) {
+          onProgress(event.loaded / event.total);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(
+            new ApiRequestError(`Upload to storage failed (${xhr.status})`, {
+              status: xhr.status,
+            }),
+          );
+        }
+      };
+      xhr.onerror = () => reject(new ApiRequestError(NETWORK_ERROR_MESSAGE, { status: 0 }));
+      xhr.onabort = () => reject(new ApiRequestError('Upload was cancelled', { status: 0 }));
+      xhr.send(file);
+    });
+  }
+
+  /** Older backends without the presigned-upload endpoints answer 404/405. */
+  private static isMissingEndpointError(error: unknown): boolean {
+    return (
+      error instanceof ApiRequestError &&
+      !(error instanceof QuotaExceededError) &&
+      (error.status === 404 || error.status === 405)
+    );
+  }
+
+  private async createDatasourceMultipart(
     authToken: string,
     workspaceId: string,
     file: File,
@@ -661,6 +729,53 @@ class APIClient {
     });
   }
 
+  async createDatasource(
+    authToken: string,
+    workspaceId: string,
+    file: File,
+    name?: string,
+    onProgress?: (fraction: number) => void,
+  ): Promise<DataSourceResponse> {
+    // Direct-to-bucket upload: the browser PUTs the file to a presigned URL so
+    // the bytes never cross the API (Cloud Run caps HTTP/1 requests at 32 MiB).
+    // Falls back to the legacy multipart endpoint when the backend predates
+    // presigned uploads or the bucket is unreachable (e.g. local dev CORS).
+    let ticket: DatasourceUploadTicket | null = null;
+    try {
+      ticket = await this.requestDatasourceUploadTicket(authToken, workspaceId, file);
+    } catch (error) {
+      if (!APIClient.isMissingEndpointError(error)) throw error;
+    }
+
+    if (ticket) {
+      try {
+        await this.putFileToBucket(ticket, file, onProgress);
+      } catch (error) {
+        if (isAbortError(error)) throw error;
+        console.warn('[API] Direct bucket upload failed, falling back to multipart:', error);
+        ticket = null;
+      }
+    }
+
+    if (!ticket) {
+      return this.createDatasourceMultipart(authToken, workspaceId, file, name);
+    }
+
+    return this.request<DataSourceResponse>(
+      `/api/datasets/workspaces/${workspaceId}/datasources/from-upload`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          upload_token: ticket.upload_token,
+          name: name || null,
+        }),
+      },
+    );
+  }
+
   async renameDatasource(
     authToken: string,
     datasourceId: string,
@@ -675,7 +790,7 @@ class APIClient {
     });
   }
 
-  async overrideDatasource(
+  private async overrideDatasourceMultipart(
     authToken: string,
     datasourceId: string,
     file: File,
@@ -694,6 +809,61 @@ class APIClient {
       },
       body: formData,
     });
+  }
+
+  async overrideDatasource(
+    authToken: string,
+    datasourceId: string,
+    file: File,
+    name?: string,
+    workspaceId?: string,
+    onProgress?: (fraction: number) => void,
+  ): Promise<DataSourceResponse> {
+    // Same direct-to-bucket flow as createDatasource; the upload ticket is
+    // issued against the datasource's workspace with edit permission.
+    let wsId = workspaceId;
+    if (!wsId) {
+      try {
+        const existing = await this.getDatasource(authToken, datasourceId);
+        wsId = existing.workspace?.id;
+      } catch {
+        wsId = undefined;
+      }
+    }
+
+    let ticket: DatasourceUploadTicket | null = null;
+    if (wsId) {
+      try {
+        ticket = await this.requestDatasourceUploadTicket(authToken, wsId, file, datasourceId);
+      } catch (error) {
+        if (!APIClient.isMissingEndpointError(error)) throw error;
+      }
+    }
+
+    if (ticket) {
+      try {
+        await this.putFileToBucket(ticket, file, onProgress);
+      } catch (error) {
+        if (isAbortError(error)) throw error;
+        console.warn('[API] Direct bucket upload failed, falling back to multipart:', error);
+        ticket = null;
+      }
+    }
+
+    if (!ticket) {
+      return this.overrideDatasourceMultipart(authToken, datasourceId, file, name);
+    }
+
+    return this.request<DataSourceResponse>(
+      `/api/datasets/datasources/${datasourceId}/from-upload`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ upload_token: ticket.upload_token }),
+      },
+    );
   }
 
   async updateDatasourceHeader(
