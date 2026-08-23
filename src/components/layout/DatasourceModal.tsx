@@ -32,7 +32,13 @@ interface DatasourceModalProps {
 }
 
 type UploadStatus =
-  'IDLE' | 'UPLOADING' | 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'NEEDS_INPUT';
+  | 'IDLE'
+  | 'UPLOADING'
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED'
+  | 'NEEDS_INPUT';
 
 const STEP_SUBTITLES: Record<number, string> = {
   1: 'Upload a spreadsheet and name your dataset. We support CSV and Excel.',
@@ -230,8 +236,17 @@ export function DatasourceModal({
       const token = await user.getIdToken();
       let result: DataSourceResponse;
 
+      // Real byte progress while the browser PUTs to the bucket (10% -> 50%).
+      const onUploadProgress = (sent: number) => setProgress(10 + Math.round(sent * 40));
+
       if (mode === 'add') {
-        result = await apiClient.createDatasource(token, workspaceId!, file!, name);
+        result = await apiClient.createDatasource(
+          token,
+          workspaceId!,
+          file!,
+          name,
+          onUploadProgress,
+        );
         await refreshWorkspaceUsage();
       } else if (mode === 'rename') {
         result = await apiClient.renameDatasource(token, datasourceId!, name.trim());
@@ -244,7 +259,14 @@ export function DatasourceModal({
         return;
       } else {
         if (file) {
-          result = await apiClient.overrideDatasource(token, datasourceId!, file, name.trim());
+          result = await apiClient.overrideDatasource(
+            token,
+            datasourceId!,
+            file,
+            name.trim(),
+            workspaceId,
+            onUploadProgress,
+          );
         } else {
           result = await apiClient.renameDatasource(token, datasourceId!, name.trim());
           setUploadStatus('READY');

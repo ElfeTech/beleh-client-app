@@ -314,6 +314,16 @@ export interface DataSourceRecoveryResponse {
   message: string;
 }
 
+/** POST /api/datasets/workspaces/{id}/uploads — presigned direct-to-bucket upload. */
+export interface DatasourceUploadTicket {
+  upload_url: string;
+  method: string;
+  upload_token: string;
+  storage_path: string;
+  expires_in: number;
+  max_bytes: number;
+}
+
 export interface DataSourceMetadata {
   id: string;
   name: string;

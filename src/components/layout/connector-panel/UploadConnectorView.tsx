@@ -46,7 +46,13 @@ export interface UploadConnectorViewProps {
 }
 
 type UploadStatus =
-  'IDLE' | 'UPLOADING' | 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'NEEDS_INPUT';
+  | 'IDLE'
+  | 'UPLOADING'
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED'
+  | 'NEEDS_INPUT';
 
 type WizardPhase = 'upload' | 'sheets' | 'headers' | 'importing';
 
@@ -412,7 +418,10 @@ export function UploadConnectorView({
       setPhase('upload');
 
       const token = await user.getIdToken();
-      const dataset = await apiClient.createDatasource(token, workspaceId, file, name);
+      // Real byte progress while the browser PUTs to the bucket (10% -> 25%).
+      const dataset = await apiClient.createDatasource(token, workspaceId, file, name, (sent) =>
+        setProgress(10 + Math.round(sent * 15)),
+      );
       await refreshWorkspaceUsage();
       setDatasource(dataset);
 
@@ -665,9 +674,7 @@ export function UploadConnectorView({
               onClick={() => !controlsLocked && fileInputRef.current?.click()}
               disabled={controlsLocked}
               title={datasourcesAtLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
-              aria-describedby={
-                error ? 'upload-file-error-panel' : 'upload-file-hint-panel'
-              }
+              aria-describedby={error ? 'upload-file-error-panel' : 'upload-file-hint-panel'}
             >
               <input
                 id="upload-file-input-panel"
@@ -760,7 +767,11 @@ export function UploadConnectorView({
           )}
 
           {error ? (
-            <div id="upload-file-error-panel" className="form-error upload-modal-error upload-file-error" role="alert">
+            <div
+              id="upload-file-error-panel"
+              className="form-error upload-modal-error upload-file-error"
+              role="alert"
+            >
               {error}
             </div>
           ) : null}
