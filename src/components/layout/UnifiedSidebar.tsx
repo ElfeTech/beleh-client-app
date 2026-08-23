@@ -98,6 +98,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
     isLoadingMoreSessions,
     invalidateWorkspaceSessions,
     isLoading: sessionsLoading,
+    sessionsLoadError,
   } = useChatSession();
 
   useEffect(() => {
@@ -155,7 +156,12 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
     }
     setIsRenaming(true);
     try {
-      await chatContext?.renameSession(actionSessionId, newTitle);
+      const updated = await chatContext?.renameSession(actionSessionId, newTitle);
+      if (!updated) {
+        // Keep the dialog open so the typed title isn't lost.
+        toast.error('Could not rename this chat. Please try again.');
+        return;
+      }
       setShowRenamePrompt(false);
       setActionSessionId(null);
     } finally {
@@ -331,11 +337,15 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
         <nav className="unified-sidebar__nav">
           {effectiveWorkspaceId ? (
             <>
-              <NavLink to={workspaceBase} end className={navClass}>
+              <NavLink to={workspaceBase} end className={navClass} data-tour="nav-chat">
                 <MessageSquare className="h-4 w-4 shrink-0" strokeWidth={2} />
                 {!collapsed && <span>Chat</span>}
               </NavLink>
-              <NavLink to={`${workspaceBase}/datasets`} className={navClass}>
+              <NavLink
+                to={`${workspaceBase}/datasets`}
+                className={navClass}
+                data-tour="nav-datasets"
+              >
                 <Database className="h-4 w-4 shrink-0" strokeWidth={2} />
                 {!collapsed && <span>Data sources</span>}
               </NavLink>
@@ -472,6 +482,20 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                           Try another search term.
                         </p>
                       </div>
+                    ) : sessionsLoadError ? (
+                      <div className="rounded-lg border border-dashed border-[color:var(--sidebar-border)] px-3 py-6 text-center">
+                        <p className="sidebar-empty-hint mb-1">Couldn't load chats</p>
+                        <p className="mb-2 text-[11px] text-[color:var(--sidebar-text-muted)]">
+                          Check your connection and try again.
+                        </p>
+                        <button
+                          type="button"
+                          className="unified-sidebar__load-more"
+                          onClick={() => void handleRefreshChats()}
+                        >
+                          Retry
+                        </button>
+                      </div>
                     ) : (
                       <div className="rounded-lg border border-dashed border-[color:var(--sidebar-border)] px-3 py-6 text-center">
                         <p className="sidebar-empty-hint mb-1">No chats yet</p>
@@ -518,6 +542,7 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
           <NavLink
             to="/settings/general"
             title="Settings"
+            data-tour="nav-settings"
             className={() =>
               cn(
                 'sidebar-settings-link',

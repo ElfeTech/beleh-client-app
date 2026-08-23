@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Clock, Database, Sparkles } from 'lucide-react';
+import { Clock, Sparkles } from 'lucide-react';
 import type { AssistantTurnMeta, UiArtifact } from '../../types/api';
 import { findPanelViewArtifacts } from '../../utils/artifactAdapters';
 import { getPanelCount, getResponseViewAvailability } from '../../utils/responseViewAvailability';
@@ -94,12 +94,6 @@ export function AssistantAnalysisCard({
             <span className="assistant-analysis-card__metric">
               <Clock className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
               Execution Time: <strong>{(Number(meta.latency_ms) / 1000).toFixed(1)}s</strong>
-            </span>
-          ) : null}
-          {meta.row_count != null ? (
-            <span className="assistant-analysis-card__metric">
-              <Database className="h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-              Rows scanned: <strong>{Number(meta.row_count).toLocaleString()}</strong>
             </span>
           ) : null}
         </div>

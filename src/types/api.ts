@@ -32,6 +32,19 @@ export interface UserMePatch {
   preferences?: Record<string, unknown>;
 }
 
+/** Feature-tour persistence (`/api/users/me/tours`). */
+export type TourStatus = 'completed' | 'dismissed';
+
+export interface TourStateEntry {
+  status: TourStatus;
+  last_step?: number | null;
+  updated_at?: string | null;
+}
+
+export interface UserToursResponse {
+  tours: Record<string, TourStateEntry>;
+}
+
 export interface HTTPValidationError {
   detail?: ValidationError[];
 }
@@ -301,6 +314,16 @@ export interface DataSourceRecoveryResponse {
   message: string;
 }
 
+/** POST /api/datasets/workspaces/{id}/uploads — presigned direct-to-bucket upload. */
+export interface DatasourceUploadTicket {
+  upload_url: string;
+  method: string;
+  upload_token: string;
+  storage_path: string;
+  expires_in: number;
+  max_bytes: number;
+}
+
 export interface DataSourceMetadata {
   id: string;
   name: string;
@@ -330,14 +353,25 @@ export type ArtifactType =
   | 'doughnut'
   | 'pie'
   | 'scatter'
+  | 'heatmap'
+  | 'map'
   | 'insight'
   | 'action_group'
   | 'filter_bar'
   | 'empty_state'
   | 'error';
 
-/** Category + part-to-whole + correlation charts in the generative-UI registry. */
-export type ChartArtifactType = 'column' | 'bar' | 'line' | 'area' | 'doughnut' | 'pie' | 'scatter';
+/** Category + part-to-whole + correlation + matrix + geo charts in the generative-UI registry. */
+export type ChartArtifactType =
+  | 'column'
+  | 'bar'
+  | 'line'
+  | 'area'
+  | 'doughnut'
+  | 'pie'
+  | 'scatter'
+  | 'heatmap'
+  | 'map';
 
 export type ActionStyle = 'primary' | 'secondary' | 'ghost';
 export type ActionKind = 'ask' | 'run_tool' | 'navigate';
@@ -386,6 +420,31 @@ export interface ScatterData {
   datasets: ScatterDataset[];
   x_label?: string;
   y_label?: string;
+  source_tool_call_id?: string | null;
+}
+
+/** Intensity matrix: two dimensions × one metric. values[y_index][x_index]. */
+export interface HeatmapData {
+  x_labels: string[];
+  y_labels: string[];
+  values: (number | null)[][];
+  x_title?: string | null;
+  y_title?: string | null;
+  value_label?: string | null;
+  source_tool_call_id?: string | null;
+}
+
+/** One shaded choropleth region: country name (preferred) or ISO code + value. */
+export interface MapRegionDatum {
+  location: string;
+  value: number;
+  label?: string | null;
+}
+
+/** Choropleth world map: metric shaded per country/region. */
+export interface MapData {
+  regions: MapRegionDatum[];
+  value_label?: string | null;
   source_tool_call_id?: string | null;
 }
 

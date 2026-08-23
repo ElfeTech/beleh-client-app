@@ -7,6 +7,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
+import { toast } from 'sonner';
 import { useAuth } from './useAuth';
 import { apiClient } from '../services/apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
@@ -236,6 +237,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       console.error('Failed to fetch workspaces:', error);
       setWorkspaces([]);
+      toast.error('Could not load your workspaces. Check your connection and refresh the page.');
     } finally {
       setLoading(false);
     }
@@ -478,10 +480,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         .then((token) => {
           apiCacheManager.invalidate('workspace-context', [token, workspaceId]);
           apiCacheManager.invalidate('workspace-sessions', [token, workspaceId]);
-          console.log(
-            '[WorkspaceContext] Invalidated context and sessions cache for workspace:',
-            workspaceId,
-          );
         })
         .catch((err) => {
           console.error('[WorkspaceContext] Failed to invalidate cache:', err);

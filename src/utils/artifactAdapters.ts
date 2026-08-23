@@ -6,8 +6,11 @@ import type {
   EmptyStateData,
   ErrorData,
   FilterBarData,
+  HeatmapData,
   InsightData,
   KpiData,
+  MapData,
+  MapRegionDatum,
   ScatterData,
   ScatterDataset,
   ScatterPoint,
@@ -17,18 +20,29 @@ import type {
 
 const CATEGORY_CHART_TYPES = new Set<string>(['column', 'bar', 'line', 'area', 'doughnut', 'pie']);
 
-const CHART_TYPES = new Set<string>([...CATEGORY_CHART_TYPES, 'scatter']);
+const CHART_TYPES = new Set<string>([...CATEGORY_CHART_TYPES, 'scatter', 'heatmap', 'map']);
+
+/** Recharts category charts only (excludes scatter / heatmap / map payload shapes). */
+export type CategoryChartArtifactType = Exclude<ChartArtifactType, 'scatter' | 'heatmap' | 'map'>;
 
 export function isChartArtifactType(type: string): type is ChartArtifactType {
   return CHART_TYPES.has(type);
 }
 
-export function isCategoryChartType(type: string): type is Exclude<ChartArtifactType, 'scatter'> {
+export function isCategoryChartType(type: string): type is CategoryChartArtifactType {
   return CATEGORY_CHART_TYPES.has(type);
 }
 
 export function isScatterArtifactType(type: string): type is 'scatter' {
   return type === 'scatter';
+}
+
+export function isHeatmapArtifactType(type: string): type is 'heatmap' {
+  return type === 'heatmap';
+}
+
+export function isMapArtifactType(type: string): type is 'map' {
+  return type === 'map';
 }
 
 export function asKpiData(data: Record<string, unknown>): KpiData {
@@ -102,12 +116,67 @@ export function asScatterData(data: Record<string, unknown>): ScatterData {
   };
 }
 
+export function asHeatmapData(data: Record<string, unknown>): HeatmapData {
+  const x_labels = Array.isArray(data.x_labels) ? data.x_labels.map(String) : [];
+  const y_labels = Array.isArray(data.y_labels) ? data.y_labels.map(String) : [];
+  const rawValues = Array.isArray(data.values) ? data.values : [];
+  const values: (number | null)[][] = y_labels.map((_, yi) => {
+    const row = Array.isArray(rawValues[yi]) ? (rawValues[yi] as unknown[]) : [];
+    return x_labels.map((_, xi) => {
+      const cell = row[xi];
+      const n = typeof cell === 'number' ? cell : Number(cell);
+      return cell == null || !Number.isFinite(n) ? null : n;
+    });
+  });
+  return {
+    x_labels,
+    y_labels,
+    values,
+    x_title: data.x_title != null ? String(data.x_title) : null,
+    y_title: data.y_title != null ? String(data.y_title) : null,
+    value_label: data.value_label != null ? String(data.value_label) : null,
+    source_tool_call_id: data.source_tool_call_id != null ? String(data.source_tool_call_id) : null,
+  };
+}
+
+export function asMapData(data: Record<string, unknown>): MapData {
+  const rawRegions = Array.isArray(data.regions) ? data.regions : [];
+  const regions: MapRegionDatum[] = rawRegions
+    .filter((r): r is Record<string, unknown> => r != null && typeof r === 'object')
+    .map((r) => {
+      const value = typeof r.value === 'number' ? r.value : Number(r.value);
+      return {
+        location: String(r.location ?? ''),
+        value: Number.isFinite(value) ? value : 0,
+        label: r.label != null ? String(r.label) : null,
+      };
+    })
+    .filter((r) => r.location !== '');
+  return {
+    regions,
+    value_label: data.value_label != null ? String(data.value_label) : null,
+    source_tool_call_id: data.source_tool_call_id != null ? String(data.source_tool_call_id) : null,
+  };
+}
+
 export function isValidCategoryChartData(data: ChartData): boolean {
   return data.labels.length > 0 && data.datasets.length > 0;
 }
 
 export function isValidScatterData(data: ScatterData): boolean {
   return data.datasets.some((d) => d.points.length > 0);
+}
+
+export function isValidHeatmapData(data: HeatmapData): boolean {
+  return (
+    data.x_labels.length > 0 &&
+    data.y_labels.length > 0 &&
+    data.values.some((row) => row.some((v) => v != null))
+  );
+}
+
+export function isValidMapData(data: MapData): boolean {
+  return data.regions.length > 0;
 }
 
 export function asInsightData(data: Record<string, unknown>): InsightData {
@@ -286,6 +355,12 @@ export function findPanelViewArtifacts(artifacts: UiArtifact[]): UiArtifact[] {
 export function getArtifactReactKey(artifact: UiArtifact): string {
   if (isScatterArtifactType(artifact.type)) {
     const sourceId = asScatterData(artifact.data).source_tool_call_id;
+    if (sourceId) return sourceId;
+  } else if (isHeatmapArtifactType(artifact.type)) {
+    const sourceId = asHeatmapData(artifact.data).source_tool_call_id;
+    if (sourceId) return sourceId;
+  } else if (isMapArtifactType(artifact.type)) {
+    const sourceId = asMapData(artifact.data).source_tool_call_id;
     if (sourceId) return sourceId;
   } else if (isCategoryChartType(artifact.type)) {
     const sourceId = asChartData(artifact.data).source_tool_call_id;

@@ -13,16 +13,17 @@ export function canManageWorkspaceSettings(role: WorkspaceRole | null | undefine
   return role === 'owner';
 }
 
-/** Delete workspace: must be owner role and the workspace creator (owner_id / user_id). */
+/**
+ * Delete workspace: caller must be owner of *that* workspace; the default workspace is protected.
+ * `role` must be resolved for the target workspace (owner role already implies creator/billing owner).
+ * Do not compare `owner_id` to a Firebase uid , `owner_id` is a backend user UUID.
+ */
 export function canDeleteWorkspace(
   role: WorkspaceRole | null | undefined,
-  workspace: Pick<WorkspaceResponse, 'user_id' | 'owner_id' | 'is_default'> | null | undefined,
-  currentUserId: string | null | undefined,
+  workspace: Pick<WorkspaceResponse, 'is_default'> | null | undefined,
 ): boolean {
-  if (role !== 'owner' || !workspace || !currentUserId) return false;
-  if (workspace.is_default) return false;
-  const creatorId = workspace.owner_id ?? workspace.user_id;
-  return creatorId === currentUserId;
+  if (!workspace || workspace.is_default) return false;
+  return role === 'owner';
 }
 
 export function canRenameWorkspace(role: WorkspaceRole | null | undefined): boolean {
@@ -410,6 +411,10 @@ export function createWorkspaceOwnershipHelper(
   return {
     backendUserId,
     homeTenantId,
+    /** Caller's role in a specific workspace (not the currently active one). */
+    role(workspace: WorkspaceResponse): WorkspaceRole | null {
+      return resolveCallerWorkspaceRole(workspace, firebaseUid, firebaseEmail, backendUserId);
+    },
     kind(workspace: WorkspaceResponse): WorkspaceOwnershipKind {
       return getWorkspaceOwnershipKind(
         workspace,

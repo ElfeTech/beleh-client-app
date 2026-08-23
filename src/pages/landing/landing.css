@@ -991,6 +991,10 @@ html[data-landing-theme='light'] .landing-page,
 }
 
 /* ---------- PRICING (API-driven) ---------- */
+.landing-pricing--standalone {
+  padding-top: clamp(6rem, 12vw, 8.5rem);
+}
+
 .landing-pricing {
   background: var(--bg-deep);
   color: var(--tx-100);

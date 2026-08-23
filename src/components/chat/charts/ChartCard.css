@@ -46,6 +46,18 @@
   line-height: 1.5;
 }
 
+/* Title-less header: keep only the action strip, aligned right, minimal height */
+.chart-card-header--bare {
+  padding: 0.5rem 0.75rem 0.25rem;
+  border-bottom: none;
+  justify-content: flex-end;
+}
+
+.chart-action-btn:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
 /* Action Buttons */
 .chart-card-actions {
   display: flex;

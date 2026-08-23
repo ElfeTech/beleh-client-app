@@ -3,7 +3,7 @@ import type { ChartArtifactType, ChartData } from '../../types/api';
 import { ArtifactChart } from './artifacts/ArtifactChart';
 import './ChartModal.css';
 
-type CategoryChartType = Exclude<ChartArtifactType, 'scatter'>;
+type CategoryChartType = Exclude<ChartArtifactType, 'scatter' | 'heatmap' | 'map'>;
 
 interface ChartModalProps {
   isOpen: boolean;

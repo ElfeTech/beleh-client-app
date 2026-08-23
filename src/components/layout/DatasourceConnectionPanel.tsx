@@ -18,13 +18,21 @@ type PanelView =
   | { id: 'supabase-orgs' }
   | { id: 'supabase-projects'; connection: ProviderConnection };
 
+export type ConnectSuccessSource = 'upload' | 'postgres' | 'supabase';
+
 export interface DatasourceConnectionPanelProps {
   workspaceId: string;
   onClose: () => void;
-  /** Called after a successful connect (upload / postgres / supabase bind). */
-  onSuccess?: (created?: ConnectorResponse) => void;
+  /**
+   * Called after a successful connect (upload / postgres / supabase bind).
+   * source tells callers which flow completed (supabase already shows its own
+   * "Connected {project}" toast — don't stack a second generic one on it).
+   */
+  onSuccess?: (created?: ConnectorResponse, source?: ConnectSuccessSource) => void;
   /** When true, hide file-based connectors (e.g. open from chat). */
   hideFileSources?: boolean;
+  /** Open directly on a flow view (e.g. restore the upload wizard after a reload). */
+  initialView?: 'upload' | 'postgres' | 'supabase-orgs';
 }
 
 function viewTitle(view: PanelView): {
@@ -73,8 +81,11 @@ export function DatasourceConnectionPanel({
   onClose,
   onSuccess,
   hideFileSources = false,
+  initialView,
 }: DatasourceConnectionPanelProps) {
-  const [stack, setStack] = useState<PanelView[]>([{ id: 'catalog' }]);
+  const [stack, setStack] = useState<PanelView[]>(() =>
+    initialView ? [{ id: 'catalog' }, { id: initialView }] : [{ id: 'catalog' }],
+  );
   const [orgsHasConnections, setOrgsHasConnections] = useState(false);
   const [orgsConnectKey, setOrgsConnectKey] = useState(0);
   const uploadBackHandlerRef = useRef<(() => boolean) | null>(null);
@@ -118,7 +129,13 @@ export function DatasourceConnectionPanel({
   };
 
   const handleFlowSuccess = (created?: ConnectorResponse) => {
-    onSuccess?.(created);
+    const source: ConnectSuccessSource =
+      current.id === 'supabase-projects' || current.id === 'supabase-orgs'
+        ? 'supabase'
+        : current.id === 'postgres'
+          ? 'postgres'
+          : 'upload';
+    onSuccess?.(created, source);
     onClose();
   };
 

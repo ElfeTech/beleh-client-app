@@ -12,7 +12,11 @@ import {
   isValidCategoryChartData,
   isValidScatterData,
 } from './artifactAdapters';
-import { isQuotaExceededError } from './apiErrorMessage';
+import {
+  isNetworkFetchError,
+  isQuotaExceededError,
+  NETWORK_ERROR_MESSAGE,
+} from './apiErrorMessage';
 import { formatQuotaResetAt, formatQuotaResetDate } from './formatters';
 import { normalizeBillingUpgradeHref } from './workspaceAccess';
 
@@ -116,8 +120,22 @@ export function formatChatRequestError(err: unknown): WorkflowFailureInfo {
       showUpgradeCta: !isDaily,
     };
   }
+  if (isNetworkFetchError(err)) {
+    return {
+      title: 'Connection lost',
+      detail: NETWORK_ERROR_MESSAGE,
+      canRetry: true,
+    };
+  }
   if (err instanceof Error) {
     const msg = err.message.trim();
+    if (msg === NETWORK_ERROR_MESSAGE) {
+      return {
+        title: 'Connection lost',
+        detail: NETWORK_ERROR_MESSAGE,
+        canRetry: true,
+      };
+    }
     if (msg.includes('Authentication') || msg.includes('sign in')) {
       return {
         title: 'Session expired',

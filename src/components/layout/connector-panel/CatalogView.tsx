@@ -23,6 +23,34 @@ interface CatalogSection {
   items: CatalogItem[];
 }
 
+function isComingSoon(item: CatalogItem): boolean {
+  return item.action.kind === 'toast' || Boolean(item.badge);
+}
+
+/** Keep live connectors in their original groups; collect Soon items at the bottom. */
+function partitionCatalog(sections: CatalogSection[]): CatalogSection[] {
+  const available: CatalogSection[] = [];
+  const comingSoonItems: CatalogItem[] = [];
+
+  for (const section of sections) {
+    const ready = section.items.filter((item) => !isComingSoon(item));
+    comingSoonItems.push(...section.items.filter(isComingSoon));
+    if (ready.length > 0) {
+      available.push({ ...section, items: ready });
+    }
+  }
+
+  if (comingSoonItems.length > 0) {
+    available.push({
+      id: 'coming-soon',
+      label: 'Coming soon',
+      items: comingSoonItems,
+    });
+  }
+
+  return available;
+}
+
 const SECTIONS: CatalogSection[] = [
   {
     id: 'files',
@@ -46,8 +74,9 @@ const SECTIONS: CatalogSection[] = [
         id: 'json',
         label: 'JSON',
         description: 'Structured records',
+        badge: 'Soon',
         Icon: Braces,
-        action: { kind: 'select', value: 'upload' },
+        action: { kind: 'toast', message: 'JSON ingestion is on the roadmap.' },
       },
     ],
   },
@@ -119,10 +148,10 @@ interface CatalogViewProps {
 export function CatalogView({ hideFileSources = false, onSelect }: CatalogViewProps) {
   const [query, setQuery] = useState('');
 
-  const catalogSections = useMemo(
-    () => (hideFileSources ? SECTIONS.filter((section) => section.id !== 'files') : SECTIONS),
-    [hideFileSources],
-  );
+  const catalogSections = useMemo(() => {
+    const source = hideFileSources ? SECTIONS.filter((section) => section.id !== 'files') : SECTIONS;
+    return partitionCatalog(source);
+  }, [hideFileSources]);
 
   const filteredSections = useMemo(() => {
     const q = query.trim().toLowerCase();

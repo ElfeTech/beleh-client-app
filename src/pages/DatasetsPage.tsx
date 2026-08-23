@@ -19,7 +19,12 @@ import { WorkspaceContext } from '../context/WorkspaceContext';
 import { DatasourceContext } from '../context/DatasourceContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
-import { DatasourceConnectionPanel } from '../components/layout/DatasourceConnectionPanel';
+import {
+  DatasourceConnectionPanel,
+  type ConnectSuccessSource,
+} from '../components/layout/DatasourceConnectionPanel';
+import { pollConnectorSyncUntilSettled } from '../utils/pollConnectorSync';
+import { loadUploadDraft, savePanelOpen, wasPanelOpen } from '../utils/uploadDraftStore';
 import MobileChatHeader from '../components/layout/MobileChatHeader';
 import WorkspaceSwitcher from '../components/layout/WorkspaceSwitcher';
 import { WorkspaceModal } from '../components/layout/WorkspaceModal';
@@ -166,6 +171,25 @@ const DatasetsPage: React.FC = () => {
   const workspaceContext = useContext(WorkspaceContext);
   const datasourceContext = useContext(DatasourceContext);
   const [showConnectionPanel, setShowConnectionPanel] = useState(false);
+  const [connectPanelInitialView, setConnectPanelInitialView] = useState<'upload' | undefined>(
+    undefined,
+  );
+
+  // Refresh-survival: reopen the connect panel where the user left it (per
+  // workspace). An upload draft (file attached or import running) reopens
+  // straight into the upload wizard, which restores its own state.
+  useEffect(() => {
+    if (!workspaceId) return;
+    const open = wasPanelOpen(workspaceId);
+    setConnectPanelInitialView(open && loadUploadDraft(workspaceId) ? 'upload' : undefined);
+    setShowConnectionPanel(open);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    savePanelOpen(workspaceId, showConnectionPanel);
+    if (!showConnectionPanel) setConnectPanelInitialView(undefined);
+  }, [workspaceId, showConnectionPanel]);
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -213,6 +237,15 @@ const DatasetsPage: React.FC = () => {
   const pendingDrillRef = useRef<DatasetsPageViewState | null>(null);
   const appliedDrillKeyRef = useRef<string | null>(null);
   const skipCloseRefreshRef = useRef(false);
+  const [retryingSyncId, setRetryingSyncId] = useState<string | null>(null);
+  // Stops in-flight schema-sync polling when the page unmounts.
+  const pollAbortRef = useRef(false);
+  useEffect(() => {
+    pollAbortRef.current = false;
+    return () => {
+      pollAbortRef.current = true;
+    };
+  }, []);
 
   // Phase A: restore filter / search / source + stash drill prefs
   useEffect(() => {
@@ -496,10 +529,12 @@ const DatasetsPage: React.FC = () => {
           if (cancelled) return;
           setCatalogTables(tables);
           applyCatalogDrill(tables, 'connector');
-        } catch {
+        } catch (err) {
           if (cancelled) return;
+          console.error('[DatasetsPage] Failed to load connector tables:', err);
           setCatalogTables([]);
           applyCatalogDrill([], 'connector');
+          toast.error('Could not load tables for this data source. Please try again.');
         } finally {
           if (!cancelled) setTablesLoading(false);
         }
@@ -530,11 +565,15 @@ const DatasetsPage: React.FC = () => {
         const tables = fetched.length > 0 ? fetched : tablesFromMetadata(row.datasource);
         setCatalogTables(tables);
         applyCatalogDrill(tables, 'datasource');
-      } catch {
+      } catch (err) {
         if (cancelled) return;
+        console.error('[DatasetsPage] Failed to load dataset tables:', err);
         const fallback = tablesFromMetadata(row.datasource);
         setCatalogTables(fallback);
         applyCatalogDrill(fallback, 'datasource');
+        if (fallback.length === 0) {
+          toast.error('Could not load tables for this data source. Please try again.');
+        }
       } finally {
         if (!cancelled) setTablesLoading(false);
       }
@@ -889,7 +928,10 @@ const DatasetsPage: React.FC = () => {
     setDatasetToRename(null);
   };
 
-  const handleLiveSourceSuccess = async (created?: ConnectorResponse) => {
+  const handleLiveSourceSuccess = async (
+    created?: ConnectorResponse,
+    source?: ConnectSuccessSource,
+  ) => {
     skipCloseRefreshRef.current = true;
     if (created) {
       workspaceContext?.setConnectors([
@@ -906,17 +948,9 @@ const DatasetsPage: React.FC = () => {
     const demoId = findDemoDatasource(datasources)?.id ?? null;
     const hadDemo = Boolean(demoId) || datasources.some((d) => Boolean(d.is_demo));
     await refreshCatalogInBackground();
-    if (created?.id && workspaceContext?.refreshConnectors) {
-      for (const delay of [1200, 2000, 3000]) {
-        await new Promise((resolve) => {
-          window.setTimeout(resolve, delay);
-        });
-        const list = await workspaceContext.refreshConnectors({ silent: true });
-        const row = list.find((connector) => connector.id === created.id);
-        if (!row || row.metadata_status === 'COMPLETED' || row.metadata_status === 'FAILED') {
-          break;
-        }
-      }
+    // Supabase binds already toast "Connected {project}" in the flow itself.
+    if (source !== 'supabase') {
+      toast.success('Datasource connected successfully.');
     }
     if (hadDemo && user && workspaceId) {
       try {
@@ -933,7 +967,45 @@ const DatasetsPage: React.FC = () => {
     if (workspaceContext?.refreshWorkspaceUsage) {
       await workspaceContext.refreshWorkspaceUsage();
     }
-    toast.success('Datasource connected successfully.');
+    // Keep pills/tables honest: follow schema sync to a terminal state instead
+    // of giving up after a few seconds and leaving a stale "Syncing" badge.
+    if ((created?.id || source === 'supabase') && workspaceContext?.refreshConnectors) {
+      const outcome = await pollConnectorSyncUntilSettled(workspaceContext.refreshConnectors, {
+        connectorId: created?.id,
+        isCancelled: () => pollAbortRef.current,
+      });
+      if (outcome === 'completed') {
+        toast.success('Schema sync complete — tables are ready.');
+      } else if (outcome === 'failed') {
+        toast.error('Schema sync failed. Open the connector to retry or reconnect.');
+      } else if (outcome === 'timeout') {
+        toast.message('Schema sync is still running — tables will appear once it finishes.');
+      }
+    }
+  };
+
+  const handleRetrySync = async (connectorId: string) => {
+    if (!user || !workspaceId || retryingSyncId || !workspaceContext?.refreshConnectors) return;
+    setRetryingSyncId(connectorId);
+    try {
+      const token = await user.getIdToken();
+      await apiClient.syncConnector(token, workspaceId, connectorId);
+      await workspaceContext.refreshConnectors({ silent: true });
+      toast.message('Schema sync restarted…');
+      const outcome = await pollConnectorSyncUntilSettled(workspaceContext.refreshConnectors, {
+        connectorId,
+        isCancelled: () => pollAbortRef.current,
+      });
+      if (outcome === 'completed') {
+        toast.success('Schema sync complete — tables are ready.');
+      } else if (outcome === 'failed') {
+        toast.error('Schema sync failed again. Check the database connection and credentials.');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not restart schema sync.');
+    } finally {
+      setRetryingSyncId(null);
+    }
   };
 
   const handleConnectionPanelClose = () => {
@@ -1193,6 +1265,7 @@ const DatasetsPage: React.FC = () => {
               onClick={openConnectOrUpgrade}
               disabled={datasourcesAtLimit}
               title={datasourcesAtLimit ? PLAN_MANAGED_BY_OWNER_COPY : undefined}
+              data-tour="connect-source"
             >
               <Plus size={18} strokeWidth={2.5} aria-hidden />
               Connect Enterprise DB
@@ -1430,7 +1503,9 @@ const DatasetsPage: React.FC = () => {
                                 <span className={`sc-status-dot ${statusDotClass(pill.className)}`}>
                                   {pill.label}
                                 </span>
-                                <span>{isSelected && tablesLoading ? loadingLabel : tableLabel}</span>
+                                <span>
+                                  {isSelected && tablesLoading ? loadingLabel : tableLabel}
+                                </span>
                               </div>
                             </div>
                           </div>
@@ -1543,6 +1618,16 @@ const DatasetsPage: React.FC = () => {
                         Could not discover schemas for this database. Try reconnecting or syncing
                         again.
                       </p>
+                      <button
+                        type="button"
+                        className="sc-empty-panel__cta"
+                        onClick={() => void handleRetrySync(selectedCatalogRow.connector.id)}
+                        disabled={Boolean(retryingSyncId)}
+                      >
+                        {retryingSyncId === selectedCatalogRow.connector.id
+                          ? 'Retrying sync…'
+                          : 'Retry sync'}
+                      </button>
                     </div>
                   ) : selectedCatalogRow?.kind === 'datasource' &&
                     selectedCatalogRow.datasource.status !== 'READY' ? (
@@ -1656,6 +1741,16 @@ const DatasetsPage: React.FC = () => {
                   <div className="sc-empty-panel">
                     <h3>Schema sync failed</h3>
                     <p>Could not load schema details for this database.</p>
+                    <button
+                      type="button"
+                      className="sc-empty-panel__cta"
+                      onClick={() => void handleRetrySync(selectedCatalogRow.connector.id)}
+                      disabled={Boolean(retryingSyncId)}
+                    >
+                      {retryingSyncId === selectedCatalogRow.connector.id
+                        ? 'Retrying sync…'
+                        : 'Retry sync'}
+                    </button>
                   </div>
                 ) : selectedCatalogRow?.kind === 'connector' && selectedTable ? (
                   <ConnectorTableDetail
@@ -1744,9 +1839,10 @@ const DatasetsPage: React.FC = () => {
       {showConnectionPanel && workspaceId && (
         <DatasourceConnectionPanel
           workspaceId={workspaceId}
+          initialView={connectPanelInitialView}
           onClose={handleConnectionPanelClose}
-          onSuccess={(created) => {
-            void handleLiveSourceSuccess(created);
+          onSuccess={(created, source) => {
+            void handleLiveSourceSuccess(created, source);
           }}
         />
       )}

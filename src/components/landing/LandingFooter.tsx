@@ -76,7 +76,7 @@ export function LandingFooter() {
               <a href="#how">How it works</a>
               <a href="#savings">Your savings</a>
               <a href="#pricing">Security</a>
-              <a href="#pricing">Pricing</a>
+              <Link to="/pricing">Pricing</Link>
             </div>
             <div className="landing-foot-col">
               <h5>Company</h5>

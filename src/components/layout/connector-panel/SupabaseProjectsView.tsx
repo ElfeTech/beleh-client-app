@@ -280,36 +280,41 @@ export function SupabaseProjectsView({
               else if (project.is_active) rowMeta = 'Tap to bind to this workspace';
 
               return (
-                <button
-                  key={project.id}
-                  type="button"
-                  className={`ds-conn-list__row ${!project.is_active ? 'is-inactive' : ''}`}
-                  disabled={!project.is_active || Boolean(bindingId)}
-                  onClick={() => void handleBind(project)}
-                >
-                  <div className="ds-conn-list__row-icon" aria-hidden>
-                    <FolderKanban size={20} strokeWidth={1.75} />
-                  </div>
-                  <div className="ds-conn-list__row-text">
-                    <span className="ds-conn-list__row-title">{project.name}</span>
-                    <span className="ds-conn-list__row-meta">{rowMeta}</span>
-                  </div>
-                  <span className={`ds-conn-list__status ${project.is_active ? 'is-active' : ''}`}>
-                    {project.is_active ? 'Active' : project.status}
-                  </span>
-                  {project.dashboard_url ? (
-                    <a
-                      href={project.dashboard_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="ds-conn-list__row-action"
-                      aria-label={`Open ${project.name} in Supabase`}
-                      onClick={(e) => e.stopPropagation()}
+                <div key={project.id} className="ds-conn-list__row-wrap">
+                  <button
+                    type="button"
+                    className={`ds-conn-list__row ${!project.is_active ? 'is-inactive' : ''}`}
+                    disabled={!project.is_active || Boolean(bindingId)}
+                    onClick={() => void handleBind(project)}
+                  >
+                    <div className="ds-conn-list__row-icon" aria-hidden>
+                      <FolderKanban size={20} strokeWidth={1.75} />
+                    </div>
+                    <div className="ds-conn-list__row-text">
+                      <span className="ds-conn-list__row-title">{project.name}</span>
+                      <span className="ds-conn-list__row-meta">{rowMeta}</span>
+                    </div>
+                    <span
+                      className={`ds-conn-list__status ${project.is_active ? 'is-active' : ''}`}
                     >
-                      <ExternalLink size={16} strokeWidth={2} />
-                    </a>
+                      {project.is_active ? 'Active' : project.status}
+                    </span>
+                  </button>
+                  {project.dashboard_url ? (
+                    <div className="ds-conn-list__row-actions">
+                      <a
+                        href={project.dashboard_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ds-conn-list__row-action"
+                        aria-label={`Open ${project.name} in Supabase`}
+                        title="Open in Supabase"
+                      >
+                        <ExternalLink size={16} strokeWidth={2} />
+                      </a>
+                    </div>
                   ) : null}
-                </button>
+                </div>
               );
             })}
           </div>

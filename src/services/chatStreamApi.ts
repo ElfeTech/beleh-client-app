@@ -13,6 +13,9 @@ import type {
 import {
   extractQuotaExceededDetail,
   formatApiErrorMessage,
+  isAbortError,
+  isNetworkFetchError,
+  NETWORK_ERROR_MESSAGE,
   QuotaExceededError,
 } from '../utils/apiErrorMessage';
 
@@ -137,13 +140,24 @@ export type ChatStreamResult = {
 };
 
 async function jsonAuth<T>(token: string, path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(apiUrl(path), {
-    ...init,
-    headers: authHeaders(token, {
-      'Content-Type': 'application/json',
-      ...(init?.headers as Record<string, string> | undefined),
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(apiUrl(path), {
+      ...init,
+      headers: authHeaders(token, {
+        'Content-Type': 'application/json',
+        ...(init?.headers as Record<string, string> | undefined),
+      }),
+    });
+  } catch (fetchError) {
+    if (isAbortError(fetchError) || init?.signal?.aborted) throw fetchError;
+    if (isNetworkFetchError(fetchError)) {
+      const err = new Error(NETWORK_ERROR_MESSAGE) as Error & { status?: number };
+      err.status = 0;
+      throw err;
+    }
+    throw fetchError;
+  }
   if (!response.ok) {
     if (isUnavailableStatus(response.status)) {
       throw new ChatStreamUnavailableError(response.status);

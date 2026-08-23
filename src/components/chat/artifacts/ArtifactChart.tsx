@@ -40,7 +40,7 @@ function formatAxisValue(value: number): string {
   return value.toFixed(2);
 }
 
-type CategoryChartType = Exclude<ChartArtifactType, 'scatter'>;
+type CategoryChartType = Exclude<ChartArtifactType, 'scatter' | 'heatmap' | 'map'>;
 
 interface ArtifactChartProps {
   type: CategoryChartType;

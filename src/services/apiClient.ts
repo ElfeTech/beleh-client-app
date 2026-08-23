@@ -8,6 +8,9 @@ import type {
   UserResponse,
   UserMeResponse,
   UserMePatch,
+  TourStateEntry,
+  TourStatus,
+  UserToursResponse,
   WorkspaceCreate,
   WorkspaceInvitation,
   WorkspaceInvitationCreate,
@@ -23,6 +26,7 @@ import type {
   PaginationParams,
   DataSourceRecoveryRequest,
   DataSourceRecoveryResponse,
+  DatasourceUploadTicket,
   DatasetTablesResponse,
   DatasetTablePreviewResponse,
   ConnectorCreate,
@@ -60,6 +64,8 @@ import {
   extractQuotaExceededDetail,
   formatApiErrorMessage,
   isAbortError,
+  isNetworkFetchError,
+  NETWORK_ERROR_MESSAGE,
   QuotaExceededError,
 } from '../utils/apiErrorMessage';
 import type {
@@ -131,35 +137,15 @@ class APIClient {
     };
 
     try {
-      let response = await fetch(url, config);
-
-      // Simulation for clarification logic verification
-      if (endpoint.includes('/messages') && options.method === 'POST') {
-        const body = JSON.parse(options.body as string);
-        if (body.prompt === 'VERIFY_CLARIFICATION') {
-          response = new Response(
-            JSON.stringify({
-              intent: {
-                clarification_needed: true,
-                clarification_message:
-                  'VERIFIED: Only this clarification message should be visible. Insight summary and limitations must be hidden because execution status is FAILED.',
-              },
-              execution: {
-                status: 'FAILED',
-                row_count: 0,
-                message: 'Execution Error (Hidden)',
-              },
-              insight: {
-                summary: 'Insight Summary (Hidden)',
-                limitations: 'Insight Limitations (Hidden)',
-              },
-            }),
-            {
-              status: 200,
-              headers: { 'Content-Type': 'application/json' },
-            },
-          );
+      let response: Response;
+      try {
+        response = await fetch(url, config);
+      } catch (fetchError) {
+        if (isAbortError(fetchError) || options.signal?.aborted) throw fetchError;
+        if (isNetworkFetchError(fetchError)) {
+          throw new ApiRequestError(NETWORK_ERROR_MESSAGE, { status: 0 });
         }
+        throw fetchError;
       }
 
       // Handle 401 Unauthorized - attempt one token refresh, then let callers / AuthSessionGate handle auth loss.
@@ -176,7 +162,6 @@ class APIClient {
         }
 
         if (newToken) {
-          console.log('[API] Token refreshed successfully, retrying request...');
           return this.request<T>(
             endpoint,
             {
@@ -193,31 +178,6 @@ class APIClient {
         throw new ApiRequestError('Authentication session expired. Please sign in again.', {
           status: 401,
         });
-      }
-
-      // Handle 403 Forbidden - often means token not yet accepted (e.g. right after login); retry once after delay with fresh token
-      if (response.status === 403 && !isRetry) {
-        try {
-          const { authService } = await import('./authService');
-          await new Promise((r) => setTimeout(r, 500));
-          const newToken = await authService.refreshToken();
-          if (newToken) {
-            const updatedHeaders = {
-              ...headers,
-              Authorization: `Bearer ${newToken}`,
-            };
-            return this.request<T>(
-              endpoint,
-              {
-                ...options,
-                headers: updatedHeaders,
-              },
-              true,
-            );
-          }
-        } catch {
-          // Fall through to normal error handling
-        }
       }
 
       // Handle 403 Forbidden - often means token not yet accepted (e.g. right after login); retry once after delay with fresh token
@@ -312,6 +272,31 @@ class APIClient {
   async patchUserMe(authToken: string, body: UserMePatch): Promise<UserMeResponse> {
     return this.request<UserMeResponse>('/api/users/me', {
       method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  /** Feature tours this user has interacted with (never shown again). */
+  async getMyTours(authToken: string): Promise<UserToursResponse> {
+    return this.request<UserToursResponse>('/api/users/me/tours', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  /** Record a tour interaction (completed / dismissed) — idempotent upsert. */
+  async recordTourState(
+    authToken: string,
+    tourId: string,
+    body: { status: TourStatus; last_step?: number | null },
+  ): Promise<TourStateEntry> {
+    return this.request<TourStateEntry>(`/api/users/me/tours/${encodeURIComponent(tourId)}`, {
+      method: 'POST',
       headers: {
         Authorization: `Bearer ${authToken}`,
       },
@@ -653,7 +638,77 @@ class APIClient {
     });
   }
 
-  async createDatasource(
+  /**
+   * Ask the backend for a presigned bucket URL + the token that registers the
+   * uploaded file. Pass datasourceId when the file replaces an existing one.
+   */
+  private async requestDatasourceUploadTicket(
+    authToken: string,
+    workspaceId: string,
+    file: File,
+    datasourceId?: string,
+  ): Promise<DatasourceUploadTicket> {
+    return this.request<DatasourceUploadTicket>(`/api/datasets/workspaces/${workspaceId}/uploads`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({
+        filename: file.name,
+        size_bytes: file.size,
+        content_type: file.type || null,
+        datasource_id: datasourceId ?? null,
+      }),
+    });
+  }
+
+  /**
+   * PUT the file bytes straight to the bucket. XHR instead of fetch so large
+   * uploads report real progress. No auth header — the URL itself is signed.
+   */
+  private putFileToBucket(
+    ticket: DatasourceUploadTicket,
+    file: File,
+    onProgress?: (fraction: number) => void,
+  ): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open(ticket.method || 'PUT', ticket.upload_url);
+      if (file.type) {
+        xhr.setRequestHeader('Content-Type', file.type);
+      }
+      xhr.upload.onprogress = (event) => {
+        if (onProgress && event.lengthComputable && event.total > 0) {
+          onProgress(event.loaded / event.total);
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve();
+        } else {
+          reject(
+            new ApiRequestError(`Upload to storage failed (${xhr.status})`, {
+              status: xhr.status,
+            }),
+          );
+        }
+      };
+      xhr.onerror = () => reject(new ApiRequestError(NETWORK_ERROR_MESSAGE, { status: 0 }));
+      xhr.onabort = () => reject(new ApiRequestError('Upload was cancelled', { status: 0 }));
+      xhr.send(file);
+    });
+  }
+
+  /** Older backends without the presigned-upload endpoints answer 404/405. */
+  private static isMissingEndpointError(error: unknown): boolean {
+    return (
+      error instanceof ApiRequestError &&
+      !(error instanceof QuotaExceededError) &&
+      (error.status === 404 || error.status === 405)
+    );
+  }
+
+  private async createDatasourceMultipart(
     authToken: string,
     workspaceId: string,
     file: File,
@@ -674,6 +729,53 @@ class APIClient {
     });
   }
 
+  async createDatasource(
+    authToken: string,
+    workspaceId: string,
+    file: File,
+    name?: string,
+    onProgress?: (fraction: number) => void,
+  ): Promise<DataSourceResponse> {
+    // Direct-to-bucket upload: the browser PUTs the file to a presigned URL so
+    // the bytes never cross the API (Cloud Run caps HTTP/1 requests at 32 MiB).
+    // Falls back to the legacy multipart endpoint when the backend predates
+    // presigned uploads or the bucket is unreachable (e.g. local dev CORS).
+    let ticket: DatasourceUploadTicket | null = null;
+    try {
+      ticket = await this.requestDatasourceUploadTicket(authToken, workspaceId, file);
+    } catch (error) {
+      if (!APIClient.isMissingEndpointError(error)) throw error;
+    }
+
+    if (ticket) {
+      try {
+        await this.putFileToBucket(ticket, file, onProgress);
+      } catch (error) {
+        if (isAbortError(error)) throw error;
+        console.warn('[API] Direct bucket upload failed, falling back to multipart:', error);
+        ticket = null;
+      }
+    }
+
+    if (!ticket) {
+      return this.createDatasourceMultipart(authToken, workspaceId, file, name);
+    }
+
+    return this.request<DataSourceResponse>(
+      `/api/datasets/workspaces/${workspaceId}/datasources/from-upload`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({
+          upload_token: ticket.upload_token,
+          name: name || null,
+        }),
+      },
+    );
+  }
+
   async renameDatasource(
     authToken: string,
     datasourceId: string,
@@ -688,7 +790,7 @@ class APIClient {
     });
   }
 
-  async overrideDatasource(
+  private async overrideDatasourceMultipart(
     authToken: string,
     datasourceId: string,
     file: File,
@@ -707,6 +809,61 @@ class APIClient {
       },
       body: formData,
     });
+  }
+
+  async overrideDatasource(
+    authToken: string,
+    datasourceId: string,
+    file: File,
+    name?: string,
+    workspaceId?: string,
+    onProgress?: (fraction: number) => void,
+  ): Promise<DataSourceResponse> {
+    // Same direct-to-bucket flow as createDatasource; the upload ticket is
+    // issued against the datasource's workspace with edit permission.
+    let wsId = workspaceId;
+    if (!wsId) {
+      try {
+        const existing = await this.getDatasource(authToken, datasourceId);
+        wsId = existing.workspace?.id;
+      } catch {
+        wsId = undefined;
+      }
+    }
+
+    let ticket: DatasourceUploadTicket | null = null;
+    if (wsId) {
+      try {
+        ticket = await this.requestDatasourceUploadTicket(authToken, wsId, file, datasourceId);
+      } catch (error) {
+        if (!APIClient.isMissingEndpointError(error)) throw error;
+      }
+    }
+
+    if (ticket) {
+      try {
+        await this.putFileToBucket(ticket, file, onProgress);
+      } catch (error) {
+        if (isAbortError(error)) throw error;
+        console.warn('[API] Direct bucket upload failed, falling back to multipart:', error);
+        ticket = null;
+      }
+    }
+
+    if (!ticket) {
+      return this.overrideDatasourceMultipart(authToken, datasourceId, file, name);
+    }
+
+    return this.request<DataSourceResponse>(
+      `/api/datasets/datasources/${datasourceId}/from-upload`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+        body: JSON.stringify({ upload_token: ticket.upload_token }),
+      },
+    );
   }
 
   async updateDatasourceHeader(
@@ -1292,6 +1449,23 @@ class APIClient {
         Authorization: `Bearer ${authToken}`,
       },
     });
+  }
+
+  /** Re-run schema metadata sync for a connector (recovery after FAILED). */
+  async syncConnector(
+    authToken: string,
+    workspaceId: string,
+    connectorId: string,
+  ): Promise<ConnectorResponse> {
+    return this.request<ConnectorResponse>(
+      `/api/connectors/workspaces/${workspaceId}/${connectorId}/sync`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
   }
 
   async listConnectorTables(

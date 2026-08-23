@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import logo from '../../assets/logo.webp';
 import { AUTH_BRAND_PANEL, AUTH_FORM_COPY, type AuthGoogleSplitMode } from './authBrandContent';
@@ -148,7 +148,14 @@ export function AuthGoogleSplitPage({
   authLoading,
   onGoogleAuth,
 }: AuthGoogleSplitPageProps) {
-  const footer = FOOTER_COPY[mode];
+  const [searchParams] = useSearchParams();
+  const nextParam = searchParams.get('next');
+  const nextSuffix = nextParam ? `?next=${encodeURIComponent(nextParam)}` : '';
+  const footerBase = FOOTER_COPY[mode];
+  const footer = {
+    ...footerBase,
+    linkTo: `${footerBase.linkTo}${nextSuffix}`,
+  };
   const brand = AUTH_BRAND_PANEL;
   const form = AUTH_FORM_COPY[mode];
   const consentId = useId();

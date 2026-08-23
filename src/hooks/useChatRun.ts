@@ -28,7 +28,12 @@ import {
   readStreamCapability,
   writeStreamCapability,
 } from '../lib/uiMemory/keys';
-import { quotaExceededFromStreamError, QuotaExceededError } from '../utils/apiErrorMessage';
+import {
+  isNetworkFetchError,
+  NETWORK_ERROR_MESSAGE,
+  quotaExceededFromStreamError,
+  QuotaExceededError,
+} from '../utils/apiErrorMessage';
 
 export type ChatRunSendOptions = {
   skipUserMessage?: boolean;
@@ -57,6 +62,7 @@ export type UseChatRunParams = {
 const POLL_INTERVAL_MS = 1500;
 const POLL_MAX_MS = 5 * 60 * 1000;
 const SSE_REATTACH_MAX = 3;
+const SSE_REATTACH_BACKOFF_MS = 1000;
 
 const DEFAULT_SHIMMER_PHRASES = [
   'Analyzing your data…',
@@ -157,9 +163,12 @@ export function useChatRun(params: UseChatRunParams) {
     async (uidLocal: string, sid: string, response: AssistantTurnResponse, prompt: string) => {
       terminalHandledRef.current = true;
       clearChatRun(uidLocal, sid, workspaceIdRef.current);
+      // Append the final message BEFORE clearing the streaming bubble so both
+      // land in one commit: the thread swaps streamed text → final card in
+      // place instead of blanking and re-rendering.
+      onCompleteRef.current(response, prompt);
       applyPersisted(null);
       sendInFlightRef.current = false;
-      onCompleteRef.current(response, prompt);
       await refetchRef.current();
     },
     [applyPersisted],
@@ -169,9 +178,10 @@ export function useChatRun(params: UseChatRunParams) {
     async (uidLocal: string, sid: string, err: unknown, prompt: string) => {
       terminalHandledRef.current = true;
       clearChatRun(uidLocal, sid, workspaceIdRef.current);
+      // Same ordering as finishSuccess: failure card in, then waiting UI out.
+      onFailureRef.current(err, prompt);
       applyPersisted(null);
       sendInFlightRef.current = false;
-      onFailureRef.current(err, prompt);
       await refetchRef.current();
     },
     [applyPersisted],
@@ -511,6 +521,22 @@ export function useChatRun(params: UseChatRunParams) {
             setActiveRunId(null);
             continue;
           }
+          // Network drop mid-stream: back off and reattach (start POST is idempotent
+          // via client_turn_id; the run keeps going server-side). Only fail after
+          // reattach attempts and status polling are both exhausted.
+          if (isNetworkFetchError(err) && !signal.aborted) {
+            attempts += 1;
+            if (attempts <= SSE_REATTACH_MAX) {
+              await new Promise((r) => setTimeout(r, SSE_REATTACH_BACKOFF_MS * attempts));
+              continue;
+            }
+            if (runId) {
+              const polled = await pollRunUntilTerminal(uidLocal, sid, runId, prompt, signal);
+              if (polled || terminalHandledRef.current) return;
+            }
+            await finishFailure(uidLocal, sid, new Error(NETWORK_ERROR_MESSAGE), prompt);
+            return;
+          }
           throw err;
         }
 
@@ -537,7 +563,12 @@ export function useChatRun(params: UseChatRunParams) {
           if (polled || terminalHandledRef.current) return;
         }
 
-        await finishFailure(uidLocal, sid, new Error('Chat stream ended unexpectedly'), prompt);
+        await finishFailure(
+          uidLocal,
+          sid,
+          new Error('The connection was interrupted before the response finished. Please try again.'),
+          prompt,
+        );
         return;
       }
     },
@@ -582,8 +613,9 @@ export function useChatRun(params: UseChatRunParams) {
       setPhaseLabel(null);
       setPartialText('');
 
+      // Hoisted so the catch below can clear run memory for a session created mid-send.
+      let sid: string | null = sessionId;
       try {
-        let sid = sessionId;
         if (!sid) {
           sid = await ensureSessionRef.current(trimmed, datasourceId);
         }
@@ -639,7 +671,6 @@ export function useChatRun(params: UseChatRunParams) {
         }
       } catch (err) {
         if (ac.signal.aborted) return;
-        const sid = sessionId;
         if (uid && sid) {
           await finishFailure(uid, sid, err, trimmed);
         } else {
@@ -679,6 +710,9 @@ export function useChatRun(params: UseChatRunParams) {
     applyPersisted(null);
     sendInFlightRef.current = false;
     terminalHandledRef.current = true;
+    // The user message (and possibly a partial reply) may already be persisted
+    // server-side; sync history so the thread reflects reality after stopping.
+    void refetchRef.current();
   }, [uid, sessionId, applyPersisted]);
 
   // Cross-tab: mirror waiting state from other tabs
