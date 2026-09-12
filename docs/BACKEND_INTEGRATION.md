@@ -94,7 +94,7 @@ VITE_API_BASE_URL=http://localhost:8000
 For production:
 
 ```env
-VITE_API_BASE_URL=https://your-backend-api.com
+VITE_API_BASE_URL=https://backend.yulona.co
 ```
 
 ## Implementation Details

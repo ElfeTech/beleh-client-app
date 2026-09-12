@@ -54,6 +54,7 @@ jobs:
       - name: Build
         env:
           VITE_APP_VERSION: ${{ steps.bump.outputs.version }}
+          VITE_API_BASE_URL: https://backend.yulona.co
         run: npm run build
 
       - name: Upload dist artifact

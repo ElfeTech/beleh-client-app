@@ -1,3 +1,5 @@
+import type { ConnectorResponse } from './api';
+
 /** Provider (Supabase OAuth) API types , /api/v1/provider/* */
 
 export type ProviderErrorCode =
@@ -64,6 +66,7 @@ export interface WorkspaceProviderBindRequest {
 export interface WorkspaceProviderBinding {
   id: string;
   name: string;
+  /** Project is linked. Schemas are ready only when the companion connector is COMPLETED. */
   is_connected: boolean;
   provider_project_id: string | null;
   provider_project_name: string | null;
@@ -73,6 +76,9 @@ export interface WorkspaceProviderBinding {
 export interface WorkspaceProviderBindResponse {
   success: boolean;
   workspace: WorkspaceProviderBinding;
+  /** Companion connector created/linked by bind. Crawl starts server-side — do not POST /sync. */
+  connector_id?: string | null;
+  connector?: ConnectorResponse;
 }
 
 export interface WorkspaceProviderUnbindResponse {

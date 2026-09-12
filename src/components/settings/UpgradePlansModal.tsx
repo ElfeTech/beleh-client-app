@@ -4,6 +4,7 @@ import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
 import type { Plan } from '../../types/usage';
 import { formatCreditCostUsd } from '../../utils/formatters';
+import { friendlyPlanDescription } from '../../lib/planFeatures';
 import './UpgradePlansModal.css';
 
 export interface UpgradePlansModalProps {
@@ -153,7 +154,9 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                     {/* Plan Header */}
                     <div className="plan-card-header">
                       <h3 className="plan-name">{plan.name}</h3>
-                      <p className="plan-description">{plan.description}</p>
+                      <p className="plan-description">
+                        {friendlyPlanDescription(plan.description)}
+                      </p>
                     </div>
 
                     {/* Price */}

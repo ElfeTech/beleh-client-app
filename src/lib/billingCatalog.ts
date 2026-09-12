@@ -1,5 +1,6 @@
 import type { BillingCatalogPlan, BillingPrice, BillingPriceInterval } from '../types/billing';
 import type { Plan } from '../types/usage';
+import { friendlyPlanDescription } from './planFeatures';
 
 export type BillingCycle = 'monthly' | 'yearly';
 
@@ -124,7 +125,7 @@ export function catalogPlansFromUsagePlans(usagePlans: Plan[]): BillingCatalogPl
         plan_id: plan.id,
         name: plan.name,
         tier: plan.tier,
-        description: plan.description ?? '',
+        description: friendlyPlanDescription(plan.description),
         features: plan.features ?? {},
         limits: plan.limits,
         prices,

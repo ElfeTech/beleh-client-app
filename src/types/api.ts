@@ -730,6 +730,8 @@ export interface ConnectorResponse {
   user_id?: string;
   created_at: string;
   updated_at: string | null;
+  /** Present when metadata_status is FAILED. */
+  schema_sync_error?: string | null;
 }
 
 export interface ConnectionTestRequest extends PostgreSQLConfig {}
@@ -744,6 +746,7 @@ export interface ConnectorTablesResponse {
   connector_id: string;
   metadata_status: MetadataStatus;
   tables: DatasetTable[];
+  schema_sync_error?: string | null;
   page?: number;
   page_size?: number;
   total_items?: number;
