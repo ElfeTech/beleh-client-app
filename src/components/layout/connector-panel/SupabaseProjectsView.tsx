@@ -1,13 +1,19 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useContext, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { ExternalLink, FolderKanban, Search, Unlink } from 'lucide-react';
 import { useAuth } from '../../../context/useAuth';
+import { WorkspaceContext } from '../../../context/WorkspaceContext';
 import { apiClient } from '../../../services/apiClient';
 import { reconnectProviderOrganization } from '../../../lib/providerOAuth';
 import {
   invalidateProviderProjectsCache,
   invalidateWorkspaceProviderCache,
 } from '../../../lib/providerCache';
+import {
+  connectorIdFromBindResponse,
+  resolveBoundCompanion,
+  stubPendingCompanion,
+} from '../../../lib/providerBind';
 import { ConfirmDialog } from '../../common/ConfirmDialog';
 import { ApiRequestError, formatProviderErrorToast } from '../../../utils/apiErrorMessage';
 import type {
@@ -16,6 +22,7 @@ import type {
   WorkspaceProviderBinding,
 } from '../../../types/provider';
 import { PROVIDER_CACHE_KEYS } from '../../../types/provider';
+import type { ConnectorResponse } from '../../../types/api';
 import { useApiData } from '../../../hooks/useApiData';
 import {
   ConnectionEmptyProjectsIcon,
@@ -26,7 +33,8 @@ import {
 interface SupabaseProjectsViewProps {
   workspaceId: string;
   connection: ProviderConnection;
-  onBound: () => void;
+  /** Bind only links the project. Pass the companion so the catalog can poll schemas. */
+  onBound: (created?: ConnectorResponse) => void;
 }
 
 export function SupabaseProjectsView({
@@ -35,6 +43,7 @@ export function SupabaseProjectsView({
   onBound,
 }: SupabaseProjectsViewProps) {
   const { user } = useAuth();
+  const workspaceContext = useContext(WorkspaceContext);
   const [query, setQuery] = useState('');
   const [bindingId, setBindingId] = useState<string | null>(null);
   const [confirmUnbind, setConfirmUnbind] = useState(false);
@@ -127,16 +136,24 @@ export function SupabaseProjectsView({
     setBindingId(project.id);
     try {
       const token = await user.getIdToken();
-      await apiClient.bindWorkspaceProvider(token, workspaceId, {
+      const bindRes = await apiClient.bindWorkspaceProvider(token, workspaceId, {
         provider_project_id: project.id,
         provider_project_name: project.name,
         provider_organization: project.organization || connection.organization,
       });
       invalidateWorkspaceProviderCache(workspaceId);
       invalidateBinding();
+      // Bind starts the crawl. Do not POST /sync — extra sync while processing is a no-op.
+      const list = workspaceContext?.refreshConnectors
+        ? await workspaceContext.refreshConnectors({ silent: true })
+        : [];
       await refetchBinding();
+      const connectorId = connectorIdFromBindResponse(bindRes);
+      const created =
+        resolveBoundCompanion(bindRes, list, project.name) ??
+        (connectorId ? stubPendingCompanion(connectorId, project.name, workspaceId) : undefined);
       toast.success(`Connected ${project.name}`);
-      onBound();
+      onBound(created);
     } catch (err) {
       const detail = err instanceof Error ? err.message : 'Failed to bind project';
       const code = err instanceof ApiRequestError ? err.code : null;

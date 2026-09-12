@@ -185,7 +185,7 @@ export function getSourceTableCountLabel(
   metadataStatus?: ConnectorResponse['metadata_status'],
 ): string {
   if (kind === 'connector' && metadataStatus !== 'COMPLETED') {
-    return 'Schema pending';
+    return metadataStatus === 'FAILED' ? 'Schema sync failed' : 'Loading schemas…';
   }
   if (tableCount === null) return ', tables';
   return `${tableCount} table${tableCount === 1 ? '' : 's'}`;

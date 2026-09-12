@@ -36,6 +36,8 @@ import { isWorkspaceMemberSelf } from '../utils/workspaceMembers';
 import { ApiRequestError } from '../utils/apiErrorMessage';
 import { fetchAllPages } from '../utils/fetchAllPages';
 import { LIST_PAGE_SIZE, MAX_LIST_PAGES } from '../constants/pagination';
+import { pollConnectorSyncUntilSettled } from '../utils/pollConnectorSync';
+import { isSchemaSyncInProgress } from '../lib/providerBind';
 
 interface WorkspaceContextType {
   workspaces: WorkspaceResponse[];
@@ -443,16 +445,32 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    loadedWorkspaceRef.current = currentWorkspace.id;
+    const workspaceId = currentWorkspace.id;
+    loadedWorkspaceRef.current = workspaceId;
+    let cancelled = false;
     // Critical path: context (session/dataset restore) in parallel with source catalogs.
     // Usage is peripheral (sidebar / soft lock) — never block restore on it.
     void Promise.all([
       refreshDatasources(),
       refreshConnectors(),
-      loadWorkspaceContext(currentWorkspace.id),
-    ]).finally(() => {
-      void refreshWorkspaceUsage();
-    });
+      loadWorkspaceContext(workspaceId),
+    ])
+      .then(async ([, connectors]) => {
+        if (cancelled || loadedWorkspaceRef.current !== workspaceId) return;
+        const pending = (connectors ?? []).some((c) => isSchemaSyncInProgress(c.metadata_status));
+        if (!pending) return;
+        // Bind already started the crawl — poll status only, never POST /sync.
+        await pollConnectorSyncUntilSettled(
+          (options) => refreshConnectors({ silent: true, ...options }),
+          { isCancelled: () => cancelled || loadedWorkspaceRef.current !== workspaceId },
+        );
+      })
+      .finally(() => {
+        if (!cancelled) void refreshWorkspaceUsage();
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [
     user,
     currentWorkspace,

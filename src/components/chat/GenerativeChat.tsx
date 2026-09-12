@@ -1403,6 +1403,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             // are ready without a manual refresh.
             const outcome = await pollConnectorSyncUntilSettled(refreshConnectors, {
               connectorId: created?.id,
+              waitForCompanion: source === 'supabase' && !created?.id,
               isCancelled: () => syncPollAbortRef.current,
             });
             if (outcome === 'completed') {

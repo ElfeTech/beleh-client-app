@@ -15,7 +15,7 @@ import {
   type BillingCycle,
   yearlySavingsPercent,
 } from '../../lib/billingCatalog';
-import { planFeatureList } from '../../lib/planFeatures';
+import { friendlyPlanDescription, planFeatureList } from '../../lib/planFeatures';
 import {
   parsePricingIntent,
   signUpPathWithPricingIntent,
@@ -128,7 +128,7 @@ function PricingCard({
       {recommended ? <span className="landing-pricing-card__badge">Most popular</span> : null}
       <header className="landing-pricing-card__header">
         <h3>{plan.name}</h3>
-        {plan.description ? <p>{plan.description}</p> : null}
+        {plan.description ? <p>{friendlyPlanDescription(plan.description)}</p> : null}
         {discount && plan.discount_label ? (
           <span className="landing-pricing-card__deal">{plan.discount_label}</span>
         ) : null}

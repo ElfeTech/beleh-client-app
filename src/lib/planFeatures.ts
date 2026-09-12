@@ -7,6 +7,45 @@ export interface PlanFeatureLine {
   source: 'limit' | 'feature';
 }
 
+/**
+ * User-facing plan copy without LLM token jargon.
+ * Keeps credit / trial details; drops confusing "tokens" mentions.
+ *
+ * Example:
+ *   "7-day free trial with 175 AI credits (3.5M tokens, 25 credits/day)"
+ * → "7-day free trial with 175 AI credits · 25 credits per day"
+ */
+export function friendlyPlanDescription(description: string | null | undefined): string {
+  if (!description?.trim()) return '';
+
+  let text = description.trim();
+
+  // Inside parentheses, drop clauses that mention tokens; keep the rest.
+  text = text.replace(/\(([^)]*)\)/g, (_match, inner: string) => {
+    const kept = inner
+      .split(',')
+      .map((part) => part.trim())
+      .filter((part) => part.length > 0 && !/\btokens?\b/i.test(part));
+    return kept.length > 0 ? `(${kept.join(', ')})` : '';
+  });
+
+  // Any remaining standalone token phrases (outside parens).
+  text = text.replace(/\b\d[\d.,]*\s*[kKmMbB]?\s*tokens?\s+(?:and|&)\s+/gi, '');
+  text = text.replace(/\s*[,·/]?\s*\d[\d.,]*\s*[kKmMbB]?\s*tokens?\b/gi, '');
+  text = text.replace(/\s*\btokens?\b/gi, '');
+
+  text = text
+    .replace(/\bcredits\/day\b/gi, 'credits per day')
+    .replace(/\((\d[\d,]*)\s+credits per day\)/gi, '· $1 credits per day')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+([,.])/g, '$1')
+    .replace(/\s+·\s+/g, ' · ')
+    .replace(/^[\s·,]+|[\s·,]+$/g, '')
+    .trim();
+
+  return text;
+}
+
 const FEATURE_LABELS: Record<string, string> = {
   ai_insights: 'AI insights',
   api_access: 'API access',
