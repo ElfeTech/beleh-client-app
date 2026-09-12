@@ -1,5 +1,15 @@
 import React from 'react';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from 'recharts';
 import './FacetedChart.css';
 
 interface FacetedChartProps {
@@ -83,7 +93,10 @@ export const FacetedChart: React.FC<FacetedChartProps> = ({
           {xLabel}: {label}
         </div>
         <div>
-          {yLabel}: {typeof payload[0].value === 'number' ? payload[0].value.toLocaleString() : payload[0].value}
+          {yLabel}:{' '}
+          {typeof payload[0].value === 'number'
+            ? payload[0].value.toLocaleString()
+            : payload[0].value}
         </div>
       </div>
     );

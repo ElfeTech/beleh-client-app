@@ -136,6 +136,26 @@
   background: var(--primary-600);
 }
 
+.create-workspace-btn--upgrade {
+  border-style: solid !important;
+  border-color: color-mix(in srgb, var(--accent-teal-500) 55%, transparent) !important;
+  background: color-mix(in srgb, var(--accent-teal-500) 12%, transparent) !important;
+}
+
+.create-workspace-btn--upgrade:hover {
+  background: color-mix(in srgb, var(--accent-teal-500) 20%, transparent) !important;
+  border-color: var(--accent-teal-500) !important;
+}
+
+.create-workspace-btn--upgrade .workspace-name {
+  color: var(--accent-teal-600, var(--accent-teal-500));
+}
+
+.create-workspace-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Divider */
 .workspace-list-divider {
   height: 1px;
@@ -211,6 +231,28 @@
   border-radius: 12px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
+  color: var(--gray-600);
+}
+
+.workspace-list-item .ownership-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 7px;
+  border-radius: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  flex-shrink: 0;
+}
+
+.workspace-list-item .ownership-badge--owned {
+  border: 1px solid color-mix(in srgb, var(--primary-600, #0d9488) 35%, transparent);
+  background: color-mix(in srgb, var(--primary-600, #0d9488) 12%, transparent);
+  color: var(--primary-600, #0d9488);
+}
+
+.workspace-list-item .ownership-badge--shared {
+  border: 1px solid var(--gray-300);
+  background: var(--gray-100);
   color: var(--gray-600);
 }
 

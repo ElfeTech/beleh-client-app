@@ -34,6 +34,7 @@ This guide will help you set up Firebase Authentication for the application.
 ### 4. Configure Environment Variables
 
 1. Create a `.env` file in the project root:
+
    ```bash
    cp .env.example .env
    ```
@@ -111,8 +112,8 @@ async function callAPI() {
 
   const response = await fetch('your-api-endpoint', {
     headers: {
-      'Authorization': `Bearer ${token}`
-    }
+      Authorization: `Bearer ${token}`,
+    },
   });
 }
 ```
@@ -150,13 +151,16 @@ npm run dev
 ## Troubleshooting
 
 ### "Firebase configuration not found"
+
 - Check that your `.env` file exists and contains all required variables
 - Restart the development server after creating/updating `.env`
 
 ### "Unauthorized domain"
+
 - Add your domain to Firebase Console > Authentication > Authorized domains
 
 ### "Cross-Origin-Opener-Policy policy would block the window.closed call"
+
 - This is a console warning that doesn't break functionality
 - Fixed by adding proper COOP headers in vite.config.ts
 - The dev server now allows popup-based authentication

@@ -17,7 +17,7 @@ function viewFeedbackState() {
       : 'Never',
     'Last Feedback Shown': state.lastShownTimestamp
       ? new Date(state.lastShownTimestamp).toLocaleString()
-      : 'Never'
+      : 'Never',
   });
   console.log('✅ Submitted Types:', state.submittedTypes || []);
   return state;
@@ -33,7 +33,7 @@ function resetFeedbackState() {
 // ⏰ Simulate returning user after 2.5 days
 function simulateReturningUser() {
   const state = JSON.parse(localStorage.getItem('feedback_state') || '{}');
-  const twoDaysAgo = Date.now() - (2.5 * 24 * 60 * 60 * 1000);
+  const twoDaysAgo = Date.now() - 2.5 * 24 * 60 * 60 * 1000;
   state.lastVisitTimestamp = twoDaysAgo;
   state.submittedTypes = []; // Clear submission history
   state.lastShownTimestamp = undefined; // Clear rate limit
@@ -154,7 +154,7 @@ window.feedbackTest = {
   clearSubmissions,
   removeRateLimit,
   fullReset,
-  help: helpFeedbackTesting
+  help: helpFeedbackTesting,
 };
 
 console.log('Or use: feedbackTest.help()');

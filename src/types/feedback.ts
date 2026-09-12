@@ -1,9 +1,4 @@
-export type FeedbackType =
-  | 'DATA_UNDERSTANDING'
-  | 'ACCURACY'
-  | 'RETURNING_USER'
-  | 'UX'
-  | 'GENERAL';
+export type FeedbackType = 'DATA_UNDERSTANDING' | 'ACCURACY' | 'RETURNING_USER' | 'UX' | 'GENERAL';
 
 export interface FeedbackTrigger {
   type: FeedbackType;

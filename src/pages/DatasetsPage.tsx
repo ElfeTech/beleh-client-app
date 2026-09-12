@@ -1,11 +1,31 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import {
+  Plus,
+  Search,
+  ChevronLeft,
+  ChevronRight,
+  ChevronDown,
+  Database,
+  FileSpreadsheet,
+  FileJson,
+  Layers,
+  MessageSquare,
+  Table2,
+  FolderOpen,
+} from 'lucide-react';
 import { WorkspaceContext } from '../context/WorkspaceContext';
 import { DatasourceContext } from '../context/DatasourceContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
-import { UploadModal } from '../components/layout/UploadModal';
+import {
+  DatasourceConnectionPanel,
+  type ConnectSuccessSource,
+} from '../components/layout/DatasourceConnectionPanel';
+import { pollConnectorSyncUntilSettled } from '../utils/pollConnectorSync';
+import { isSchemaSyncInProgress } from '../lib/providerBind';
+import { loadUploadDraft, savePanelOpen, wasPanelOpen } from '../utils/uploadDraftStore';
 import MobileChatHeader from '../components/layout/MobileChatHeader';
 import WorkspaceSwitcher from '../components/layout/WorkspaceSwitcher';
 import { WorkspaceModal } from '../components/layout/WorkspaceModal';
@@ -13,7 +33,137 @@ import { DatasourceModal } from '../components/layout/DatasourceModal';
 import { ActionSheet, type ActionSheetItem } from '../components/common/ActionSheet';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { ContextMenu, type ContextMenuItem } from '../components/common/ContextMenu';
+import type {
+  ConnectorResponse,
+  DataSourceResponse,
+  DatasetTable,
+  DatasetTablePreviewResponse,
+} from '../types/api';
+import { DatasetPreviewGrid } from '../components/datasets/DatasetPreviewGrid';
+import {
+  ConnectorTableDetail,
+  type ConnectorDetailTab,
+} from '../components/datasets/ConnectorTableDetail';
+import {
+  catalogSourceKey,
+  tablesFromMetadata,
+  getSourceDisplayName,
+  getSourceHostHint,
+  getSourceTableCountLabel,
+  groupTablesBySchema,
+  filterTablesByQuery,
+  filterSchemaGroupsByQuery,
+  parseTableIdentity,
+  type CatalogSourceRef,
+  type CatalogBrowseLevel,
+} from '../utils/schemaCatalog';
+import {
+  readDatasetsView,
+  writeActiveWorkspaceId,
+  writeDatasetsView,
+  type DatasetsPageViewState,
+} from '../lib/uiMemory';
+import {
+  BILLING_UPGRADE_HREF,
+  canEditOrDeleteResource,
+  canShowWorkspaceUpgradeCta,
+  isDatasourcesAtLimit,
+  PLAN_MANAGED_BY_OWNER_COPY,
+  workspaceLimitUpgradeMessage,
+  UPGRADE_TO_ADD_DATASOURCES_LABEL,
+} from '../utils/workspaceAccess';
+import { formatResourceDeleteError, isAbortError } from '../utils/apiErrorMessage';
+import { ensureDemoRemovedAfterLiveSource, findDemoDatasource } from '../lib/workspaceDemo';
+import {
+  INITIAL_PAGE,
+  MAX_LIST_PAGES,
+  SEARCH_VISIBILITY_THRESHOLD,
+  TABLES_PAGE_SIZE,
+  TABLES_SEARCH_VISIBILITY_THRESHOLD,
+} from '../constants/pagination';
+import { sortByUpdatedAtDesc } from '../utils/sortByUpdatedAt';
 import './DatasetsPage.css';
+
+async function fetchAllDatasetTables(token: string, datasetId: string): Promise<DatasetTable[]> {
+  const tables: DatasetTable[] = [];
+  let page = INITIAL_PAGE;
+  while (page <= MAX_LIST_PAGES) {
+    const response = await apiClient.listDatasetTables(token, datasetId, {
+      page,
+      page_size: TABLES_PAGE_SIZE,
+    });
+    tables.push(...(response.tables ?? []));
+    if (!response.has_next) break;
+    page += 1;
+  }
+  return tables;
+}
+
+async function fetchAllConnectorTables(
+  token: string,
+  workspaceId: string,
+  connectorId: string,
+): Promise<DatasetTable[]> {
+  const tables: DatasetTable[] = [];
+  let page = INITIAL_PAGE;
+  while (page <= MAX_LIST_PAGES) {
+    const response = await apiClient.listConnectorTables(token, workspaceId, connectorId, {
+      page,
+      page_size: TABLES_PAGE_SIZE,
+    });
+    tables.push(...(response.tables ?? []));
+    if (!response.has_next) break;
+    page += 1;
+  }
+  return tables;
+}
+
+type SourceFilter = 'all' | 'files' | 'databases';
+type MobileCatalogPane = 'sources' | 'schemas' | 'tables' | 'preview';
+
+type UnifiedRow =
+  | { kind: 'connector'; id: string; connector: ConnectorResponse }
+  | { kind: 'datasource'; id: string; datasource: DataSourceResponse };
+
+function getConnectorPill(status: ConnectorResponse['status']): {
+  label: string;
+  className: string;
+} {
+  switch (status) {
+    case 'ACTIVE':
+      return { label: 'Connected', className: 'ds-pill ds-pill--success' };
+    case 'FAILED':
+      return { label: 'Failed', className: 'ds-pill ds-pill--error' };
+    case 'SYNCING':
+      return { label: 'Syncing', className: 'ds-pill ds-pill--sync' };
+    default:
+      return { label: 'Inactive', className: 'ds-pill ds-pill--muted' };
+  }
+}
+
+function getDatasourcePill(status: DataSourceResponse['status']): {
+  label: string;
+  className: string;
+} {
+  switch (status) {
+    case 'READY':
+      return { label: 'Connected', className: 'ds-pill ds-pill--success' };
+    case 'FAILED':
+      return { label: 'Failed', className: 'ds-pill ds-pill--error' };
+    case 'PROCESSING':
+    case 'PENDING':
+      return { label: 'Syncing', className: 'ds-pill ds-pill--sync' };
+    default:
+      return { label: status.replace(/_/g, ' '), className: 'ds-pill ds-pill--muted' };
+  }
+}
+
+function statusDotClass(pillClassName: string): string {
+  if (pillClassName.includes('success')) return 'sc-status-dot--success';
+  if (pillClassName.includes('error')) return 'sc-status-dot--error';
+  if (pillClassName.includes('sync')) return 'sc-status-dot--sync';
+  return 'sc-status-dot--muted';
+}
 
 const DatasetsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,18 +171,44 @@ const DatasetsPage: React.FC = () => {
   const { user } = useAuth();
   const workspaceContext = useContext(WorkspaceContext);
   const datasourceContext = useContext(DatasourceContext);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showConnectionPanel, setShowConnectionPanel] = useState(false);
+  const [connectPanelInitialView, setConnectPanelInitialView] = useState<'upload' | undefined>(
+    undefined,
+  );
+
+  // Refresh-survival: reopen the connect panel where the user left it (per
+  // workspace). An upload draft (file attached or import running) reopens
+  // straight into the upload wizard, which restores its own state.
+  useEffect(() => {
+    if (!workspaceId) return;
+    const open = wasPanelOpen(workspaceId);
+    setConnectPanelInitialView(open && loadUploadDraft(workspaceId) ? 'upload' : undefined);
+    setShowConnectionPanel(open);
+  }, [workspaceId]);
+
+  useEffect(() => {
+    if (!workspaceId) return;
+    savePanelOpen(workspaceId, showConnectionPanel);
+    if (!showConnectionPanel) setConnectPanelInitialView(undefined);
+  }, [workspaceId, showConnectionPanel]);
   const [showWorkspaceSwitcher, setShowWorkspaceSwitcher] = useState(false);
   const [showCreateWorkspaceModal, setShowCreateWorkspaceModal] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [mobileCatalogPane, setMobileCatalogPane] = useState<MobileCatalogPane>('sources');
 
   // Mobile menu state
   const [showActionSheet, setShowActionSheet] = useState(false);
-  const [selectedDatasetForMenu, setSelectedDatasetForMenu] = useState<string | null>(null);
+  const [selectedItemForMenu, setSelectedItemForMenu] = useState<{
+    id: string;
+    type: 'datasource' | 'connector';
+  } | null>(null);
   const [datasetToEdit, setDatasetToEdit] = useState<string | null>(null);
   const [datasetToRename, setDatasetToRename] = useState<string | null>(null);
   const [showRenameModal, setShowRenameModal] = useState(false);
-  const [datasetToDelete, setDatasetToDelete] = useState<string | null>(null);
+  const [itemToDelete, setItemToDelete] = useState<{
+    id: string;
+    type: 'datasource' | 'connector';
+  } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -41,9 +217,579 @@ const DatasetsPage: React.FC = () => {
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
 
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [selectedCatalogSource, setSelectedCatalogSource] = useState<CatalogSourceRef | null>(null);
+  const [tableSearchQuery, setTableSearchQuery] = useState('');
+  const [catalogTables, setCatalogTables] = useState<DatasetTable[]>([]);
+  const [tablesLoading, setTablesLoading] = useState(false);
+  const [browseLevel, setBrowseLevel] = useState<CatalogBrowseLevel>('tables');
+  const [selectedSchemaName, setSelectedSchemaName] = useState<string | null>(null);
+  const [selectedTableName, setSelectedTableName] = useState<string | null>(null);
+  const [connectorDetailTab, setConnectorDetailTab] = useState<ConnectorDetailTab>('columns');
+  const [previewData, setPreviewData] = useState<DatasetTablePreviewResponse | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewPage, setPreviewPage] = useState(1);
+  const [previewPageSize, setPreviewPageSize] = useState(10);
+  const [previewSearch, setPreviewSearch] = useState('');
+  const [datasetsViewHydrated, setDatasetsViewHydrated] = useState(false);
+  /** Stashed drill-down prefs from uiMemory; applied once tables load for the restored source. */
+  const pendingDrillRef = useRef<DatasetsPageViewState | null>(null);
+  const appliedDrillKeyRef = useRef<string | null>(null);
+  const skipCloseRefreshRef = useRef(false);
+  const [retryingSyncId, setRetryingSyncId] = useState<string | null>(null);
+  const [schemaPollTimedOutId, setSchemaPollTimedOutId] = useState<string | null>(null);
+  // Stops in-flight schema-sync polling when the page unmounts.
+  const pollAbortRef = useRef(false);
+  const schemaPollIdsRef = useRef(new Set<string>());
+  useEffect(() => {
+    pollAbortRef.current = false;
+    return () => {
+      pollAbortRef.current = true;
+    };
+  }, []);
+
+  // Phase A: restore filter / search / source + stash drill prefs
+  useEffect(() => {
+    if (!user?.uid || !workspaceId) return;
+    pendingDrillRef.current = null;
+    appliedDrillKeyRef.current = null;
+
+    const stored = readDatasetsView(user.uid, workspaceId);
+    if (stored) {
+      pendingDrillRef.current = stored;
+      if (stored.searchQuery != null) setSearchQuery(stored.searchQuery);
+      if (
+        stored.sourceFilter === 'all' ||
+        stored.sourceFilter === 'files' ||
+        stored.sourceFilter === 'databases'
+      ) {
+        setSourceFilter(stored.sourceFilter);
+      }
+      if (
+        stored.selectedCatalog &&
+        (stored.selectedCatalog.kind === 'datasource' ||
+          stored.selectedCatalog.kind === 'connector') &&
+        stored.selectedCatalog.id
+      ) {
+        setSelectedCatalogSource(stored.selectedCatalog as CatalogSourceRef);
+      }
+      if (stored.tableSearchQuery != null) setTableSearchQuery(stored.tableSearchQuery);
+      if (stored.connectorDetailTab === 'columns' || stored.connectorDetailTab === 'data') {
+        setConnectorDetailTab(stored.connectorDetailTab);
+      }
+      if (
+        typeof stored.previewPageSize === 'number' &&
+        stored.previewPageSize > 0 &&
+        stored.previewPageSize <= 200
+      ) {
+        setPreviewPageSize(stored.previewPageSize);
+      }
+      if (
+        stored.mobileCatalogPane === 'sources' ||
+        stored.mobileCatalogPane === 'schemas' ||
+        stored.mobileCatalogPane === 'tables' ||
+        stored.mobileCatalogPane === 'preview'
+      ) {
+        setMobileCatalogPane(stored.mobileCatalogPane);
+      }
+    }
+    setDatasetsViewHydrated(true);
+  }, [user?.uid, workspaceId]);
+
+  useEffect(() => {
+    if (!datasetsViewHydrated || !user?.uid || !workspaceId) return;
+    const state: DatasetsPageViewState = {
+      searchQuery,
+      sourceFilter,
+      selectedCatalog: selectedCatalogSource,
+      browseLevel,
+      selectedSchemaName,
+      selectedTableName,
+      tableSearchQuery,
+      connectorDetailTab,
+      previewPageSize,
+      mobileCatalogPane,
+    };
+    writeDatasetsView(user.uid, workspaceId, state);
+  }, [
+    datasetsViewHydrated,
+    user?.uid,
+    workspaceId,
+    searchQuery,
+    sourceFilter,
+    selectedCatalogSource,
+    browseLevel,
+    selectedSchemaName,
+    selectedTableName,
+    tableSearchQuery,
+    connectorDetailTab,
+    previewPageSize,
+    mobileCatalogPane,
+  ]);
+
+  const applyCatalogDrill = (tables: DatasetTable[], kind: 'connector' | 'datasource'): void => {
+    const sourceKey = selectedCatalogSource ? catalogSourceKey(selectedCatalogSource) : null;
+    const pending = pendingDrillRef.current;
+    const pendingKey =
+      pending?.selectedCatalog &&
+      (pending.selectedCatalog.kind === 'datasource' ||
+        pending.selectedCatalog.kind === 'connector') &&
+      pending.selectedCatalog.id
+        ? catalogSourceKey(pending.selectedCatalog as CatalogSourceRef)
+        : null;
+
+    const canRestore =
+      Boolean(sourceKey) &&
+      pendingKey === sourceKey &&
+      appliedDrillKeyRef.current !== sourceKey &&
+      Boolean(pending);
+
+    if (canRestore && pending && sourceKey) {
+      appliedDrillKeyRef.current = sourceKey;
+
+      if (kind === 'connector') {
+        const schemaNames = new Set(
+          tables.map((t) => parseTableIdentity(t).schema).filter(Boolean),
+        );
+        const schema =
+          pending.selectedSchemaName && schemaNames.has(pending.selectedSchemaName)
+            ? pending.selectedSchemaName
+            : null;
+        const tableExists = pending.selectedTableName
+          ? tables.some((t) => t.table_name === pending.selectedTableName)
+          : false;
+        const table = tableExists ? pending.selectedTableName! : null;
+
+        const level: CatalogBrowseLevel =
+          pending.browseLevel === 'tables' && (schema || table)
+            ? 'tables'
+            : pending.browseLevel === 'schemas'
+              ? 'schemas'
+              : schema || table
+                ? 'tables'
+                : 'schemas';
+
+        setBrowseLevel(level);
+        let resolvedSchema = schema;
+        if (!resolvedSchema && table) {
+          const match = tables.find((t) => t.table_name === table);
+          if (match) resolvedSchema = parseTableIdentity(match).schema;
+        }
+        setSelectedSchemaName(resolvedSchema);
+        setSelectedTableName(table);
+        if (pending.connectorDetailTab === 'columns' || pending.connectorDetailTab === 'data') {
+          setConnectorDetailTab(pending.connectorDetailTab);
+        }
+        return;
+      }
+
+      // datasource / file
+      setBrowseLevel('tables');
+      setSelectedSchemaName(null);
+      const tableExists = pending.selectedTableName
+        ? tables.some((t) => t.table_name === pending.selectedTableName)
+        : false;
+      setSelectedTableName(
+        tableExists ? pending.selectedTableName! : (tables[0]?.table_name ?? null),
+      );
+      return;
+    }
+
+    // Defaults when not restoring
+    if (kind === 'connector') {
+      setBrowseLevel('schemas');
+      setSelectedSchemaName(null);
+      setSelectedTableName(null);
+      setConnectorDetailTab('columns');
+    } else {
+      setBrowseLevel('tables');
+      setSelectedSchemaName(null);
+      setSelectedTableName(tables[0]?.table_name ?? null);
+    }
+  };
+
   const datasources = workspaceContext?.datasources || [];
+  const connectors = workspaceContext?.connectors || [];
   const loading = workspaceContext?.loading || false;
-  const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => { });
+  const currentRole = workspaceContext?.currentRole ?? null;
+  const datasourcesAtLimit = isDatasourcesAtLimit(workspaceContext?.workspaceUsage ?? null);
+  const canUpgrade = canShowWorkspaceUpgradeCta(currentRole);
+  const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => {});
+
+  const openConnectOrUpgrade = () => {
+    if (datasourcesAtLimit) {
+      if (canUpgrade) {
+        navigate(BILLING_UPGRADE_HREF);
+        return;
+      }
+      toast.error(workspaceLimitUpgradeMessage(currentRole, 'datasources'));
+      return;
+    }
+    setShowConnectionPanel(true);
+  };
+
+  const canMutateSelected = (): boolean => {
+    if (!selectedItemForMenu) return false;
+    if (selectedItemForMenu.type === 'datasource') {
+      const ds = datasources.find((d) => d.id === selectedItemForMenu.id);
+      return canEditOrDeleteResource(currentRole, ds?.user_id, user?.uid);
+    }
+    const connector = connectors.find((c) => c.id === selectedItemForMenu.id);
+    return canEditOrDeleteResource(currentRole, connector?.user_id, user?.uid);
+  };
+
+  const unifiedSources: UnifiedRow[] = useMemo(() => {
+    const rows: UnifiedRow[] = [];
+    connectors.forEach((connector) =>
+      rows.push({ kind: 'connector', id: connector.id, connector }),
+    );
+    datasources.forEach((datasource) =>
+      rows.push({ kind: 'datasource', id: datasource.id, datasource }),
+    );
+    const keyed = rows.map((row) => ({
+      row,
+      updated_at: row.kind === 'connector' ? row.connector.updated_at : row.datasource.updated_at,
+      created_at: row.kind === 'connector' ? row.connector.created_at : row.datasource.created_at,
+    }));
+    return sortByUpdatedAtDesc(keyed).map((item) => item.row);
+  }, [connectors, datasources]);
+
+  const activeConnectionCount = useMemo(() => {
+    return unifiedSources.filter((row) => {
+      if (row.kind === 'connector') {
+        return row.connector.status === 'ACTIVE' || row.connector.status === 'SYNCING';
+      }
+      return row.datasource.status === 'READY' || row.datasource.status === 'PROCESSING';
+    }).length;
+  }, [unifiedSources]);
+
+  const filteredSources = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return unifiedSources.filter((row) => {
+      if (sourceFilter === 'files' && row.kind !== 'datasource') return false;
+      if (sourceFilter === 'databases' && row.kind !== 'connector') return false;
+      if (!q) return true;
+      const name = row.kind === 'connector' ? row.connector.name : row.datasource.name;
+      return name.toLowerCase().includes(q);
+    });
+  }, [unifiedSources, searchQuery, sourceFilter]);
+
+  useEffect(() => {
+    if (filteredSources.length === 0) {
+      setSelectedCatalogSource(null);
+      return;
+    }
+    const stillVisible = selectedCatalogSource
+      ? filteredSources.some(
+          (row) =>
+            catalogSourceKey({ kind: row.kind, id: row.id }) ===
+            catalogSourceKey(selectedCatalogSource),
+        )
+      : false;
+    if (!stillVisible) {
+      const first = filteredSources[0];
+      setSelectedCatalogSource({ kind: first.kind, id: first.id });
+    }
+  }, [filteredSources, selectedCatalogSource]);
+
+  useEffect(() => {
+    if (!user || !selectedCatalogSource || !workspaceId) {
+      setCatalogTables([]);
+      setSelectedTableName(null);
+      setSelectedSchemaName(null);
+      setBrowseLevel('tables');
+      return;
+    }
+
+    const row = unifiedSources.find(
+      (r) => r.kind === selectedCatalogSource.kind && r.id === selectedCatalogSource.id,
+    );
+    if (!row) {
+      setTablesLoading(true);
+      setCatalogTables([]);
+      return;
+    }
+
+    if (row.kind === 'connector') {
+      const meta = row.connector.metadata_status;
+      if (meta === 'FAILED') {
+        setCatalogTables([]);
+        setSelectedTableName(null);
+        setSelectedSchemaName(null);
+        setBrowseLevel('schemas');
+        setTablesLoading(false);
+        return;
+      }
+      if (isSchemaSyncInProgress(meta)) {
+        // Bind/link is not "schemas ready". Keep the spinner until COMPLETED.
+        setCatalogTables([]);
+        setSelectedTableName(null);
+        setSelectedSchemaName(null);
+        setBrowseLevel('schemas');
+        setTablesLoading(schemaPollTimedOutId !== row.connector.id);
+        return;
+      }
+
+      let cancelled = false;
+      (async () => {
+        setTablesLoading(true);
+        try {
+          const token = await user.getIdToken();
+          const tables = await fetchAllConnectorTables(token, workspaceId, row.connector.id);
+          if (cancelled) return;
+          setCatalogTables(tables);
+          applyCatalogDrill(tables, 'connector');
+        } catch (err) {
+          if (cancelled) return;
+          console.error('[DatasetsPage] Failed to load connector tables:', err);
+          setCatalogTables([]);
+          applyCatalogDrill([], 'connector');
+          toast.error('Could not load tables for this data source. Please try again.');
+        } finally {
+          if (!cancelled) setTablesLoading(false);
+        }
+      })();
+
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    if (row.datasource.status !== 'READY') {
+      setCatalogTables([]);
+      setSelectedTableName(null);
+      setSelectedSchemaName(null);
+      setBrowseLevel('tables');
+      setTablesLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    (async () => {
+      setTablesLoading(true);
+      try {
+        const token = await user.getIdToken();
+        const fetched = await fetchAllDatasetTables(token, row.datasource.id);
+        if (cancelled) return;
+        const tables = fetched.length > 0 ? fetched : tablesFromMetadata(row.datasource);
+        setCatalogTables(tables);
+        applyCatalogDrill(tables, 'datasource');
+      } catch (err) {
+        if (cancelled) return;
+        console.error('[DatasetsPage] Failed to load dataset tables:', err);
+        const fallback = tablesFromMetadata(row.datasource);
+        setCatalogTables(fallback);
+        applyCatalogDrill(fallback, 'datasource');
+        if (fallback.length === 0) {
+          toast.error('Could not load tables for this data source. Please try again.');
+        }
+      } finally {
+        if (!cancelled) setTablesLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+    // applyCatalogDrill closes over selectedCatalogSource / pending refs — intentional on source change
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- restore drill when source/tables identity changes
+  }, [user, selectedCatalogSource, unifiedSources, workspaceId, schemaPollTimedOutId]);
+
+  useEffect(() => {
+    if (!workspaceContext?.refreshConnectors) return;
+    const pendingIds = unifiedSources
+      .filter(
+        (row): row is Extract<UnifiedRow, { kind: 'connector' }> =>
+          row.kind === 'connector' && isSchemaSyncInProgress(row.connector.metadata_status),
+      )
+      .map((row) => row.connector.id);
+    if (pendingIds.length === 0) return;
+
+    const refresh = workspaceContext.refreshConnectors;
+    for (const id of pendingIds) {
+      if (schemaPollIdsRef.current.has(id)) continue;
+      schemaPollIdsRef.current.add(id);
+      void pollConnectorSyncUntilSettled(refresh, {
+        connectorId: id,
+        isCancelled: () => pollAbortRef.current,
+      })
+        .then((outcome) => {
+          if (outcome === 'timeout') {
+            setSchemaPollTimedOutId((prev) => prev ?? id);
+          }
+        })
+        .finally(() => {
+          schemaPollIdsRef.current.delete(id);
+        });
+    }
+  }, [unifiedSources, workspaceContext]);
+
+  const schemaGroups = useMemo(() => groupTablesBySchema(catalogTables), [catalogTables]);
+
+  const filteredSchemaGroups = useMemo(
+    () => filterSchemaGroupsByQuery(schemaGroups, tableSearchQuery),
+    [schemaGroups, tableSearchQuery],
+  );
+
+  const tablesInSelectedSchema = useMemo(() => {
+    if (!selectedSchemaName) return [];
+    return schemaGroups.find((g) => g.name === selectedSchemaName)?.tables ?? [];
+  }, [schemaGroups, selectedSchemaName]);
+
+  const selectedCatalogRow = useMemo(() => {
+    if (!selectedCatalogSource) return null;
+    return (
+      unifiedSources.find(
+        (r) => r.kind === selectedCatalogSource.kind && r.id === selectedCatalogSource.id,
+      ) ?? null
+    );
+  }, [unifiedSources, selectedCatalogSource]);
+
+  useEffect(() => {
+    if (selectedCatalogRow?.kind !== 'connector') return;
+    if (selectedCatalogRow.connector.metadata_status === 'COMPLETED') {
+      setSchemaPollTimedOutId((prev) =>
+        prev === selectedCatalogRow.connector.id ? null : prev,
+      );
+    }
+  }, [selectedCatalogRow]);
+
+  const isConnectorSource = selectedCatalogRow?.kind === 'connector';
+
+  const browseTables = useMemo(() => {
+    if (isConnectorSource) {
+      return filterTablesByQuery(tablesInSelectedSchema, tableSearchQuery);
+    }
+    return filterTablesByQuery(catalogTables, tableSearchQuery);
+  }, [isConnectorSource, tablesInSelectedSchema, catalogTables, tableSearchQuery]);
+
+  const tablesSearchListCount =
+    isConnectorSource && browseLevel === 'schemas'
+      ? schemaGroups.length
+      : isConnectorSource
+        ? tablesInSelectedSchema.length
+        : catalogTables.length;
+  const showTablesSearch = tablesSearchListCount >= TABLES_SEARCH_VISIBILITY_THRESHOLD;
+
+  useEffect(() => {
+    if (!showTablesSearch && tableSearchQuery) {
+      setTableSearchQuery('');
+    }
+  }, [showTablesSearch, tableSearchQuery]);
+
+  const handlePreviewSearchChange = (query: string) => {
+    setPreviewSearch(query);
+    setPreviewPage(1);
+  };
+
+  const selectedTable = useMemo(
+    () => catalogTables.find((t) => t.table_name === selectedTableName) ?? null,
+    [catalogTables, selectedTableName],
+  );
+
+  const previewDatasetId =
+    selectedCatalogRow?.kind === 'datasource' ? selectedCatalogRow.datasource.id : null;
+  const previewConnectorId =
+    selectedCatalogRow?.kind === 'connector' ? selectedCatalogRow.connector.id : null;
+
+  useEffect(() => {
+    setPreviewPage(1);
+    setPreviewSearch('');
+    setPreviewData(null);
+    setPreviewError(null);
+  }, [selectedTableName, previewDatasetId, previewConnectorId]);
+
+  useEffect(() => {
+    if (!user || !selectedTableName) {
+      setPreviewData(null);
+      setPreviewLoading(false);
+      setPreviewError(null);
+      return;
+    }
+
+    // File/dataset sources: preview whenever a READY table is selected.
+    const canPreviewDatasource =
+      selectedCatalogRow?.kind === 'datasource' &&
+      selectedCatalogRow.datasource.status === 'READY' &&
+      Boolean(previewDatasetId);
+
+    // Connectors: fetch rows when the Data tab is open (schema sync must be complete).
+    const canPreviewConnector =
+      selectedCatalogRow?.kind === 'connector' &&
+      selectedCatalogRow.connector.metadata_status === 'COMPLETED' &&
+      Boolean(previewConnectorId) &&
+      Boolean(workspaceId) &&
+      connectorDetailTab === 'data';
+
+    if (!canPreviewDatasource && !canPreviewConnector) {
+      if (selectedCatalogRow?.kind === 'connector' && connectorDetailTab !== 'data') {
+        // Keep any prior preview while on Columns; don't clear mid-switch.
+        setPreviewLoading(false);
+        return;
+      }
+      setPreviewData(null);
+      setPreviewLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+
+    (async () => {
+      setPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const token = await user.getIdToken();
+        if (controller.signal.aborted) return;
+        const response =
+          canPreviewConnector && previewConnectorId && workspaceId
+            ? await apiClient.getConnectorTablePreview(
+                token,
+                workspaceId,
+                previewConnectorId,
+                selectedTableName,
+                previewPage,
+                previewPageSize,
+                previewSearch,
+                controller.signal,
+              )
+            : await apiClient.getDatasetTablePreview(
+                token,
+                previewDatasetId!,
+                selectedTableName,
+                previewPage,
+                previewPageSize,
+                previewSearch,
+                controller.signal,
+              );
+        if (controller.signal.aborted) return;
+        setPreviewData(response);
+      } catch (err: unknown) {
+        if (isAbortError(err) || controller.signal.aborted) return;
+        setPreviewData(null);
+        setPreviewError(err instanceof Error ? err.message : 'Failed to load table preview.');
+      } finally {
+        if (!controller.signal.aborted) setPreviewLoading(false);
+      }
+    })();
+
+    return () => {
+      controller.abort();
+    };
+  }, [
+    user,
+    workspaceId,
+    previewDatasetId,
+    previewConnectorId,
+    selectedTableName,
+    previewPage,
+    previewPageSize,
+    previewSearch,
+    selectedCatalogRow,
+    connectorDetailTab,
+  ]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -54,103 +800,177 @@ const DatasetsPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  useEffect(() => {
+    if (!isMobile) setMobileCatalogPane('sources');
+  }, [isMobile]);
+
+  const handleUseInChat = (ref: CatalogSourceRef) => {
+    setSelectedDatasourceId(ref.id);
+    navigate(`/workspace/${workspaceId}`);
+    toast.success('Source selected for AI analysis');
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'READY':
-        return 'status-ready';
-      case 'PROCESSING':
-        return 'status-processing';
-      case 'FAILED':
-        return 'status-failed';
-      default:
-        return 'status-pending';
+  const handleCatalogSourceSelect = (ref: CatalogSourceRef) => {
+    setSelectedCatalogSource(ref);
+    setTableSearchQuery('');
+    setSelectedSchemaName(null);
+    setSelectedTableName(null);
+    setConnectorDetailTab('columns');
+    setCatalogTables([]);
+    setPreviewData(null);
+    setPreviewError(null);
+    setPreviewLoading(false);
+    setTablesLoading(true);
+    if (ref.kind === 'connector') {
+      setBrowseLevel('schemas');
+      if (isMobile) setMobileCatalogPane('schemas');
+    } else {
+      setBrowseLevel('tables');
+      if (isMobile) setMobileCatalogPane('tables');
     }
   };
 
-  const getFileTypeIcon = (fileType: string) => {
-    const type = fileType.toLowerCase();
-    if (type.includes('csv')) return 'CSV';
-    if (type.includes('excel') || type.includes('xlsx')) return 'XLS';
-    if (type.includes('json')) return 'JSON';
-    return 'FILE';
+  const handleSelectSchema = (schemaName: string) => {
+    setSelectedSchemaName(schemaName);
+    setSelectedTableName(null);
+    setBrowseLevel('tables');
+    setTableSearchQuery('');
+    setConnectorDetailTab('columns');
+    if (isMobile) setMobileCatalogPane('tables');
   };
 
-  const handleDatasetSelect = async (datasetId: string) => {
-    // Set as active dataset
-    setSelectedDatasourceId(datasetId);
-
-    // Navigate back to chat (session will be created in Workspace component)
-    navigate(`/workspace/${workspaceId}`);
+  const handleBackToSchemas = () => {
+    setBrowseLevel('schemas');
+    setSelectedSchemaName(null);
+    setSelectedTableName(null);
+    setTableSearchQuery('');
+    setConnectorDetailTab('columns');
+    if (isMobile) setMobileCatalogPane('schemas');
   };
 
+  const handleSelectTable = (tableName: string) => {
+    setSelectedTableName(tableName);
+    setConnectorDetailTab('columns');
+    if (isMobile) setMobileCatalogPane('preview');
+  };
+
+  const handleBrowseBack = () => {
+    if (isConnectorSource && browseLevel === 'tables') {
+      handleBackToSchemas();
+      return;
+    }
+    setMobileCatalogPane('sources');
+  };
   // Mobile menu handlers
-  const handleMoreClick = (e: React.MouseEvent, datasetId: string) => {
+  const handleMoreClick = (e: React.MouseEvent, id: string, type: 'datasource' | 'connector') => {
     e.stopPropagation();
-    setSelectedDatasetForMenu(datasetId);
+    setSelectedItemForMenu({ id, type });
     setShowActionSheet(true);
   };
 
-  const handleDesktopMenuClick = (e: React.MouseEvent<HTMLButtonElement>, datasetId: string) => {
+  const handleDesktopMenuClick = (
+    e: React.MouseEvent<HTMLButtonElement>,
+    id: string,
+    type: 'datasource' | 'connector',
+  ) => {
     e.stopPropagation();
-    setSelectedDatasetForMenu(datasetId);
+    setSelectedItemForMenu({ id, type });
     setMenuAnchorEl(e.currentTarget);
     setShowContextMenu(true);
   };
 
   const handleRename = () => {
-    setDatasetToRename(selectedDatasetForMenu);
-    setShowRenameModal(true);
+    if (selectedItemForMenu?.type === 'datasource') {
+      setDatasetToRename(selectedItemForMenu.id);
+      setShowRenameModal(true);
+    } else {
+      toast.info('Renaming connectors coming soon');
+    }
   };
 
   const handleEdit = () => {
-    // Store the dataset ID before ActionSheet closes and clears selectedDatasetForMenu
-    setDatasetToEdit(selectedDatasetForMenu);
-    setShowEditModal(true);
+    if (selectedItemForMenu?.type === 'datasource') {
+      setDatasetToEdit(selectedItemForMenu.id);
+      setShowEditModal(true);
+    } else {
+      toast.info('Editing connectors coming soon');
+    }
   };
 
   const handleDelete = () => {
-    // Store the dataset ID before ActionSheet closes and clears selectedDatasetForMenu
-    setDatasetToDelete(selectedDatasetForMenu);
+    setItemToDelete(selectedItemForMenu);
     setShowDeleteConfirm(true);
   };
 
-  const handlePreview = (datasetId: string) => {
-    navigate(`/workspace/${workspaceId}/datasets/${datasetId}/preview`);
+  const handlePreview = (datasetId: string, tableName?: string) => {
+    const tableQuery = tableName ? `?table=${encodeURIComponent(tableName)}` : '';
+    navigate(`/workspace/${workspaceId}/datasets/${datasetId}/preview${tableQuery}`);
   };
 
   const handleConfirmDelete = async () => {
-    if (!datasetToDelete || !user) return;
+    if (!itemToDelete || !user || !workspaceId) return;
+
+    const deletedId = itemToDelete.id;
+    const deletedType = itemToDelete.type;
+    const resourceLabel = deletedType === 'datasource' ? 'dataset' : 'connector';
 
     try {
       setIsDeleting(true);
       const token = await user.getIdToken();
-      await apiClient.deleteDatasource(token, datasetToDelete);
 
-      // Refresh datasources
-      if (workspaceContext?.refreshDatasources) {
-        await workspaceContext.refreshDatasources();
+      if (deletedType === 'datasource') {
+        await apiClient.deleteDatasource(token, deletedId);
+        if (workspaceContext?.refreshDatasources) {
+          await workspaceContext.refreshDatasources();
+        }
+      } else {
+        await apiClient.deleteConnector(token, workspaceId, deletedId);
+        if (workspaceContext?.refreshConnectors) {
+          await workspaceContext.refreshConnectors();
+        }
+      }
+
+      if (workspaceContext?.refreshWorkspaceUsage) {
+        await workspaceContext.refreshWorkspaceUsage();
+      }
+
+      if (datasourceContext?.selectedDatasourceId === deletedId) {
+        const remainingSources =
+          deletedType === 'datasource'
+            ? [
+                ...datasources.filter((ds) => ds.id !== deletedId).map((ds) => ds.id),
+                ...connectors.map((c) => c.id),
+              ]
+            : [
+                ...datasources.map((ds) => ds.id),
+                ...connectors.filter((c) => c.id !== deletedId).map((c) => c.id),
+              ];
+        setSelectedDatasourceId(remainingSources[0] ?? null);
       }
 
       setShowDeleteConfirm(false);
-      setDatasetToDelete(null);
-      toast.success('Dataset deleted successfully');
+      setItemToDelete(null);
+      toast.success(
+        `${deletedType === 'datasource' ? 'Dataset' : 'Connector'} deleted successfully`,
+      );
     } catch (err) {
-      console.error('Failed to delete dataset:', err);
-      toast.error('Failed to delete dataset. Please try again.');
+      console.error('Failed to delete item:', err);
+      toast.error(formatResourceDeleteError(err, resourceLabel));
     } finally {
       setIsDeleting(false);
     }
   };
 
+  const refreshCatalogInBackground = async () => {
+    await Promise.all([
+      workspaceContext?.refreshConnectors?.({ silent: true }),
+      workspaceContext?.refreshDatasources?.({ silent: true }),
+    ]);
+  };
+
   const handleEditSuccess = async () => {
     if (workspaceContext?.refreshDatasources) {
-      await workspaceContext.refreshDatasources();
+      await workspaceContext.refreshDatasources({ silent: true });
     }
     setShowEditModal(false);
     setShowRenameModal(false);
@@ -158,251 +978,937 @@ const DatasetsPage: React.FC = () => {
     setDatasetToRename(null);
   };
 
-  const getMenuItems = (): ActionSheetItem[] => [
-    {
-      id: 'preview',
-      label: 'Preview Data',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      ),
-      variant: 'default' as const,
-      onClick: () => {
-        if (selectedDatasetForMenu) handlePreview(selectedDatasetForMenu);
-      },
-    },
-    {
-      id: 'rename',
-      label: 'Rename',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-      ),
-      variant: 'default' as const,
-      onClick: handleRename,
-    },
-    {
-      id: 'update',
-      label: 'Update Dataset',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-      ),
-      variant: 'default' as const,
-      onClick: handleEdit,
-    },
-    {
-      id: 'delete',
-      label: 'Delete Dataset',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        </svg>
-      ),
-      variant: 'danger' as const,
-      onClick: handleDelete,
-    },
-  ];
+  const handleLiveSourceSuccess = async (
+    created?: ConnectorResponse,
+    source?: ConnectSuccessSource,
+  ) => {
+    skipCloseRefreshRef.current = true;
+    if (created) {
+      workspaceContext?.setConnectors([
+        created,
+        ...connectors.filter((connector) => connector.id !== created.id),
+      ]);
+      setSourceFilter('all');
+      setSearchQuery('');
+      setSelectedCatalogSource({ kind: 'connector', id: created.id });
+      setCatalogTables([]);
+      setTablesLoading(true);
+      setSchemaPollTimedOutId((prev) => (prev === created.id ? null : prev));
+    }
 
-  const getContextMenuItems = (): ContextMenuItem[] => [
-    {
-      id: 'preview',
-      label: 'Preview Data',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-          <circle cx="12" cy="12" r="3" />
-        </svg>
-      ),
-      variant: 'default',
-      onClick: () => {
-        if (selectedDatasetForMenu) handlePreview(selectedDatasetForMenu);
-      },
-    },
-    {
-      id: 'rename',
-      label: 'Rename',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-        </svg>
-      ),
-      variant: 'default',
-      onClick: handleRename,
-    },
-    {
-      id: 'update',
-      label: 'Update Dataset',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <polyline points="17 8 12 3 7 8" />
-          <line x1="12" y1="3" x2="12" y2="15" />
-        </svg>
-      ),
-      variant: 'default',
-      onClick: handleEdit,
-    },
-    {
-      id: 'delete',
-      label: 'Delete Dataset',
-      icon: (
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-          <polyline points="3 6 5 6 21 6" />
-          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-        </svg>
-      ),
-      variant: 'danger',
-      onClick: handleDelete,
-    },
-  ];
+    const demoId = findDemoDatasource(datasources)?.id ?? null;
+    const hadDemo = Boolean(demoId) || datasources.some((d) => Boolean(d.is_demo));
+    await refreshCatalogInBackground();
+    // Supabase binds already toast "Connected {project}" in the flow itself.
+    if (source !== 'supabase') {
+      toast.success('Datasource connected successfully.');
+    }
+    if (hadDemo && user && workspaceId) {
+      try {
+        const token = await user.getIdToken();
+        await ensureDemoRemovedAfterLiveSource(token, workspaceId, datasources);
+        await workspaceContext?.refreshDatasources?.({ silent: true });
+        if (demoId && datasourceContext?.selectedDatasourceId === demoId) {
+          datasourceContext.setSelectedDatasourceId(null);
+        }
+      } catch {
+        /* best-effort */
+      }
+    }
+    if (workspaceContext?.refreshWorkspaceUsage) {
+      await workspaceContext.refreshWorkspaceUsage();
+    }
+    // Keep pills/tables honest: follow schema sync to a terminal state instead
+    // of giving up after a few seconds and leaving a stale "Syncing" badge.
+    if ((created?.id || source === 'supabase') && workspaceContext?.refreshConnectors) {
+      if (created?.id) schemaPollIdsRef.current.add(created.id);
+      const outcome = await pollConnectorSyncUntilSettled(workspaceContext.refreshConnectors, {
+        connectorId: created?.id,
+        waitForCompanion: source === 'supabase' && !created?.id,
+        isCancelled: () => pollAbortRef.current,
+      });
+      if (created?.id) schemaPollIdsRef.current.delete(created.id);
+      if (outcome === 'completed') {
+        toast.success('Schema sync complete — tables are ready.');
+      } else if (outcome === 'failed') {
+        toast.error('Schema sync failed. Open the connector to retry or reconnect.');
+      } else if (outcome === 'timeout') {
+        if (created?.id) setSchemaPollTimedOutId(created.id);
+        toast.message('Schema sync is still running — tables will appear once it finishes.');
+      }
+    }
+  };
+
+  const handleRetrySync = async (connectorId: string) => {
+    if (!user || !workspaceId || retryingSyncId || !workspaceContext?.refreshConnectors) return;
+    setRetryingSyncId(connectorId);
+    try {
+      const token = await user.getIdToken();
+      await apiClient.syncConnector(token, workspaceId, connectorId);
+      await workspaceContext.refreshConnectors({ silent: true });
+      toast.message('Schema sync restarted…');
+      const outcome = await pollConnectorSyncUntilSettled(workspaceContext.refreshConnectors, {
+        connectorId,
+        isCancelled: () => pollAbortRef.current,
+      });
+      if (outcome === 'completed') {
+        toast.success('Schema sync complete — tables are ready.');
+      } else if (outcome === 'failed') {
+        toast.error('Schema sync failed again. Check the database connection and credentials.');
+      }
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not restart schema sync.');
+    } finally {
+      setRetryingSyncId(null);
+    }
+  };
+
+  const handleConnectionPanelClose = () => {
+    setShowConnectionPanel(false);
+    if (skipCloseRefreshRef.current) {
+      skipCloseRefreshRef.current = false;
+      return;
+    }
+    // Refetch even when dismissed via X (upload may already exist server-side).
+    void refreshCatalogInBackground();
+  };
+
+  const getMenuItems = (): ActionSheetItem[] => {
+    const items: ActionSheetItem[] = [];
+
+    if (selectedItemForMenu) {
+      items.push({
+        id: 'use-in-chat',
+        label: 'Use in AI Analyst',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+        ),
+        variant: 'default' as const,
+        onClick: () => {
+          if (selectedItemForMenu) {
+            handleUseInChat({
+              kind: selectedItemForMenu.type === 'connector' ? 'connector' : 'datasource',
+              id: selectedItemForMenu.id,
+            });
+          }
+        },
+      });
+    }
+
+    if (selectedItemForMenu?.type === 'datasource') {
+      items.push({
+        id: 'preview',
+        label: 'Preview Data',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        ),
+        variant: 'default' as const,
+        onClick: () => {
+          if (selectedItemForMenu) handlePreview(selectedItemForMenu.id);
+        },
+      });
+
+      if (canMutateSelected()) {
+        items.push({
+          id: 'rename',
+          label: 'Rename',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          ),
+          variant: 'default' as const,
+          onClick: handleRename,
+        });
+
+        items.push({
+          id: 'update',
+          label: 'Update Dataset',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          ),
+          variant: 'default' as const,
+          onClick: handleEdit,
+        });
+      }
+    }
+
+    if (canMutateSelected()) {
+      items.push({
+        id: 'delete',
+        label: selectedItemForMenu?.type === 'datasource' ? 'Delete Dataset' : 'Delete Connector',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        ),
+        variant: 'danger' as const,
+        onClick: handleDelete,
+      });
+    }
+
+    return items;
+  };
+
+  const getContextMenuItems = (): ContextMenuItem[] => {
+    const items: ContextMenuItem[] = [];
+
+    if (selectedItemForMenu) {
+      items.push({
+        id: 'use-in-chat',
+        label: 'Use in AI Analyst',
+        icon: <MessageSquare size={16} strokeWidth={2} />,
+        variant: 'default',
+        onClick: () => {
+          if (selectedItemForMenu) {
+            handleUseInChat({
+              kind: selectedItemForMenu.type === 'connector' ? 'connector' : 'datasource',
+              id: selectedItemForMenu.id,
+            });
+          }
+        },
+      });
+    }
+
+    if (selectedItemForMenu?.type === 'datasource') {
+      items.push({
+        id: 'preview',
+        label: 'Preview Data',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        ),
+        variant: 'default',
+        onClick: () => {
+          if (selectedItemForMenu) handlePreview(selectedItemForMenu.id);
+        },
+      });
+
+      if (canMutateSelected()) {
+        items.push({
+          id: 'rename',
+          label: 'Rename',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+            </svg>
+          ),
+          variant: 'default',
+          onClick: handleRename,
+        });
+
+        items.push({
+          id: 'update',
+          label: 'Update Dataset',
+          icon: (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17 8 12 3 7 8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          ),
+          variant: 'default',
+          onClick: handleEdit,
+        });
+      }
+    }
+
+    if (canMutateSelected()) {
+      items.push({
+        id: 'delete',
+        label: selectedItemForMenu?.type === 'datasource' ? 'Delete Dataset' : 'Delete Connector',
+        icon: (
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="3 6 5 6 21 6" />
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+          </svg>
+        ),
+        variant: 'danger',
+        onClick: handleDelete,
+      });
+    }
+
+    return items;
+  };
+
+  const hasContent = unifiedSources.length > 0;
+  /** Avoid blanking the catalog on background refetch after connect/close. */
+  const showCatalogLoading = loading && !hasContent;
+  let catalogProgressLabel = 'Loading tables from this source…';
+  if (
+    selectedCatalogRow?.kind === 'connector' &&
+    isSchemaSyncInProgress(selectedCatalogRow.connector.metadata_status)
+  ) {
+    catalogProgressLabel = 'Loading schemas…';
+  } else if (isConnectorSource && browseLevel === 'schemas') {
+    catalogProgressLabel = 'Loading schemas from this source…';
+  }
+
+  const renderSourceIcon = (row: UnifiedRow) => {
+    const iconProps = { size: 16, strokeWidth: 1.75 as const };
+    if (row.kind === 'connector') return <Database {...iconProps} />;
+    const mime = row.datasource.mime_type?.toLowerCase() || '';
+    if (mime.includes('json')) return <FileJson {...iconProps} />;
+    if (
+      mime.includes('csv') ||
+      mime.includes('excel') ||
+      mime.includes('sheet') ||
+      mime.includes('spreadsheet')
+    ) {
+      return <FileSpreadsheet {...iconProps} />;
+    }
+    return <Layers {...iconProps} />;
+  };
+
+  const tableCountForSource = (row: UnifiedRow): number | null => {
+    const key = catalogSourceKey({ kind: row.kind, id: row.id });
+    if (selectedCatalogSource && catalogSourceKey(selectedCatalogSource) === key) {
+      return catalogTables.length;
+    }
+    if (row.kind === 'datasource' && row.datasource.metadata_json?.columns?.length) {
+      return 1;
+    }
+    return null;
+  };
 
   return (
-    <div className="datasets-page">
+    <div className="schema-catalog-page app-page-root analytics-page">
       {isMobile && (
         <MobileChatHeader
           onWorkspaceClick={() => setShowWorkspaceSwitcher(true)}
-          onDatasetClick={() => {/* Already on datasets page */ }}
+          onDatasetClick={() => {
+            /* Already on datasets page */
+          }}
           showDatasetSelector={false}
         />
       )}
 
-      <div className="datasets-header">
-        <h1>Datasets</h1>
-        <p>Select a dataset to start analyzing</p>
+      <div className="sc-inner">
+        <header className="sc-page-header">
+          <div>
+            <div className="sc-page-header__title-row">
+              <span className="sc-page-header__icon" aria-hidden>
+                <Database size={22} strokeWidth={1.75} />
+              </span>
+              <div>
+                <h1>Database Schema Catalog</h1>
+                <p className="sc-page-header__lede">
+                  Audit and map enterprise datasources, table schemas, and secure encrypted
+                  pipelines.
+                </p>
+              </div>
+            </div>
+          </div>
+          {datasourcesAtLimit && canUpgrade ? (
+            <button
+              type="button"
+              className="btn-gradient-primary sc-connect-cta--desktop"
+              onClick={openConnectOrUpgrade}
+              title={UPGRADE_TO_ADD_DATASOURCES_LABEL}
+            >
+              {UPGRADE_TO_ADD_DATASOURCES_LABEL}
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="btn-gradient-primary sc-connect-cta--desktop"
+              onClick={openConnectOrUpgrade}
+              disabled={datasourcesAtLimit}
+              title={datasourcesAtLimit ? PLAN_MANAGED_BY_OWNER_COPY : undefined}
+              data-tour="connect-source"
+            >
+              <Plus size={18} strokeWidth={2.5} aria-hidden />
+              Connect Enterprise DB
+            </button>
+          )}
+        </header>
+
+        {!showCatalogLoading && hasContent && (
+          <div className="sc-toolbar">
+            {unifiedSources.length > SEARCH_VISIBILITY_THRESHOLD && (
+              <div className="sc-search-wrap">
+                <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
+                <input
+                  className="sc-search-input"
+                  placeholder="Search by name, type, or host…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Search data sources"
+                />
+              </div>
+            )}
+            <div className="sc-filter-pills" role="tablist" aria-label="Filter sources">
+              {(['all', 'files', 'databases'] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="tab"
+                  aria-selected={sourceFilter === key}
+                  className={`sc-filter-pill ${sourceFilter === key ? 'is-active' : ''}`}
+                  onClick={() => setSourceFilter(key)}
+                >
+                  {key === 'all' ? 'All' : key === 'files' ? 'Files' : 'Databases'}
+                </button>
+              ))}
+            </div>
+            <span className="ds-pill ds-pill--muted" aria-live="polite">
+              {activeConnectionCount} active
+            </span>
+          </div>
+        )}
+
+        <button
+          className="upload-dataset-fab"
+          type="button"
+          onClick={openConnectOrUpgrade}
+          disabled={datasourcesAtLimit && !canUpgrade}
+          aria-label={
+            datasourcesAtLimit && canUpgrade
+              ? UPGRADE_TO_ADD_DATASOURCES_LABEL
+              : 'Connect data source'
+          }
+          title={
+            datasourcesAtLimit
+              ? canUpgrade
+                ? UPGRADE_TO_ADD_DATASOURCES_LABEL
+                : PLAN_MANAGED_BY_OWNER_COPY
+              : undefined
+          }
+        >
+          {datasourcesAtLimit && canUpgrade ? (
+            <span className="upload-dataset-fab__upgrade">Upgrade</span>
+          ) : (
+            <Plus size={26} strokeWidth={2.5} />
+          )}
+        </button>
+
+        {showCatalogLoading ? (
+          <div className="sc-catalog-layout">
+            <div className="sc-panel sc-col--sources">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="sc-skeleton-row" />
+              ))}
+            </div>
+            <div className="sc-panel">
+              <div className="sc-skeleton-row" />
+              <div className="sc-skeleton-row" />
+            </div>
+            <div className="sc-panel">
+              <div className="sc-skeleton-row" />
+            </div>
+          </div>
+        ) : !hasContent ? (
+          <div className="sc-empty-hero">
+            <Database size={40} strokeWidth={1.5} aria-hidden />
+            <h3>No data sources yet</h3>
+            <p>
+              Upload a spreadsheet or connect PostgreSQL to explore schemas and analyze with AI.
+            </p>
+            {datasourcesAtLimit && canUpgrade ? (
+              <button
+                type="button"
+                className="btn-gradient-primary"
+                onClick={openConnectOrUpgrade}
+                title={UPGRADE_TO_ADD_DATASOURCES_LABEL}
+              >
+                {UPGRADE_TO_ADD_DATASOURCES_LABEL}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn-gradient-primary"
+                onClick={openConnectOrUpgrade}
+                disabled={datasourcesAtLimit}
+                title={datasourcesAtLimit ? PLAN_MANAGED_BY_OWNER_COPY : undefined}
+              >
+                <Plus size={18} strokeWidth={2.5} aria-hidden />
+                Connect Enterprise DB
+              </button>
+            )}
+          </div>
+        ) : filteredSources.length === 0 ? (
+          <div className="sc-empty-hero">
+            <h3>No matches</h3>
+            <p>Try another search or reset filters.</p>
+            <button
+              type="button"
+              className="sc-link-btn"
+              onClick={() => {
+                setSearchQuery('');
+                setSourceFilter('all');
+              }}
+            >
+              Clear filters
+            </button>
+          </div>
+        ) : (
+          <div
+            className={`sc-catalog-layout ${isMobile ? 'sc-catalog-layout--mobile' : ''}`}
+            data-mobile-pane={isMobile ? mobileCatalogPane : undefined}
+          >
+            <div
+              className={`sc-col sc-col--sources ${isMobile && mobileCatalogPane !== 'sources' ? 'sc-col--mobile-hidden' : ''}`}
+            >
+              <div className="sc-panel">
+                <div className="sc-panel__head">Encrypted sources</div>
+                <div className="sc-panel__body">
+                  <div className="sc-sources-list">
+                    {filteredSources.map((row) => {
+                      const ref: CatalogSourceRef = { kind: row.kind, id: row.id };
+                      const isSelected =
+                        selectedCatalogSource?.kind === ref.kind &&
+                        selectedCatalogSource?.id === ref.id;
+                      const pill =
+                        row.kind === 'connector'
+                          ? getConnectorPill(row.connector.status)
+                          : getDatasourcePill(row.datasource.status);
+                      const title = getSourceDisplayName(
+                        row.kind,
+                        row.kind === 'connector' ? row.connector : undefined,
+                        row.kind === 'datasource' ? row.datasource : undefined,
+                      );
+                      const hostHint = getSourceHostHint(
+                        row.kind,
+                        row.kind === 'connector' ? row.connector : undefined,
+                        row.kind === 'datasource' ? row.datasource : undefined,
+                      );
+                      const tableLabel = getSourceTableCountLabel(
+                        row.kind,
+                        tableCountForSource(row),
+                        row.kind === 'connector' ? row.connector.metadata_status : undefined,
+                      );
+                      const menuType = row.kind === 'connector' ? 'connector' : 'datasource';
+                      const ready =
+                        row.kind === 'datasource'
+                          ? row.datasource.status === 'READY'
+                          : row.connector.status === 'ACTIVE';
+                      const isFailed =
+                        row.kind === 'datasource'
+                          ? row.datasource.status === 'FAILED'
+                          : row.connector.status === 'FAILED';
+                      const isDatasourcePending = row.kind === 'datasource' && !ready && !isFailed;
+                      const loadingLabel =
+                        row.kind === 'connector' ? 'Loading schemas…' : 'Loading tables…';
+
+                      return (
+                        <div
+                          key={catalogSourceKey(ref)}
+                          role="button"
+                          tabIndex={ready || row.kind !== 'datasource' || isFailed ? 0 : -1}
+                          className={[
+                            'sc-source-item',
+                            isSelected ? 'is-selected' : '',
+                            isFailed ? 'is-failed' : '',
+                            isDatasourcePending ? 'is-disabled' : '',
+                            isSelected && tablesLoading ? 'is-loading' : '',
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                          aria-disabled={isDatasourcePending ? true : undefined}
+                          onClick={() => {
+                            if (isDatasourcePending) return;
+                            handleCatalogSourceSelect(ref);
+                          }}
+                          onKeyDown={(e) => {
+                            if (isDatasourcePending) return;
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              handleCatalogSourceSelect(ref);
+                            }
+                          }}
+                        >
+                          <div className="sc-source-item__row">
+                            <span className="sc-source-item__icon" aria-hidden>
+                              {renderSourceIcon(row)}
+                            </span>
+                            <div className="sc-source-item__body">
+                              <div className="sc-source-item__header">
+                                <div className="sc-source-item__title-block">
+                                  <p className="sc-source-item__name">
+                                    {title}
+                                    {row.kind === 'datasource' && row.datasource.is_demo ? (
+                                      <span className="sc-source-item__sample-badge">
+                                        Sample data
+                                      </span>
+                                    ) : null}
+                                  </p>
+                                  <p className="sc-source-item__host">{hostHint}</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  className="sc-source-item__actions-btn"
+                                  aria-haspopup="menu"
+                                  aria-label={`Actions for ${title}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isMobile) handleMoreClick(e, ref.id, menuType);
+                                    else handleDesktopMenuClick(e, ref.id, menuType);
+                                  }}
+                                >
+                                  Actions
+                                  <ChevronDown size={14} strokeWidth={2.25} aria-hidden />
+                                </button>
+                              </div>
+                              <div className="sc-source-item__meta">
+                                <span className={`sc-status-dot ${statusDotClass(pill.className)}`}>
+                                  {pill.label}
+                                </span>
+                                <span>
+                                  {isSelected && tablesLoading ? loadingLabel : tableLabel}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          {isSelected && tablesLoading ? (
+                            <div className="sc-source-item__progress" aria-hidden>
+                              <span className="sc-source-item__progress-bar" />
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <section
+              className={`sc-col sc-col--tables ${
+                isMobile && mobileCatalogPane !== 'tables' && mobileCatalogPane !== 'schemas'
+                  ? 'sc-col--mobile-hidden'
+                  : ''
+              }`}
+            >
+              <div className="sc-panel">
+                {(isMobile || (isConnectorSource && browseLevel === 'tables')) && (
+                  <button
+                    type="button"
+                    className={isMobile ? 'sc-mobile-back' : 'sc-browse-back'}
+                    onClick={handleBrowseBack}
+                  >
+                    <ChevronLeft size={16} strokeWidth={2.25} aria-hidden />
+                    {isConnectorSource && browseLevel === 'tables' ? 'All schemas' : 'Sources'}
+                  </button>
+                )}
+
+                {isConnectorSource && browseLevel === 'tables' && selectedSchemaName ? (
+                  <div className="sc-browse-crumb" aria-label="Catalog path">
+                    <button type="button" onClick={handleBackToSchemas}>
+                      Schemas
+                    </button>
+                    <span aria-hidden>/</span>
+                    <strong>{selectedSchemaName}</strong>
+                  </div>
+                ) : null}
+
+                <div className="sc-panel__head">
+                  {isConnectorSource && browseLevel === 'schemas'
+                    ? `Schemas (${tablesLoading ? '…' : schemaGroups.length})`
+                    : isConnectorSource
+                      ? `Tables in ${selectedSchemaName ?? 'schema'} (${tablesLoading ? '…' : browseTables.length})`
+                      : `Sheets & tables (${tablesLoading ? '…' : catalogTables.length})`}
+                </div>
+                {showTablesSearch ? (
+                  <div className="sc-tables-search">
+                    <div className="sc-search-wrap">
+                      <Search className="sc-search-icon" size={18} strokeWidth={2} aria-hidden />
+                      <input
+                        className="sc-search-input"
+                        placeholder={
+                          isConnectorSource && browseLevel === 'schemas'
+                            ? 'Search schemas…'
+                            : isConnectorSource
+                              ? 'Search tables…'
+                              : 'Search sheets & tables…'
+                        }
+                        value={tableSearchQuery}
+                        onChange={(e) => setTableSearchQuery(e.target.value)}
+                        aria-label="Search catalog"
+                        disabled={
+                          !selectedCatalogSource ||
+                          (selectedCatalogRow?.kind === 'connector' &&
+                            selectedCatalogRow.connector.metadata_status !== 'COMPLETED') ||
+                          (selectedCatalogRow?.kind === 'datasource' &&
+                            selectedCatalogRow.datasource.status !== 'READY')
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                <div className="sc-panel__body sc-panel__body--flush">
+                  {tablesLoading ? (
+                    <div className="sc-catalog-progress" role="status" aria-live="polite">
+                      <div className="sc-catalog-progress__track">
+                        <span className="sc-catalog-progress__bar" />
+                      </div>
+                      <p className="sc-catalog-progress__label">{catalogProgressLabel}</p>
+                      <div className="sc-skeleton-row" />
+                      <div className="sc-skeleton-row" />
+                      <div className="sc-skeleton-row" />
+                    </div>
+                  ) : selectedCatalogRow?.kind === 'connector' &&
+                    isSchemaSyncInProgress(selectedCatalogRow.connector.metadata_status) ? (
+                    <div className="sc-empty-panel">
+                      <h3>Loading schemas…</h3>
+                      <p>
+                        {schemaPollTimedOutId === selectedCatalogRow.connector.id
+                          ? 'Schema sync is still running — tables will appear once it finishes.'
+                          : 'This project is linked. Schemas appear when metadata sync completes.'}
+                      </p>
+                    </div>
+                  ) : selectedCatalogRow?.kind === 'connector' &&
+                    selectedCatalogRow.connector.metadata_status === 'FAILED' ? (
+                    <div className="sc-empty-panel">
+                      <h3>Schema sync failed</h3>
+                      <p>
+                        {selectedCatalogRow.connector.schema_sync_error ||
+                          'Could not discover schemas for this database. Try reconnecting or syncing again.'}
+                      </p>
+                      <button
+                        type="button"
+                        className="sc-empty-panel__cta"
+                        onClick={() => void handleRetrySync(selectedCatalogRow.connector.id)}
+                        disabled={Boolean(retryingSyncId)}
+                      >
+                        {retryingSyncId === selectedCatalogRow.connector.id
+                          ? 'Retrying sync…'
+                          : 'Retry sync'}
+                      </button>
+                    </div>
+                  ) : selectedCatalogRow?.kind === 'datasource' &&
+                    selectedCatalogRow.datasource.status !== 'READY' ? (
+                    <div className="sc-empty-panel">
+                      <h3>Source processing</h3>
+                      <p>Schema tables are available when this dataset reaches Ready status.</p>
+                    </div>
+                  ) : isConnectorSource && browseLevel === 'schemas' ? (
+                    filteredSchemaGroups.length === 0 ? (
+                      <div className="sc-empty-panel">
+                        <p>No schemas match your search.</p>
+                      </div>
+                    ) : (
+                      <ul className="sc-schema-list">
+                        {filteredSchemaGroups.map((group) => (
+                          <li key={group.name}>
+                            <button
+                              type="button"
+                              className={`sc-schema-item ${selectedSchemaName === group.name ? 'is-selected' : ''}`}
+                              onClick={() => handleSelectSchema(group.name)}
+                            >
+                              <span className="sc-schema-item__icon" aria-hidden>
+                                <FolderOpen size={18} strokeWidth={2} />
+                              </span>
+                              <span className="sc-schema-item__body">
+                                <span className="sc-schema-item__name">{group.name}</span>
+                                <span className="sc-schema-item__meta">
+                                  {group.tableCount} table{group.tableCount === 1 ? '' : 's'}
+                                  {group.rowCount > 0
+                                    ? ` · ${group.rowCount.toLocaleString()} rows`
+                                    : ''}
+                                </span>
+                              </span>
+                              <ChevronRight
+                                className="sc-schema-item__chevron"
+                                size={16}
+                                strokeWidth={2.25}
+                                aria-hidden
+                              />
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  ) : browseTables.length === 0 ? (
+                    <div className="sc-empty-panel">
+                      <p>
+                        {isConnectorSource
+                          ? 'No tables in this schema match your search.'
+                          : 'No tables match your search.'}
+                      </p>
+                    </div>
+                  ) : (
+                    <ul className="sc-table-list">
+                      {browseTables.map((table) => {
+                        const identity = parseTableIdentity(table);
+                        return (
+                          <li key={table.table_name}>
+                            <button
+                              type="button"
+                              className={`sc-table-item ${selectedTableName === table.table_name ? 'is-selected' : ''}`}
+                              onClick={() => handleSelectTable(table.table_name)}
+                            >
+                              <span className="sc-table-item__leading" aria-hidden>
+                                <Table2 size={16} strokeWidth={2} />
+                              </span>
+                              <span className="sc-table-item__label">
+                                <span className="sc-table-item__name">{identity.name}</span>
+                                {isConnectorSource ? (
+                                  <span className="sc-table-item__sub">
+                                    {table.column_count || table.columns?.length || 0} cols
+                                  </span>
+                                ) : null}
+                              </span>
+                              <span className="sc-table-item__count">
+                                {table.row_count.toLocaleString()} rows
+                              </span>
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section
+              className={`sc-col sc-col--detail ${isMobile && mobileCatalogPane !== 'preview' ? 'sc-col--mobile-hidden' : ''}`}
+            >
+              <div className="sc-panel sc-panel--preview">
+                {isMobile && (
+                  <button
+                    type="button"
+                    className="sc-mobile-back"
+                    onClick={() => setMobileCatalogPane('tables')}
+                  >
+                    <ChevronLeft size={18} strokeWidth={2.25} aria-hidden />
+                    Tables
+                  </button>
+                )}
+                {selectedCatalogRow?.kind === 'connector' &&
+                isSchemaSyncInProgress(selectedCatalogRow.connector.metadata_status) ? (
+                  <div className="sc-empty-panel">
+                    <h3>Loading schemas…</h3>
+                    <p>
+                      {schemaPollTimedOutId === selectedCatalogRow.connector.id
+                        ? 'Schema sync is still running — table details will appear once it finishes.'
+                        : 'Table details appear here when metadata sync completes.'}
+                    </p>
+                  </div>
+                ) : selectedCatalogRow?.kind === 'connector' &&
+                  selectedCatalogRow.connector.metadata_status === 'FAILED' ? (
+                  <div className="sc-empty-panel">
+                    <h3>Schema sync failed</h3>
+                    <p>
+                      {selectedCatalogRow.connector.schema_sync_error ||
+                        'Could not load schema details for this database.'}
+                    </p>
+                    <button
+                      type="button"
+                      className="sc-empty-panel__cta"
+                      onClick={() => void handleRetrySync(selectedCatalogRow.connector.id)}
+                      disabled={Boolean(retryingSyncId)}
+                    >
+                      {retryingSyncId === selectedCatalogRow.connector.id
+                        ? 'Retrying sync…'
+                        : 'Retry sync'}
+                    </button>
+                  </div>
+                ) : selectedCatalogRow?.kind === 'connector' && selectedTable ? (
+                  <ConnectorTableDetail
+                    table={selectedTable}
+                    activeTab={connectorDetailTab}
+                    onTabChange={setConnectorDetailTab}
+                    preview={previewData}
+                    previewLoading={previewLoading}
+                    previewError={previewError}
+                    page={previewPage}
+                    pageSize={previewPageSize}
+                    onPageChange={setPreviewPage}
+                    onPageSizeChange={(size) => {
+                      setPreviewPageSize(size);
+                      setPreviewPage(1);
+                    }}
+                    searchQuery={previewSearch}
+                    onSearchChange={handlePreviewSearchChange}
+                  />
+                ) : selectedCatalogRow?.kind === 'connector' &&
+                  browseLevel === 'schemas' &&
+                  !selectedTable ? (
+                  <div className="sc-empty-panel sc-empty-panel--guide">
+                    <div className="sc-empty-panel__icon" aria-hidden>
+                      <FolderOpen size={28} strokeWidth={1.75} />
+                    </div>
+                    <h3>Pick a schema</h3>
+                    <p>
+                      PostgreSQL catalogs start with schemas. Open one to browse its tables, then
+                      inspect columns or preview rows.
+                    </p>
+                  </div>
+                ) : selectedCatalogRow?.kind === 'connector' &&
+                  browseLevel === 'tables' &&
+                  !selectedTable ? (
+                  <div className="sc-empty-panel sc-empty-panel--guide">
+                    <div className="sc-empty-panel__icon" aria-hidden>
+                      <Table2 size={28} strokeWidth={1.75} />
+                    </div>
+                    <h3>Pick a table</h3>
+                    <p>
+                      Select a table in <strong>{selectedSchemaName ?? 'this schema'}</strong> to
+                      view columns or preview its data.
+                    </p>
+                  </div>
+                ) : selectedCatalogRow?.kind === 'datasource' &&
+                  selectedCatalogRow.datasource.status !== 'READY' ? (
+                  <div className="sc-empty-panel">
+                    <h3>Source processing</h3>
+                    <p>Data preview is available when this dataset reaches Ready status.</p>
+                  </div>
+                ) : selectedTable && previewDatasetId ? (
+                  <DatasetPreviewGrid
+                    embedded
+                    tableName={selectedTable.table_name}
+                    estimatedRows={selectedTable.row_count}
+                    schemaColumnCount={selectedTable.column_count}
+                    preview={previewData}
+                    loading={previewLoading}
+                    page={previewPage}
+                    pageSize={previewPageSize}
+                    onPageChange={setPreviewPage}
+                    onPageSizeChange={(size) => {
+                      setPreviewPageSize(size);
+                      setPreviewPage(1);
+                    }}
+                    searchQuery={previewSearch}
+                    onSearchChange={handlePreviewSearchChange}
+                    onExpand={() => handlePreview(previewDatasetId, selectedTable.table_name)}
+                  />
+                ) : (
+                  <div className="sc-empty-panel sc-empty-panel--guide">
+                    <div className="sc-empty-panel__icon" aria-hidden>
+                      <Layers size={28} strokeWidth={1.75} />
+                    </div>
+                    <h3>Select a table</h3>
+                    <p>Choose a sheet or table to preview rows in the data grid.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        )}
       </div>
 
-      <button className="upload-dataset-btn" onClick={() => setShowUploadModal(true)}>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
-        Add New Dataset
-      </button>
-
-      {loading ? (
-        <div className="datasets-loading">
-          <div className="spinner" />
-          <p>Loading datasets...</p>
-        </div>
-      ) : datasources.length === 0 ? (
-        <div className="datasets-empty">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
-          </svg>
-          <h3>No datasets yet</h3>
-          <p>Upload a CSV, Excel, or JSON file to get started</p>
-        </div>
-      ) : (
-        <div className="datasets-list">
-          {datasources.map((dataset) => (
-            <div key={dataset.id} className="dataset-card-wrapper">
-              <button
-                className={`dataset-card ${datasourceContext?.selectedDatasourceId === dataset.id ? 'active' : ''}`}
-                onClick={() => handleDatasetSelect(dataset.id)}
-                disabled={dataset.status !== 'READY'}
-              >
-                <div className={`dataset-icon ${getFileTypeIcon(dataset.mime_type || '').toLowerCase()}`}>
-                  {getFileTypeIcon(dataset.mime_type || '')}
-                </div>
-
-                <div className="dataset-content">
-                  <h3 className="dataset-name">{dataset.name}</h3>
-
-                  <div className="dataset-meta-row">
-                    <span className={`dataset-status ${getStatusColor(dataset.status)}`}>
-                      {dataset.status}
-                    </span>
-                    <span className="dataset-meta-separator">•</span>
-                    <span className="dataset-type">{dataset.mime_type || 'Unknown'}</span>
-                    {dataset.file_size && (
-                      <>
-                        <span className="dataset-meta-separator">•</span>
-                        <span className="dataset-size">{formatFileSize(dataset.file_size)}</span>
-                      </>
-                    )}
-                  </div>
-
-                  {dataset.metadata_json?.row_count ? (
-                    <div className="dataset-stats">
-                      <span>{dataset.metadata_json.row_count.toLocaleString()} rows</span>
-                      {Boolean(dataset.metadata_json.col_count) && (
-                        <>
-                          <span className="dataset-meta-separator">•</span>
-                          <span>{dataset.metadata_json.col_count} columns</span>
-                        </>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-
-                <svg className="chevron-right" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-
-                {/* Desktop Menu Button */}
-                {!isMobile && (
-                  <button
-                    className="dataset-more-btn-desktop"
-                    onClick={(e) => handleDesktopMenuClick(e, dataset.id)}
-                    aria-label="More options"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="12" cy="12" r="1" />
-                      <circle cx="12" cy="5" r="1" />
-                      <circle cx="12" cy="19" r="1" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Desktop Preview Button */}
-                {!isMobile && dataset.status === 'READY' && (
-                  <button
-                    className="dataset-preview-btn-desktop"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handlePreview(dataset.id);
-                    }}
-                  >
-                    Preview
-                  </button>
-                )}
-              </button>
-
-              {/* Mobile-only more options button */}
-              {isMobile && (
-                <button
-                  className="dataset-more-btn-mobile"
-                  onClick={(e) => handleMoreClick(e, dataset.id)}
-                  aria-label="More options"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="1" />
-                    <circle cx="12" cy="5" r="1" />
-                    <circle cx="12" cy="19" r="1" />
-                  </svg>
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {showUploadModal && workspaceId && (
-        <UploadModal
+      {showConnectionPanel && workspaceId && (
+        <DatasourceConnectionPanel
           workspaceId={workspaceId}
-          onClose={() => setShowUploadModal(false)}
-          onSuccess={() => {
-            setShowUploadModal(false);
-            // Refresh will happen automatically via context
+          initialView={connectPanelInitialView}
+          onClose={handleConnectionPanelClose}
+          onSuccess={(created, source) => {
+            void handleLiveSourceSuccess(created, source);
           }}
         />
       )}
@@ -429,7 +1935,7 @@ const DatasetsPage: React.FC = () => {
               const newWorkspace = workspaceContext.workspaces.at(-1);
               if (newWorkspace && workspaceContext.setCurrentWorkspace) {
                 workspaceContext.setCurrentWorkspace(newWorkspace);
-                localStorage.setItem('activeWorkspaceId', newWorkspace.id);
+                writeActiveWorkspaceId(newWorkspace.id);
                 navigate(`/workspace/${newWorkspace.id}`);
               }
             }
@@ -440,13 +1946,13 @@ const DatasetsPage: React.FC = () => {
       {/* Mobile Action Sheet for dataset options */}
       <ActionSheet
         isOpen={showActionSheet}
-        title="Dataset Options"
+        title={selectedItemForMenu?.type === 'datasource' ? 'Dataset Options' : 'Connector Options'}
         items={getMenuItems()}
         onClose={() => {
           setShowActionSheet(false);
           // Only clear selection if no modal or context menu is being opened
           if (!showEditModal && !showDeleteConfirm && !showRenameModal && !showContextMenu) {
-            setSelectedDatasetForMenu(null);
+            setSelectedItemForMenu(null);
           }
         }}
       />
@@ -461,7 +1967,7 @@ const DatasetsPage: React.FC = () => {
           setMenuAnchorEl(null);
           // Only clear selection if no modal is being opened
           if (!showEditModal && !showDeleteConfirm && !showRenameModal) {
-            setSelectedDatasetForMenu(null);
+            setSelectedItemForMenu(null);
           }
         }}
       />
@@ -469,8 +1975,8 @@ const DatasetsPage: React.FC = () => {
       {/* Delete Confirmation Dialog */}
       <ConfirmDialog
         isOpen={showDeleteConfirm}
-        title="Delete Dataset?"
-        message="This action cannot be undone. All data and chat history associated with this dataset will be permanently deleted."
+        title={itemToDelete?.type === 'datasource' ? 'Delete Dataset?' : 'Delete Connector?'}
+        message="This action cannot be undone. All data associated with this source will be permanently removed from your workspace."
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"
@@ -478,7 +1984,7 @@ const DatasetsPage: React.FC = () => {
         onConfirm={handleConfirmDelete}
         onCancel={() => {
           setShowDeleteConfirm(false);
-          setDatasetToDelete(null);
+          setItemToDelete(null);
         }}
       />
 
@@ -487,7 +1993,7 @@ const DatasetsPage: React.FC = () => {
         <DatasourceModal
           mode="edit"
           datasourceId={datasetToEdit}
-          initialName={datasources.find(ds => ds.id === datasetToEdit)?.name || ''}
+          initialName={datasources.find((ds) => ds.id === datasetToEdit)?.name || ''}
           onClose={() => {
             setShowEditModal(false);
             setDatasetToEdit(null);
@@ -501,7 +2007,7 @@ const DatasetsPage: React.FC = () => {
         <DatasourceModal
           mode="rename"
           datasourceId={datasetToRename}
-          initialName={datasources.find(ds => ds.id === datasetToRename)?.name || ''}
+          initialName={datasources.find((ds) => ds.id === datasetToRename)?.name || ''}
           onClose={() => {
             setShowRenameModal(false);
             setDatasetToRename(null);

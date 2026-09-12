@@ -66,11 +66,7 @@ export const ChartLegend: React.FC<ChartLegendProps> = ({
           );
         })}
       </div>
-      {hasMore && (
-        <div className="chart-legend__more">
-          +{items.length - maxItems} more
-        </div>
-      )}
+      {hasMore && <div className="chart-legend__more">+{items.length - maxItems} more</div>}
     </div>
   );
 };

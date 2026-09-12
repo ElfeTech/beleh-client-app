@@ -2,14 +2,24 @@
  * Type definitions for the visualization formatting system
  */
 
-import type { FormatConfig as BaseFormatConfig, TimeGranularity as BaseTimeGranularity } from '../utils/formatters';
+import type {
+  FormatConfig as BaseFormatConfig,
+  TimeGranularity as BaseTimeGranularity,
+} from '../utils/formatters';
 
 export type { FormatConfig, TimeGranularity } from '../utils/formatters';
 
 /**
  * Supported format types
  */
-export type FormatType = 'number' | 'currency' | 'percentage' | 'date' | 'time' | 'datetime' | 'string';
+export type FormatType =
+  | 'number'
+  | 'currency'
+  | 'percentage'
+  | 'date'
+  | 'time'
+  | 'datetime'
+  | 'string';
 
 /**
  * Configuration for formatting a specific field

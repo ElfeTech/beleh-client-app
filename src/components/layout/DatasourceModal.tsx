@@ -1,448 +1,795 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import { Upload, FileSpreadsheet, X, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
 import { authService } from '../../services/authService';
-import type { DataSourceResponse, ExcelSheet, SheetRecoveryConfig } from '../../types/api';
+import type { DataSourceResponse, ExcelSheet } from '../../types/api';
 import { StepIndicator } from '../upload/StepIndicator';
 import { SheetSelection } from '../upload/SheetSelection';
-import { HeaderSelection } from '../upload/HeaderSelection';
+import { HeaderRowPicker } from '../upload/HeaderSelection';
 import { useWorkspace } from '../../context/WorkspaceContext';
+import { formatDatasourceError } from '../../utils/apiErrorMessage';
+import {
+  isDatasourcesAtLimit,
+  PLAN_LIMIT_REACHED_TOOLTIP,
+  workspaceLimitUpgradeMessage,
+} from '../../utils/workspaceAccess';
+import {
+  formatSpreadsheetFileSize,
+  spreadsheetUploadHint,
+  validateSpreadsheetUpload,
+} from '../../utils/spreadsheetUpload';
 import './UploadModal.css';
 
 interface DatasourceModalProps {
-    mode: 'add' | 'edit' | 'rename';
-    workspaceId?: string; // Required for add mode
-    datasourceId?: string; // Required for edit/rename mode
-    initialName?: string; // For edit mode
-    onClose: () => void;
-    onSuccess: () => void;
+  mode: 'add' | 'edit' | 'rename';
+  workspaceId?: string; // Required for add mode
+  datasourceId?: string; // Required for edit/rename mode
+  initialName?: string; // For edit mode
+  onClose: () => void;
+  onSuccess: () => void;
 }
 
-type UploadStatus = 'IDLE' | 'UPLOADING' | 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'NEEDS_INPUT';
+type UploadStatus =
+  | 'IDLE'
+  | 'UPLOADING'
+  | 'PENDING'
+  | 'PROCESSING'
+  | 'READY'
+  | 'FAILED'
+  | 'NEEDS_INPUT';
 
-const FLOW_STEPS = [
-    { id: 1, label: 'Upload' },
-    { id: 2, label: 'Select Sheets' },
-    { id: 3, label: 'Set Headers' },
-    { id: 4, label: 'Finalize' },
-];
+const STEP_SUBTITLES: Record<number, string> = {
+  1: 'Upload a spreadsheet and name your dataset. We support CSV and Excel.',
+  2: 'Choose which sheets to include. Preview samples help you decide.',
+  3: 'Tap the row that has the column titles. Preview is a sliced sample.',
+  4: 'Importing the full sheets you selected.',
+};
 
-export function DatasourceModal({ mode, workspaceId, datasourceId, initialName = '', onClose, onSuccess }: DatasourceModalProps) {
-    const { user } = useAuth();
-    const { refreshDatasources, saveWorkspaceState, currentWorkspace } = useWorkspace();
-    const [file, setFile] = useState<File | null>(null);
-    const [name, setName] = useState(initialName);
-    const [uploadStatus, setUploadStatus] = useState<UploadStatus>('IDLE');
-    const [error, setError] = useState<string | null>(null);
-    const [progress, setProgress] = useState(0);
-    const [currentStep, setCurrentStep] = useState(1);
-    const [datasource, setDatasource] = useState<DataSourceResponse | null>(null);
-    const [sheets, setSheets] = useState<ExcelSheet[]>([]);
+function buildHeaderQueue(sheets: ExcelSheet[]): ExcelSheet[] {
+  return sheets.filter((s) => s.selected && s.needs_user_input);
+}
 
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const pollIntervalRef = useRef<number | null>(null);
+export function DatasourceModal({
+  mode,
+  workspaceId,
+  datasourceId,
+  initialName = '',
+  onClose,
+  onSuccess,
+}: DatasourceModalProps) {
+  const { user } = useAuth();
+  const {
+    refreshDatasources,
+    refreshWorkspaceUsage,
+    saveWorkspaceState,
+    currentWorkspace,
+    workspaceUsage,
+    currentRole,
+  } = useWorkspace();
+  const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState(initialName);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('IDLE');
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [datasource, setDatasource] = useState<DataSourceResponse | null>(null);
+  const [sheets, setSheets] = useState<ExcelSheet[]>([]);
+  const [headerQueue, setHeaderQueue] = useState<ExcelSheet[]>([]);
+  const [headerIndex, setHeaderIndex] = useState(0);
+  const [selectedHeaders, setSelectedHeaders] = useState<Record<string, number>>({});
+  const [includeSheetsStep, setIncludeSheetsStep] = useState(false);
 
-    // Cleanup polling on unmount
-    useEffect(() => {
-        return () => {
-            if (pollIntervalRef.current) {
-                clearInterval(pollIntervalRef.current);
-            }
-        };
-    }, []);
+  const datasourcesAtLimit = mode === 'add' && isDatasourcesAtLimit(workspaceUsage);
 
-    const mapDatasourceToSheets = (ds: DataSourceResponse): ExcelSheet[] => {
-        const validationResult = ds.metadata_json?.validation_result;
-        if (!validationResult || !validationResult.sheets) return [];
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollIntervalRef = useRef<number | null>(null);
+  const submitRecoveryRef = useRef<
+    (
+      ds: DataSourceResponse,
+      sheetsSnapshot: ExcelSheet[],
+      headersSnapshot: Record<string, number>,
+    ) => Promise<void>
+  >(() => Promise.resolve());
 
-        return validationResult.sheets.map(s => ({
-            name: s.sheet_name,
-            status: s.status === 'valid' ? 'READY' : 'NEEDS_ATTENTION',
-            needs_user_input: s.status === 'invalid',
-            preview_rows: s.sample_rows?.map(row => row.values) || [],
-            selected: true,
-            reason: s.reason,
-            issues: s.issues,
-        }));
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+      }
     };
+  }, []);
 
-    const pollDatasetStatus = async (datasetId: string) => {
-        try {
-            const token = authService.getAuthToken();
-            if (!token) return;
+  const mapDatasourceToSheets = (ds: DataSourceResponse): ExcelSheet[] => {
+    const validationResult = ds.metadata_json?.validation_result;
+    if (!validationResult || !validationResult.sheets) return [];
 
-            const dataset: DataSourceResponse = await apiClient.getDatasource(token, datasetId);
+    return validationResult.sheets.map((s) => ({
+      name: s.sheet_name,
+      status: s.status === 'valid' ? 'READY' : 'NEEDS_ATTENTION',
+      needs_user_input: s.status === 'invalid',
+      preview_rows: s.sample_rows?.map((row) => row.values) || [],
+      selected: true,
+      reason: s.reason,
+      issues: s.issues,
+    }));
+  };
 
-            setDatasource(dataset);
+  const enterNeedsInputFlow = (dataset: DataSourceResponse) => {
+    setDatasource(dataset);
+    setUploadStatus('NEEDS_INPUT');
+    setError(null);
+    setProgress(50);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
 
-            // Check if user input is needed (even if status is FAILED)
-            const needsInput = dataset.status === 'NEEDS_INPUT' ||
-                (dataset.status === 'FAILED' && dataset.metadata_json?.requires_user_input);
+    const mappedSheets = mapDatasourceToSheets(dataset);
+    setSheets(mappedSheets);
+    setSelectedHeaders({});
+    const multi = mappedSheets.length > 1;
+    setIncludeSheetsStep(multi);
 
-            if (needsInput) {
-                setUploadStatus('NEEDS_INPUT');
-                if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+    if (multi) {
+      setCurrentStep(2);
+      return;
+    }
 
-                const mappedSheets = mapDatasourceToSheets(dataset);
-                setSheets(mappedSheets);
+    const queue = buildHeaderQueue(mappedSheets);
+    setHeaderQueue(queue);
+    setHeaderIndex(0);
+    if (queue.length === 0) {
+      void submitRecoveryRef.current(dataset, mappedSheets, {});
+      return;
+    }
+    setCurrentStep(3);
+  };
 
-                // Determine next step
-                if (mappedSheets.length > 1) {
-                    setCurrentStep(2);
-                } else if (mappedSheets.some(s => s.needs_user_input)) {
-                    setCurrentStep(3);
-                }
-                setProgress(50);
-            } else if (dataset.status === 'PENDING') {
-                setProgress(60);
-            } else if (dataset.status === 'PROCESSING') {
-                setProgress(80);
-            } else if (dataset.status === 'READY') {
-                setProgress(100);
-                if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+  const pollDatasetStatus = async (datasetId: string) => {
+    try {
+      const token = authService.getAuthToken();
+      if (!token) return;
 
-                // Auto-create chat session and update workspace state
-                try {
-                    const authToken = await user?.getIdToken();
-                    if (authToken && currentWorkspace) {
-                        console.log('[AutoSession] Creating session for dataset:', dataset.id);
-                        const session = await apiClient.createChatSession(authToken, dataset.id, `Chat: ${dataset.name}`);
+      const dataset: DataSourceResponse = await apiClient.getDatasource(token, datasetId);
 
-                        console.log('[AutoSession] Updating workspace state with session:', session.id);
-                        await saveWorkspaceState(currentWorkspace.id, dataset.id, session.id);
+      setDatasource(dataset);
 
-                        // Refresh datasources to ensure the new one is listed
-                        await refreshDatasources();
-                    }
-                } catch (sessionErr) {
-                    console.error('[AutoSession] Failed to initialize chat for new dataset:', sessionErr);
-                }
+      const needsInput =
+        dataset.status === 'NEEDS_INPUT' ||
+        (dataset.status === 'FAILED' && dataset.metadata_json?.requires_user_input);
 
-                setTimeout(() => {
-                    onSuccess();
-                    onClose();
-                }, 1500);
-            } else if (dataset.status === 'FAILED') {
-                setProgress(0);
-                setError(dataset.ingestion_error || 'Dataset processing failed');
-                if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-            }
-        } catch (err) {
-            console.error('Error polling dataset status:', err);
-        }
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const selectedFile = e.target.files?.[0];
-        if (selectedFile) {
-            setFile(selectedFile);
-            if (mode === 'add') {
-                const baseName = selectedFile.name.replace(/\.[^/.]+$/, "");
-                setName(baseName.slice(0, 23));
-            }
-        }
-    };
-
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!user || !name.trim()) return;
-        if (mode === 'add' && !file) return;
-
-        try {
-            setUploadStatus('UPLOADING');
-            setProgress(10);
-            setError(null);
-
-            const token = await user.getIdToken();
-            let result: DataSourceResponse;
-
-            if (mode === 'add') {
-                result = await apiClient.createDatasource(token, workspaceId!, file!, name);
-            } else if (mode === 'rename') {
-                result = await apiClient.renameDatasource(token, datasourceId!, name.trim());
-                setUploadStatus('READY');
-                setProgress(100);
-                setTimeout(() => { onSuccess(); onClose(); }, 1000);
-                return;
-            } else {
-                if (file) {
-                    result = await apiClient.overrideDatasource(token, datasourceId!, file, name.trim());
-                } else {
-                    result = await apiClient.renameDatasource(token, datasourceId!, name.trim());
-                    setUploadStatus('READY');
-                    setProgress(100);
-                    setTimeout(() => { onSuccess(); onClose(); }, 1000);
-                    return;
-                }
-            }
-
-            setDatasource(result);
-
-            const needsInput = result.status === 'NEEDS_INPUT' ||
-                (result.status === 'FAILED' && result.metadata_json?.requires_user_input);
-
-            if (needsInput) {
-                setUploadStatus('NEEDS_INPUT');
-                const mappedSheets = mapDatasourceToSheets(result);
-                setSheets(mappedSheets);
-
-                if (mappedSheets.length > 1) {
-                    setCurrentStep(2);
-                } else if (mappedSheets.some(s => s.needs_user_input)) {
-                    setCurrentStep(3);
-                }
-            } else {
-                setUploadStatus(result.status);
-                if (result.id) {
-                    pollIntervalRef.current = setInterval(() => pollDatasetStatus(result.id), 2000);
-                } else {
-                    console.error('[Upload] Missing ID in response:', result);
-                    setError('Internal error: Missing dataset ID');
-                    setUploadStatus('FAILED');
-                }
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Operation failed');
-            setUploadStatus('FAILED');
-            setProgress(0);
-        }
-    };
-
-    const handleToggleSheet = (sheetName: string) => {
-        setSheets(prev => prev.map(s =>
-            s.name === sheetName ? { ...s, selected: !s.selected } : s
-        ));
-    };
-
-    const handleSheetsContinue = () => {
-        const selectedSheetNames = sheets.filter(s => s.selected).map(s => s.name);
-        if (selectedSheetNames.length === 0) return;
-        setCurrentStep(3);
-    };
-
-    const cleanupFailedDatasource = async () => {
-        if (!datasource?.id || !user) return;
-
-        // Only cleanup if we are in a state that should be cleaned up (failed or intermediate add mode)
-        const isFailed = uploadStatus === 'FAILED' || (datasource.status === 'FAILED');
-        const isIntermediate = currentStep > 1 && currentStep < 4;
-
-        if (mode === 'add' && (isFailed || isIntermediate)) {
-            try {
-                const token = await user.getIdToken();
-                await apiClient.deleteDatasource(token, datasource.id);
-                console.log('[Cleanup] Deleted failed/cancelled datasource:', datasource.id);
-            } catch (err) {
-                console.error('[Cleanup] Failed to delete datasource:', err);
-            }
-        }
-    };
-
-    const handleRecoverySubmit = async (configs: SheetRecoveryConfig[]) => {
-        if (!datasource || !user) return;
-
-        try {
-            setUploadStatus('PROCESSING');
-            const token = await user.getIdToken();
-            const result = await apiClient.recoverDatasource(token, datasource.id, {
-                datasource_id: datasource.id,
-                sheets_to_ingest: sheets.filter(s => s.selected).map(s => s.name),
-                sheet_configurations: configs
-            });
-
-            if (!result || !result.datasource_id) {
-                throw new Error('Invalid response from recovery API');
-            }
-
-            if (result.ingestion_started) {
-                setUploadStatus('PENDING');
-                setCurrentStep(4);
-                // Ensure we use datasource_id explicitly
-                pollIntervalRef.current = setInterval(() => pollDatasetStatus(result.datasource_id), 2000);
-            } else {
-                // If ingestion didn't start, it might mean more input is needed 
-                setUploadStatus('NEEDS_INPUT');
-                setError(result.message || 'Some sheets still have validation issues. Please review and retry. Check your header doesn\'t have empty cell');
-            }
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Failed to recover dataset');
-            setUploadStatus('FAILED');
-        }
-    };
-
-    const handleClose = async () => {
+      if (needsInput && currentStep < 2) {
+        enterNeedsInputFlow(dataset);
+      } else if (dataset.status === 'PENDING') {
+        setProgress(60);
+      } else if (dataset.status === 'PROCESSING') {
+        setProgress(80);
+      } else if (dataset.status === 'READY') {
+        setProgress(100);
         if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
 
-        // Cleanup if necessary before closing
-        await cleanupFailedDatasource();
-        onClose();
-    };
-
-    const getStatusText = () => {
-        switch (uploadStatus) {
-            case 'IDLE': return '';
-            case 'UPLOADING': return 'Uploading file...';
-            case 'PENDING': return 'Queued for processing...';
-            case 'NEEDS_INPUT': return 'Action required';
-            case 'PROCESSING': return 'Processing data...';
-            case 'READY': return 'Dataset ready!';
-            case 'FAILED': return 'Processing failed';
-            default: return '';
+        try {
+          const authToken = await user?.getIdToken();
+          if (authToken && currentWorkspace) {
+            const session = await apiClient.createChatSession(
+              authToken,
+              dataset.id,
+              `Chat: ${dataset.name}`,
+            );
+            await saveWorkspaceState(currentWorkspace.id, dataset.id, session.id);
+            await refreshDatasources();
+          }
+        } catch (sessionErr) {
+          console.error('[AutoSession] Failed to initialize chat for new dataset:', sessionErr);
         }
-    };
 
-    const getStatusColor = () => {
-        switch (uploadStatus) {
-            case 'UPLOADING': case 'PENDING': return '#f59e0b';
-            case 'NEEDS_INPUT': return '#3b82f6';
-            case 'PROCESSING': return '#3b82f6';
-            case 'READY': return '#10b981';
-            case 'FAILED': return '#ef4444';
-            default: return '#6b7280';
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 1500);
+      } else if (dataset.status === 'FAILED' && !needsInput) {
+        setProgress(0);
+        setUploadStatus('FAILED');
+        setError(formatDatasourceError(dataset));
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      }
+    } catch (err) {
+      console.error('Error polling dataset status:', err);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    const validationError = validateSpreadsheetUpload(selectedFile);
+    setFile(selectedFile);
+    if (mode === 'add') {
+      const baseName = selectedFile.name.replace(/\.[^/.]+$/, '');
+      setName(baseName.slice(0, 23));
+    }
+    setError(validationError);
+    e.target.value = '';
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !name.trim()) return;
+    if (mode === 'add' && !file) return;
+    if (datasourcesAtLimit) {
+      setError(workspaceLimitUpgradeMessage(currentRole, 'datasources'));
+      return;
+    }
+    if (file) {
+      const validationError = validateSpreadsheetUpload(file);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+
+    try {
+      setUploadStatus('UPLOADING');
+      setProgress(10);
+      setError(null);
+
+      const token = await user.getIdToken();
+      let result: DataSourceResponse;
+
+      // Real byte progress while the browser PUTs to the bucket (10% -> 50%).
+      const onUploadProgress = (sent: number) => setProgress(10 + Math.round(sent * 40));
+
+      if (mode === 'add') {
+        result = await apiClient.createDatasource(
+          token,
+          workspaceId!,
+          file!,
+          name,
+          onUploadProgress,
+        );
+        await refreshWorkspaceUsage();
+      } else if (mode === 'rename') {
+        result = await apiClient.renameDatasource(token, datasourceId!, name.trim());
+        setUploadStatus('READY');
+        setProgress(100);
+        setTimeout(() => {
+          onSuccess();
+          onClose();
+        }, 1000);
+        return;
+      } else {
+        if (file) {
+          result = await apiClient.overrideDatasource(
+            token,
+            datasourceId!,
+            file,
+            name.trim(),
+            workspaceId,
+            onUploadProgress,
+          );
+        } else {
+          result = await apiClient.renameDatasource(token, datasourceId!, name.trim());
+          setUploadStatus('READY');
+          setProgress(100);
+          setTimeout(() => {
+            onSuccess();
+            onClose();
+          }, 1000);
+          return;
         }
-    };
+      }
 
-    const renderStepContent = () => {
-        switch (currentStep) {
-            case 1:
-                return (
-                    <div className="step-upload">
-                        {mode !== 'rename' && (
-                            <div className="form-group">
-                                <label>{mode === 'add' ? 'Select File' : 'Replace Dataset File'}</label>
-                                <div className="file-upload-area" onClick={() => uploadStatus === 'IDLE' && fileInputRef.current?.click()}>
-                                    <input type="file" ref={fileInputRef} onChange={handleFileChange} accept=".csv,.xlsx,.xls" style={{ display: 'none' }} />
-                                    {file ? (
-                                        <div className="file-info">
-                                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" /></svg>
-                                            <span>{file.name}</span>
-                                        </div>
-                                    ) : (
-                                        <div className="upload-placeholder">
-                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" /></svg>
-                                            <span>Click to upload Excel or CSV</span>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                        <div className="form-group">
-                            <label htmlFor="ds-name">Dataset Name</label>
-                            <input id="ds-name" type="text" value={name} onChange={(e) => setName(e.target.value.slice(0, 23))} placeholder="Enter dataset name" maxLength={23} required />
-                        </div>
-                    </div>
-                );
-            case 2:
-                return (
-                    <SheetSelection
-                        sheets={sheets}
-                        onToggleSheet={handleToggleSheet}
-                    />
-                );
-            case 3:
-                return (
-                    <HeaderSelection
-                        sheets={sheets}
-                        onSubmit={handleRecoverySubmit}
-                        onBack={() => sheets.length > 1 ? setCurrentStep(2) : setCurrentStep(1)}
-                    />
-                );
-            case 4:
-                return (
-                    <div className="upload-progress-container finalize-step">
-                        <div className="progress-header">
-                            <div className="progress-status" style={{ color: getStatusColor() }}>
-                                {uploadStatus === 'READY' ? (
-                                    <svg viewBox="0 0 24 24" fill="currentColor" className="status-icon"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /></svg>
-                                ) : uploadStatus === 'FAILED' ? (
-                                    <svg viewBox="0 0 24 24" fill="currentColor" className="status-icon"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" /></svg>
-                                ) : (
-                                    <svg className="status-icon spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83" /></svg>
-                                )}
-                                <span>{getStatusText()}</span>
-                            </div>
-                            <span className="progress-percentage">{progress}%</span>
-                        </div>
-                        <div className="progress-bar">
-                            <div className="progress-fill" style={{ width: `${progress}%`, backgroundColor: getStatusColor() }} />
-                        </div>
-                        <p className="status-help-text">
-                            {uploadStatus === 'READY'
-                                ? "Everything looks good! Your data is ready to be visualized."
-                                : uploadStatus === 'PROCESSING'
-                                    ? "We're almost there. Just making sure all your data is properly structured."
-                                    : "Preparing your data..."
-                            }
-                        </p>
-                    </div>
-                );
-            default: return null;
+      setDatasource(result);
+
+      const needsInput =
+        result.status === 'NEEDS_INPUT' ||
+        (result.status === 'FAILED' && result.metadata_json?.requires_user_input);
+
+      if (result.status === 'FAILED' && !needsInput) {
+        setUploadStatus('FAILED');
+        setProgress(0);
+        setError(formatDatasourceError(result));
+        return;
+      }
+
+      if (needsInput) {
+        enterNeedsInputFlow(result);
+      } else {
+        setUploadStatus(result.status);
+        if (result.id) {
+          pollIntervalRef.current = setInterval(() => pollDatasetStatus(result.id), 2000);
+        } else {
+          console.error('[Upload] Missing ID in response:', result);
+          setError('Internal error: Missing dataset ID');
+          setUploadStatus('FAILED');
         }
-    };
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Operation failed');
+      setUploadStatus('FAILED');
+      setProgress(0);
+    }
+  };
 
-    const modalContent = (
-        <div className="modal-backdrop" onClick={(uploadStatus === 'IDLE' || uploadStatus === 'FAILED' || uploadStatus === 'NEEDS_INPUT') ? handleClose : undefined} style={{ zIndex: 10001 }}>
-            <div className="modal-container large" onClick={(e) => e.stopPropagation()}>
-                <div className="modal-header">
-                    <h2>{mode === 'add' ? 'Add New Dataset' : mode === 'rename' ? 'Rename Dataset' : 'Update Dataset'}</h2>
-                    {(uploadStatus === 'IDLE' || uploadStatus === 'FAILED' || uploadStatus === 'NEEDS_INPUT') && (
-                        <button className="close-btn" onClick={handleClose}>
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                        </button>
-                    )}
-                </div>
-
-                {error && <div className="form-error">{error}</div>}
-
-                <div className="modal-body">
-                    {currentStep > 1 && <StepIndicator currentStep={currentStep} steps={FLOW_STEPS} />}
-
-                    <div className="step-content">
-                        {renderStepContent()}
-                    </div>
-                </div>
-
-                <div className="modal-actions">
-                    {uploadStatus === 'FAILED' ? (
-                        <button type="button" className="secondary-btn" onClick={handleClose}>Close & Cleanup</button>
-                    ) : (
-                        <>
-                            {currentStep === 1 && (
-                                <>
-                                    <button type="button" className="secondary-btn" onClick={handleClose}>Cancel</button>
-                                    <button type="submit" className="primary-btn" onClick={handleSubmit} disabled={(mode !== 'rename' && !file && mode === 'add') || !name.trim() || uploadStatus !== 'IDLE'}>
-                                        {mode === 'rename' ? (uploadStatus === 'UPLOADING' ? 'Renaming...' : 'Save Name') : (uploadStatus === 'UPLOADING' ? 'Uploading...' : 'Next: Select Sheets')}
-                                    </button>
-                                </>
-                            )}
-                            {currentStep === 2 && (
-                                <>
-                                    <button type="button" className="secondary-btn" onClick={() => setCurrentStep(1)}>Back</button>
-                                    <button type="button" className="primary-btn" onClick={handleSheetsContinue} disabled={!sheets.some(s => s.selected)}>
-                                        Continue
-                                    </button>
-                                </>
-                            )}
-                            {currentStep === 3 && (
-                                <>
-                                    <button type="button" className="secondary-btn" onClick={() => sheets.length > 1 ? setCurrentStep(2) : setCurrentStep(1)}>
-                                        Back
-                                    </button>
-                                    {/* Submit All is inside HeaderSelection component */}
-                                </>
-                            )}
-                            {currentStep === 4 && (
-                                <button type="button" className="primary-btn" onClick={handleClose} disabled={uploadStatus !== 'READY'}>
-                                    {uploadStatus === 'READY' ? 'Finish & Visualize' : 'Processing...'}
-                                </button>
-                            )}
-                        </>
-                    )}
-                </div>
-            </div>
-        </div>
+  const handleToggleSheet = (sheetName: string) => {
+    setSheets((prev) =>
+      prev.map((s) => (s.name === sheetName ? { ...s, selected: !s.selected } : s)),
     );
+  };
 
-    return createPortal(modalContent, document.body);
+  const handleSelectAllSheets = () => {
+    setSheets((prev) => prev.map((s) => ({ ...s, selected: true })));
+  };
+
+  const handleClearSheets = () => {
+    setSheets((prev) => prev.map((s) => ({ ...s, selected: false })));
+  };
+
+  const submitRecovery = async (
+    ds: DataSourceResponse,
+    sheetsSnapshot: ExcelSheet[],
+    headersSnapshot: Record<string, number>,
+  ) => {
+    if (!user) return;
+
+    try {
+      setError(null);
+      setUploadStatus('PROCESSING');
+      setCurrentStep(4);
+      setProgress(60);
+      const token = await user.getIdToken();
+      const result = await apiClient.recoverDatasource(token, ds.id, {
+        datasource_id: ds.id,
+        sheets_to_ingest: sheetsSnapshot.filter((s) => s.selected).map((s) => s.name),
+        sheet_configurations: sheetsSnapshot
+          .filter((s) => s.selected)
+          .map((s) => ({
+            sheet_name: s.name,
+            header_row_index: headersSnapshot[s.name] ?? (s.needs_user_input ? -1 : 0),
+          })),
+      });
+
+      if (!result || !result.datasource_id) {
+        throw new Error('Invalid response from recovery API');
+      }
+
+      if (result.ingestion_started) {
+        setUploadStatus('PENDING');
+        pollIntervalRef.current = setInterval(() => pollDatasetStatus(result.datasource_id), 2000);
+      } else {
+        setUploadStatus('NEEDS_INPUT');
+        setError(
+          result.message ||
+            'Some sheets still need attention. Check your header row has no empty cells.',
+        );
+        const multi = sheetsSnapshot.length > 1;
+        setIncludeSheetsStep(multi);
+        setCurrentStep(multi ? 2 : 3);
+        if (!multi) {
+          const queue = buildHeaderQueue(sheetsSnapshot);
+          setHeaderQueue(queue);
+          setHeaderIndex(0);
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to recover dataset');
+      setUploadStatus('FAILED');
+    }
+  };
+  submitRecoveryRef.current = submitRecovery;
+
+  const handleSheetsContinue = () => {
+    if (!sheets.some((s) => s.selected) || !datasource) return;
+    const queue = buildHeaderQueue(sheets);
+    setHeaderQueue(queue);
+    setHeaderIndex(0);
+    if (queue.length === 0) {
+      void submitRecovery(datasource, sheets, selectedHeaders);
+      return;
+    }
+    setCurrentStep(3);
+  };
+
+  const handleHeaderContinue = () => {
+    const current = headerQueue[headerIndex];
+    if (!current || selectedHeaders[current.name] == null || !datasource) return;
+    if (headerIndex < headerQueue.length - 1) {
+      setHeaderIndex((i) => i + 1);
+      return;
+    }
+    void submitRecovery(datasource, sheets, selectedHeaders);
+  };
+
+  const handleWizardBack = () => {
+    if (currentStep === 3) {
+      if (headerIndex > 0) {
+        setHeaderIndex((i) => i - 1);
+        return;
+      }
+      if (includeSheetsStep) {
+        setCurrentStep(2);
+        return;
+      }
+      setCurrentStep(1);
+      return;
+    }
+    if (currentStep === 2) {
+      setCurrentStep(1);
+    }
+  };
+
+  const cleanupFailedDatasource = async () => {
+    if (!datasource?.id || !user) return;
+
+    const isFailed = uploadStatus === 'FAILED' || datasource.status === 'FAILED';
+    const isIntermediate = currentStep > 1 && currentStep < 4;
+
+    if (mode === 'add' && (isFailed || isIntermediate)) {
+      try {
+        const token = await user.getIdToken();
+        await apiClient.deleteDatasource(token, datasource.id);
+      } catch (err) {
+        console.error('[Cleanup] Failed to delete datasource:', err);
+      }
+    }
+  };
+
+  const handleClose = async () => {
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+    // Cleanup if necessary before closing
+    await cleanupFailedDatasource();
+    onClose();
+  };
+
+  const getStatusText = () => {
+    switch (uploadStatus) {
+      case 'IDLE':
+        return '';
+      case 'UPLOADING':
+        return 'Uploading file...';
+      case 'PENDING':
+        return 'Queued for processing...';
+      case 'NEEDS_INPUT':
+        return 'Action required';
+      case 'PROCESSING':
+        return 'Processing data...';
+      case 'READY':
+        return 'Dataset ready!';
+      case 'FAILED':
+        return error || 'Processing failed';
+      default:
+        return '';
+    }
+  };
+
+  const getStatusColor = () => {
+    switch (uploadStatus) {
+      case 'UPLOADING':
+      case 'PENDING':
+        return '#f59e0b';
+      case 'NEEDS_INPUT':
+        return '#3b82f6';
+      case 'PROCESSING':
+        return '#3b82f6';
+      case 'READY':
+        return '#10b981';
+      case 'FAILED':
+        return '#ef4444';
+      default:
+        return '#6b7280';
+    }
+  };
+
+  const wizardSteps = useMemo(() => {
+    const steps: { id: number; label: string }[] = [{ id: 1, label: 'Upload' }];
+    let id = 2;
+    if (includeSheetsStep) steps.push({ id: id++, label: 'Sheets' });
+    steps.push({ id: id++, label: 'Headers' });
+    steps.push({ id: id, label: 'Import' });
+    return steps;
+  }, [includeSheetsStep]);
+
+  const wizardStepCurrent = useMemo(() => {
+    if (currentStep === 1) return 1;
+    if (currentStep === 2) return 2;
+    if (currentStep === 3) return includeSheetsStep ? 3 : 2;
+    return wizardSteps[wizardSteps.length - 1]?.id ?? 4;
+  }, [currentStep, includeSheetsStep, wizardSteps]);
+
+  const currentHeaderSheet = headerQueue[headerIndex];
+  const headerProgressLabel =
+    headerQueue.length > 1 ? `${headerIndex + 1} of ${headerQueue.length}` : null;
+  const headerRowSelected =
+    currentHeaderSheet != null && selectedHeaders[currentHeaderSheet.name] != null;
+  const isLastHeaderSheet = headerIndex >= headerQueue.length - 1;
+
+  const canClose =
+    uploadStatus === 'IDLE' || uploadStatus === 'FAILED' || uploadStatus === 'NEEDS_INPUT';
+  const isStepLocked = uploadStatus !== 'IDLE' && currentStep === 1;
+
+  const headerCopy = useMemo(() => {
+    if (mode === 'rename') {
+      return {
+        eyebrow: 'Dataset',
+        title: 'Rename dataset',
+        subtitle: 'Update the display name for this dataset.',
+      };
+    }
+    if (mode === 'edit') {
+      return {
+        eyebrow: 'Import data',
+        title: 'Update dataset',
+        subtitle: STEP_SUBTITLES[currentStep] ?? STEP_SUBTITLES[1],
+      };
+    }
+    return {
+      eyebrow: 'Import data',
+      title: 'Add new dataset',
+      subtitle: STEP_SUBTITLES[currentStep] ?? STEP_SUBTITLES[1],
+    };
+  }, [mode, currentStep]);
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 1:
+        return (
+          <div className="dataset-wizard-step dataset-wizard-step--upload">
+            {mode !== 'rename' && (
+              <div className="form-group upload-modal-field">
+                <label className="upload-modal-label" htmlFor="ds-file-input">
+                  {mode === 'add' ? 'File' : 'Replace file'}
+                </label>
+                <button
+                  type="button"
+                  className={`upload-dropzone ${file ? 'has-file' : ''} ${isStepLocked ? 'is-locked' : ''} ${file && validateSpreadsheetUpload(file) ? 'is-invalid' : ''}`}
+                  onClick={() => !isStepLocked && fileInputRef.current?.click()}
+                  disabled={isStepLocked}
+                  aria-describedby={error ? 'upload-file-error-modal' : undefined}
+                >
+                  <input
+                    id="ds-file-input"
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileChange}
+                    accept=".csv,.xlsx,.xls"
+                    className="upload-dropzone-input"
+                    disabled={isStepLocked}
+                  />
+                  {file ? (
+                    <div className="upload-dropzone-file">
+                      <div className="upload-dropzone-file-icon" aria-hidden>
+                        <FileSpreadsheet size={22} strokeWidth={1.75} />
+                      </div>
+                      <div className="upload-dropzone-file-meta">
+                        <span className="upload-dropzone-file-name">{file.name}</span>
+                        <span className="upload-dropzone-file-size">
+                          {formatSpreadsheetFileSize(file.size)}
+                        </span>
+                      </div>
+                      {!isStepLocked && (
+                        <span className="upload-dropzone-replace">Replace file</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="upload-dropzone-empty">
+                      <div className="upload-dropzone-icon-ring" aria-hidden>
+                        <Upload className="upload-dropzone-icon" size={22} strokeWidth={2} />
+                      </div>
+                      <p className="upload-dropzone-title">Drop a file here or click to browse</p>
+                      <p className="upload-dropzone-hint">
+                        Secure upload · {spreadsheetUploadHint()}
+                      </p>
+                      <div className="upload-dropzone-badges">
+                        <span>.csv</span>
+                        <span>.xlsx</span>
+                        <span>.xls</span>
+                      </div>
+                    </div>
+                  )}
+                </button>
+              </div>
+            )}
+            <div className="form-group upload-modal-field">
+              <label className="upload-modal-label" htmlFor="ds-name">
+                Dataset name
+              </label>
+              <input
+                id="ds-name"
+                type="text"
+                className="upload-modal-input"
+                value={name}
+                onChange={(e) => setName(e.target.value.slice(0, 23))}
+                placeholder="e.g. Q4 Sales pipeline"
+                maxLength={23}
+                required
+                disabled={isStepLocked}
+              />
+              <p className="dataset-wizard-hint">Max 23 characters</p>
+            </div>
+          </div>
+        );
+      case 2:
+        return (
+          <SheetSelection
+            sheets={sheets}
+            onToggleSheet={handleToggleSheet}
+            onSelectAll={handleSelectAllSheets}
+            onClearAll={handleClearSheets}
+          />
+        );
+      case 3:
+        return currentHeaderSheet ? (
+          <HeaderRowPicker
+            sheet={currentHeaderSheet}
+            selectedRow={selectedHeaders[currentHeaderSheet.name]}
+            progressLabel={headerProgressLabel}
+            onSelectRow={(rowIndex) => {
+              setSelectedHeaders((prev) => ({
+                ...prev,
+                [currentHeaderSheet.name]: rowIndex,
+              }));
+            }}
+          />
+        ) : null;
+      case 4:
+        return (
+          <div className="upload-progress-container dataset-wizard-progress finalize-step">
+            <div className="progress-header">
+              <div className="progress-status" style={{ color: getStatusColor() }}>
+                {uploadStatus === 'READY' ? (
+                  <CheckCircle2 className="status-icon" size={20} strokeWidth={2} />
+                ) : uploadStatus === 'FAILED' ? (
+                  <AlertCircle className="status-icon" size={20} strokeWidth={2} />
+                ) : (
+                  <Loader2 className="status-icon spinner" size={20} strokeWidth={2} />
+                )}
+                <span>{getStatusText()}</span>
+              </div>
+              <span className="progress-percentage">{progress}%</span>
+            </div>
+            <div className="progress-bar dataset-wizard-progress-bar">
+              <div
+                className="progress-fill dataset-wizard-progress-fill"
+                style={{ width: `${progress}%`, backgroundColor: getStatusColor() }}
+              />
+            </div>
+            <p className="status-help-text">
+              {uploadStatus === 'READY'
+                ? 'Your dataset is ready.'
+                : uploadStatus === 'FAILED'
+                  ? error || 'Processing failed. Please try again.'
+                  : 'Importing the full sheets you selected…'}
+            </p>
+          </div>
+        );
+      default:
+        return null;
+    }
+  };
+
+  const modalContent = (
+    <div className="modal-backdrop dataset-wizard-backdrop" style={{ zIndex: 10001 }}>
+      <div className="modal-container dataset-wizard-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header upload-modal-header dataset-wizard-header">
+          <div className="upload-modal-header-text">
+            <p className="upload-modal-eyebrow">{headerCopy.eyebrow}</p>
+            <h2>{headerCopy.title}</h2>
+            <p className="upload-modal-subtitle">{headerCopy.subtitle}</p>
+          </div>
+          {canClose && (
+            <button type="button" className="close-btn" onClick={handleClose} aria-label="Close">
+              <X size={20} strokeWidth={2} />
+            </button>
+          )}
+        </div>
+
+        {datasourcesAtLimit && (
+          <div className="form-error upload-modal-error dataset-wizard-error">
+            {workspaceLimitUpgradeMessage(currentRole, 'datasources')}
+          </div>
+        )}
+        {error && (
+          <div
+            id="upload-file-error-modal"
+            className="form-error upload-modal-error dataset-wizard-error"
+            role="alert"
+          >
+            {error}
+          </div>
+        )}
+
+        <div className="dataset-wizard-body">
+          {currentStep > 1 && mode === 'add' && (
+            <StepIndicator currentStep={wizardStepCurrent} steps={wizardSteps} />
+          )}
+
+          <div className="dataset-wizard-step-content">{renderStepContent()}</div>
+        </div>
+
+        <div className="modal-actions upload-modal-actions dataset-wizard-actions">
+          {uploadStatus === 'FAILED' ? (
+            <button type="button" className="secondary-btn" onClick={handleClose}>
+              Close & cleanup
+            </button>
+          ) : (
+            <>
+              {currentStep === 1 && (
+                <>
+                  <button type="button" className="secondary-btn" onClick={handleClose}>
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-gradient-primary"
+                    onClick={handleSubmit}
+                    disabled={
+                      datasourcesAtLimit ||
+                      (mode === 'add' && !file) ||
+                      Boolean(file && validateSpreadsheetUpload(file)) ||
+                      !name.trim() ||
+                      uploadStatus !== 'IDLE'
+                    }
+                    title={datasourcesAtLimit ? PLAN_LIMIT_REACHED_TOOLTIP : undefined}
+                  >
+                    {mode === 'rename'
+                      ? uploadStatus === 'UPLOADING'
+                        ? 'Saving…'
+                        : 'Save name'
+                      : uploadStatus === 'UPLOADING'
+                        ? 'Uploading…'
+                        : mode === 'edit'
+                          ? 'Save changes'
+                          : 'Upload dataset'}
+                  </button>
+                </>
+              )}
+              {currentStep === 2 && (
+                <>
+                  <button type="button" className="secondary-btn" onClick={handleWizardBack}>
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-gradient-primary"
+                    onClick={handleSheetsContinue}
+                    disabled={!sheets.some((s) => s.selected)}
+                  >
+                    Continue
+                  </button>
+                </>
+              )}
+              {currentStep === 3 && (
+                <>
+                  <button type="button" className="secondary-btn" onClick={handleWizardBack}>
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    className="btn-gradient-primary"
+                    onClick={handleHeaderContinue}
+                    disabled={!headerRowSelected}
+                  >
+                    {isLastHeaderSheet ? 'Start import' : 'Continue'}
+                  </button>
+                </>
+              )}
+              {currentStep === 4 && (
+                <button
+                  type="button"
+                  className="btn-gradient-primary"
+                  onClick={handleClose}
+                  disabled={uploadStatus !== 'READY'}
+                >
+                  {uploadStatus === 'READY' ? 'Done' : 'Importing…'}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return createPortal(modalContent, document.body);
 }

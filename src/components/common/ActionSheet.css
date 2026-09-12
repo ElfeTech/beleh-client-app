@@ -22,7 +22,9 @@
   animation: slideUpSheet 0.3s ease-out;
   box-shadow: var(--shadow-xl);
   border-top: 1px solid var(--border-primary);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+  transition:
+    background-color 0.3s ease,
+    border-color 0.3s ease;
 }
 
 .action-sheet-handle {

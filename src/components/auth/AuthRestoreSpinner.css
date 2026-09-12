@@ -1,0 +1,47 @@
+.auth-restore-screen {
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary, #f8fafc);
+  box-sizing: border-box;
+}
+
+.auth-restore-spinner {
+  width: 2.25rem;
+  height: 2.25rem;
+  animation: auth-restore-spin 0.75s linear infinite;
+}
+
+.auth-restore-spinner__track {
+  fill: none;
+  stroke: #e2e8f0;
+  stroke-width: 3;
+}
+
+.auth-restore-spinner__arc {
+  fill: none;
+  stroke: #00c2a0;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 80 125;
+}
+
+@keyframes auth-restore-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.auth-restore-screen .sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

@@ -147,7 +147,8 @@
 }
 
 @keyframes pulse-warning {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
   }
   50% {
@@ -156,7 +157,8 @@
 }
 
 @keyframes pulse-critical {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 2px 8px rgba(239, 68, 68, 0.25);
   }
   50% {
@@ -186,7 +188,6 @@
   fill: #111827;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
-
 
 /* Accessibility improvements */
 .mobile-usage-badge:focus-visible {

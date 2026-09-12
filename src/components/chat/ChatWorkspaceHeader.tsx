@@ -1,0 +1,163 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { ChevronDown, ChevronUp, Database, RefreshCw, Sparkles } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import type { ConnectorResponse, DataSourceResponse } from '../../types/api';
+import { getWorkspaceSourceContext } from '../../utils/datasourceDisplay';
+import { useAuth } from '../../context/useAuth';
+import { readChatHeaderCollapsed, writeChatHeaderCollapsed } from '../../lib/uiMemory';
+import { BILLING_UPGRADE_HREF } from '../../utils/workspaceAccess';
+import './ChatWorkspaceHeader.css';
+
+interface ChatWorkspaceHeaderProps {
+  workspaceId: string;
+  selectedDatasourceId: string | null;
+  datasources: DataSourceResponse[];
+  connectors?: ConnectorResponse[];
+  onRefresh?: () => void;
+  refreshing?: boolean;
+  /** Show Upgrade CTA for free-plan owners in the chat top bar. */
+  showUpgradeCta?: boolean;
+  upgradeHref?: string;
+}
+
+export function ChatWorkspaceHeader({
+  workspaceId,
+  selectedDatasourceId,
+  datasources,
+  connectors = [],
+  onRefresh,
+  refreshing = false,
+  showUpgradeCta = false,
+  upgradeHref = BILLING_UPGRADE_HREF,
+}: ChatWorkspaceHeaderProps) {
+  const { user } = useAuth();
+  const uid = user?.uid ?? '';
+  const storageIdentity = `${uid}:${workspaceId}`;
+
+  const [collapsed, setCollapsed] = useState(() => {
+    if (!uid) return false;
+    return readChatHeaderCollapsed(uid, workspaceId);
+  });
+  const [identity, setIdentity] = useState(storageIdentity);
+
+  if (identity !== storageIdentity) {
+    setIdentity(storageIdentity);
+    setCollapsed(uid ? readChatHeaderCollapsed(uid, workspaceId) : false);
+  }
+
+  useEffect(() => {
+    if (!uid) return;
+    writeChatHeaderCollapsed(uid, workspaceId, collapsed);
+  }, [collapsed, uid, workspaceId]);
+
+  const source = getWorkspaceSourceContext(selectedDatasourceId, datasources, connectors);
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((c) => !c);
+  }, []);
+
+  const upgradeButton = showUpgradeCta ? (
+    <Link to={upgradeHref} className="chat-workspace-header__upgrade" title="Upgrade your plan">
+      <Sparkles className="h-3.5 w-3.5" strokeWidth={2.25} aria-hidden />
+      Upgrade
+    </Link>
+  ) : null;
+
+  if (collapsed) {
+    return (
+      <header className="chat-workspace-header chat-workspace-header--collapsed">
+        <div className="chat-workspace-header__collapsed-inner">
+          <div className="chat-workspace-header__collapse-summary">
+            <span
+              className={cn(
+                'chat-workspace-header__status-dot',
+                `chat-workspace-header__status-dot--${source.statusTone}`,
+              )}
+            />
+            <span className="truncate">{source.displayName}</span>
+            <span className="text-[color:var(--text-muted)] font-mono text-[10px]">
+              {source.statusLabel.split('//')[0]?.trim()}
+            </span>
+          </div>
+          <div className="chat-workspace-header__cluster-row">
+            {upgradeButton}
+            <button
+              type="button"
+              className="chat-workspace-header__icon-btn"
+              onClick={toggleCollapsed}
+              aria-expanded={false}
+              aria-label="Expand workspace context"
+              title="Show context"
+            >
+              <ChevronDown className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      </header>
+    );
+  }
+
+  return (
+    <header className="chat-workspace-header">
+      <div className="chat-workspace-header__inner">
+        <div className="chat-workspace-header__source">
+          <div className="chat-workspace-header__icon-wrap">
+            <Database className="h-5 w-5" strokeWidth={2} />
+          </div>
+          <div className="chat-workspace-header__meta">
+            <div className="chat-workspace-header__pills">
+              <span className="chat-workspace-header__pill">{source.displayName}</span>
+              <span className="chat-workspace-header__pill chat-workspace-header__pill--muted">
+                {source.typeLabel}
+              </span>
+            </div>
+            <p className="chat-workspace-header__path" title={source.connectionPath}>
+              {source.connectionPath}
+            </p>
+          </div>
+        </div>
+
+        <div className="chat-workspace-header__cluster">
+          <span className="chat-workspace-header__cluster-label">Cluster status</span>
+          <div className="chat-workspace-header__cluster-row">
+            <span
+              className={cn(
+                'chat-workspace-header__status',
+                `chat-workspace-header__status--${source.statusTone}`,
+              )}
+            >
+              {source.statusLabel}
+            </span>
+            {upgradeButton}
+            {onRefresh ? (
+              <button
+                type="button"
+                className="chat-workspace-header__icon-btn"
+                onClick={onRefresh}
+                disabled={refreshing}
+                aria-label="Refresh source status"
+                title="Refresh"
+              >
+                <RefreshCw
+                  className={cn('h-4 w-4', refreshing && 'animate-spin')}
+                  strokeWidth={2}
+                />
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="chat-workspace-header__icon-btn"
+              onClick={toggleCollapsed}
+              aria-expanded
+              aria-label="Collapse workspace context"
+              title="Collapse"
+            >
+              <ChevronUp className="h-4 w-4" strokeWidth={2} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </header>
+  );
+}

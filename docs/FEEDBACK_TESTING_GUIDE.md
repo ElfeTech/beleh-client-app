@@ -22,10 +22,12 @@ The frontend now sends feedback with the correct structure:
 ## 🧪 How to Test Each Feedback Trigger
 
 ### 1. DATA_UNDERSTANDING Feedback
+
 **Trigger:** After dataset upload + 3 chat queries
 **Question:** "Did Beleh understand your data correctly?"
 
 **Steps to Test:**
+
 1. Start the dev server: `npm run dev`
 2. Sign in to the app
 3. Upload a dataset (CSV file)
@@ -40,19 +42,22 @@ The frontend now sends feedback with the correct structure:
 6. Feedback modal should appear with the DATA_UNDERSTANDING question
 
 **To verify in console:**
+
 ```javascript
 // Open browser console and check localStorage
-JSON.parse(localStorage.getItem('feedback_state'))
+JSON.parse(localStorage.getItem('feedback_state'));
 // Should show: { datasetUploadCount: 1, chatQueryCount: 3, ... }
 ```
 
 ---
 
 ### 2. ACCURACY Feedback
+
 **Trigger:** After complex query (GROUP BY, FILTER, aggregations)
 **Question:** "Was this insight accurate and useful?"
 
 **Steps to Test:**
+
 1. In an existing chat session with a dataset
 2. Send a **complex query** with keywords like:
    - "Show me **top** 10 products by sales"
@@ -65,29 +70,35 @@ JSON.parse(localStorage.getItem('feedback_state'))
 4. Feedback modal should appear with ACCURACY question
 
 **Detection keywords:**
+
 - group, filter, rank, top, bottom, average, sum, count
 - OR if response has visualization (bar/line/pie chart)
 
 ---
 
 ### 3. RETURNING_USER Feedback
+
 **Trigger:** User returns after 2-3 days
 **Question:** "How does Beleh feel to use so far?"
 
 **Steps to Test (Quick Method):**
+
 1. Open browser DevTools Console
 2. Manually set last visit timestamp to 2.5 days ago:
+
 ```javascript
 const feedback_state = JSON.parse(localStorage.getItem('feedback_state') || '{}');
-const twoDaysAgo = Date.now() - (2.5 * 24 * 60 * 60 * 1000);
+const twoDaysAgo = Date.now() - 2.5 * 24 * 60 * 60 * 1000;
 feedback_state.lastVisitTimestamp = twoDaysAgo;
 localStorage.setItem('feedback_state', JSON.stringify(feedback_state));
 ```
+
 3. Refresh the page
 4. Wait 2 seconds
 5. Feedback modal should appear with RETURNING_USER question
 
 **Steps to Test (Real Method):**
+
 1. Visit the app today
 2. Don't visit for 2-3 days
 3. Return and open workspace
@@ -96,10 +107,12 @@ localStorage.setItem('feedback_state', JSON.stringify(feedback_state));
 ---
 
 ### 4. UX Feedback
+
 **Trigger:** After chart expansion/interaction
 **Question:** "How do you like the charts and visualizations?"
 
 **Steps to Test:**
+
 1. Send a query that generates a chart:
    - "Show me sales by month" (line chart)
    - "What's the distribution by category?" (bar chart)
@@ -111,14 +124,17 @@ localStorage.setItem('feedback_state', JSON.stringify(feedback_state));
 ---
 
 ### 5. GENERAL Feedback
+
 **Trigger:** Random (10% chance), max once per week
 **Question:** "Anything we could improve?"
 
 **Steps to Test:**
+
 1. This triggers randomly with 10% probability
 2. To force it for testing, temporarily modify the code:
 
 Open `src/context/FeedbackContext.tsx` and change line ~136:
+
 ```typescript
 // FROM:
 return Math.random() < 0.1; // 10% chance
@@ -162,7 +178,9 @@ console.table({
   'Complex Queries': state.complexQueryCount || 0,
   'Chart Interactions': state.visualizationInteractionCount || 0,
   'Submitted Types': state.submittedTypes || [],
-  'Last Visit': state.lastVisitTimestamp ? new Date(state.lastVisitTimestamp).toLocaleString() : 'Never'
+  'Last Visit': state.lastVisitTimestamp
+    ? new Date(state.lastVisitTimestamp).toLocaleString()
+    : 'Never',
 });
 ```
 
@@ -218,6 +236,7 @@ location.reload();
 ### Check Console Logs
 
 The app logs feedback events:
+
 - `[Feedback] Submission failed:` - if API call fails (expected if backend not running)
 - Look for any errors in console
 
@@ -228,6 +247,7 @@ The app logs feedback events:
 **Full End-to-End Test:**
 
 1. **Fresh Start**
+
    ```javascript
    localStorage.removeItem('feedback_state');
    location.reload();
@@ -265,6 +285,7 @@ The app logs feedback events:
 ### Feedback Not Showing?
 
 Check these conditions:
+
 1. **Already submitted?** Check `state.submittedTypes` in localStorage
 2. **Already dismissed?** Refresh page (session dismissals reset)
 3. **Rate limited?** Check `state.lastShownTimestamp` (must be >24h ago)
@@ -296,15 +317,16 @@ location.reload();
 
 ## 📊 Expected Behavior Summary
 
-| Trigger | Min Requirements | Delay After Trigger | Rate Limit | Resets On |
-|---------|-----------------|---------------------|------------|-----------|
-| DATA_UNDERSTANDING | 1 upload + 3 queries | 5 seconds | 24h | Never (once submitted) |
-| ACCURACY | 1 complex query | 8 seconds | 24h | Never (once submitted) |
-| RETURNING_USER | Visit after 2-3 days | 2 seconds | 24h | Never (once submitted) |
-| UX | 1 chart interaction | 5 seconds | 24h | Never (once submitted) |
-| GENERAL | Random 10% | Immediate | 1 week | Never (once submitted) |
+| Trigger            | Min Requirements     | Delay After Trigger | Rate Limit | Resets On              |
+| ------------------ | -------------------- | ------------------- | ---------- | ---------------------- |
+| DATA_UNDERSTANDING | 1 upload + 3 queries | 5 seconds           | 24h        | Never (once submitted) |
+| ACCURACY           | 1 complex query      | 8 seconds           | 24h        | Never (once submitted) |
+| RETURNING_USER     | Visit after 2-3 days | 2 seconds           | 24h        | Never (once submitted) |
+| UX                 | 1 chart interaction  | 5 seconds           | 24h        | Never (once submitted) |
+| GENERAL            | Random 10%           | Immediate           | 1 week     | Never (once submitted) |
 
 **Global Rules:**
+
 - ✅ Max 1 feedback per 24 hours (across all types)
 - ✅ Once submitted, that type never shows again
 - ✅ Dismissing only prevents showing in current session

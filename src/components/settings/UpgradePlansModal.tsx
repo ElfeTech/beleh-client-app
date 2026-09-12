@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../../context/useAuth';
 import { apiClient } from '../../services/apiClient';
 import type { Plan } from '../../types/usage';
+import { formatCreditCostUsd } from '../../utils/formatters';
+import { friendlyPlanDescription } from '../../lib/planFeatures';
 import './UpgradePlansModal.css';
 
 export interface UpgradePlansModalProps {
@@ -56,7 +58,6 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
 
       // Set billing cycle from current plan response
       setBillingCycle(currentPlanResponse.billing_cycle);
-
     } catch (err) {
       console.error('Failed to fetch plans:', err);
       setError('Failed to load available plans. Please try again.');
@@ -66,18 +67,6 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
   };
 
   if (!isOpen) return null;
-
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget) {
-      onClose();
-    }
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      onClose();
-    }
-  };
 
   const getPrice = (plan: Plan) => {
     return billingCycle === 'monthly' ? plan.price_monthly : plan.price_yearly;
@@ -96,7 +85,7 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
   };
 
   const modalContent = (
-    <div className="upgrade-modal-backdrop" onClick={handleBackdropClick} onKeyDown={handleKeyDown} role="dialog" aria-modal="true" tabIndex={-1}>
+    <div className="upgrade-modal-backdrop" role="dialog" aria-modal="true" tabIndex={-1}>
       <div className="upgrade-modal-container">
         {/* Header */}
         <div className="upgrade-modal-header">
@@ -153,6 +142,7 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
               {plans.map((plan) => {
                 const badge = getPlanBadge(plan.tier);
                 const isCurrent = isCurrentPlan(plan.id);
+                const creditCostLine = formatCreditCostUsd(plan.credit_cost_usd);
 
                 return (
                   <div key={plan.id} className={`plan-card ${isCurrent ? 'current-plan' : ''}`}>
@@ -164,7 +154,9 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                     {/* Plan Header */}
                     <div className="plan-card-header">
                       <h3 className="plan-name">{plan.name}</h3>
-                      <p className="plan-description">{plan.description}</p>
+                      <p className="plan-description">
+                        {friendlyPlanDescription(plan.description)}
+                      </p>
                     </div>
 
                     {/* Price */}
@@ -172,18 +164,29 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                       <div className="plan-price">
                         <span className="price-currency">$</span>
                         <span className="price-value">{getPrice(plan)}</span>
-                        <span className="price-period">/{billingCycle === 'monthly' ? 'mo' : 'yr'}</span>
+                        <span className="price-period">
+                          /{billingCycle === 'monthly' ? 'mo' : 'yr'}
+                        </span>
                       </div>
                     </div>
 
                     {/* Features */}
                     <div className="plan-features">
-                      <div className="feature-item">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="20 6 9 17 4 12" />
-                        </svg>
-                        <span>{plan.limits.monthly_query_limit.toLocaleString()} queries/month</span>
-                      </div>
+                      {plan.limits.monthly_query_limit > 0 ? (
+                        <div className="feature-item">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          <span>
+                            {plan.limits.monthly_query_limit.toLocaleString()} prompts/month
+                          </span>
+                        </div>
+                      ) : null}
                       <div className="feature-item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="20 6 9 17 4 12" />
@@ -194,13 +197,33 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        <span>{(plan.limits.monthly_llm_token_limit / 1000).toFixed(0)}K AI tokens/month</span>
+                        <span>
+                          {plan.limits.monthly_credit_limit <= 0
+                            ? 'Unlimited AI credits'
+                            : `${plan.limits.monthly_credit_limit.toLocaleString()} AI credits/month`}
+                        </span>
                       </div>
+                      {creditCostLine ? (
+                        <div className="feature-item">
+                          <svg
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          <span>{creditCostLine}</span>
+                        </div>
+                      ) : null}
                       <div className="feature-item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
-                        <span>{plan.limits.max_workspaces} workspace{plan.limits.max_workspaces > 1 ? 's' : ''}</span>
+                        <span>
+                          {plan.limits.max_workspaces} workspace
+                          {plan.limits.max_workspaces > 1 ? 's' : ''}
+                        </span>
                       </div>
                       <div className="feature-item">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -213,14 +236,17 @@ export function UpgradePlansModal({ isOpen, currentPlanId, onClose }: UpgradePla
                           <polyline points="20 6 9 17 4 12" />
                         </svg>
                         <span>
-                          {plan.limits.max_members_per_workspace} member{plan.limits.max_members_per_workspace > 1 ? 's' : ''} per
-                          workspace
+                          {plan.limits.max_members_per_workspace} member
+                          {plan.limits.max_members_per_workspace > 1 ? 's' : ''} per workspace
                         </span>
                       </div>
                     </div>
 
                     {/* CTA Button */}
-                    <button className={`plan-cta ${isCurrent ? 'current' : ''}`} disabled={isCurrent}>
+                    <button
+                      className={`plan-cta ${isCurrent ? 'current' : ''}`}
+                      disabled={isCurrent}
+                    >
                       {isCurrent ? 'Current Plan' : 'Upgrade to ' + plan.name}
                     </button>
                   </div>

@@ -4,7 +4,8 @@ import { useFeedback } from '../../context/FeedbackContext';
 import './FeedbackModal.css';
 
 const FeedbackModal = () => {
-  const { currentTrigger, isVisible, isSubmitting, dismissFeedback, submitFeedback } = useFeedback();
+  const { currentTrigger, isVisible, isSubmitting, dismissFeedback, submitFeedback } =
+    useFeedback();
   const [rating, setRating] = useState<number | undefined>(undefined);
   const [comment, setComment] = useState('');
   const [hoveredStar, setHoveredStar] = useState<number | null>(null);
@@ -19,18 +20,6 @@ const FeedbackModal = () => {
       setShowSuccess(false);
     }
   }, [isVisible]);
-
-  // Handle escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isVisible && !isSubmitting) {
-        dismissFeedback();
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, [isVisible, isSubmitting, dismissFeedback]);
 
   // Disable body scroll when modal is open
   useEffect(() => {
@@ -62,8 +51,8 @@ const FeedbackModal = () => {
   }
 
   const modalContent = (
-    <div className="feedback-modal-backdrop" onClick={dismissFeedback}>
-      <div className="feedback-modal-content" onClick={(e) => e.stopPropagation()}>
+    <div className="feedback-modal-backdrop">
+      <div className="feedback-modal-content">
         {showSuccess ? (
           <div className="feedback-success">
             <div className="feedback-success-icon">✓</div>
@@ -110,9 +99,7 @@ const FeedbackModal = () => {
                 rows={4}
               />
 
-              <div className="feedback-char-count">
-                {comment.length}/500
-              </div>
+              <div className="feedback-char-count">{comment.length}/500</div>
             </div>
 
             <div className="feedback-footer">

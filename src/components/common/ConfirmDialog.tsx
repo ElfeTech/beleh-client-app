@@ -1,4 +1,6 @@
 import { createPortal } from 'react-dom';
+import { useRef } from 'react';
+import { handleBackdropClick, useModalDismiss } from './useModalDismiss';
 import './ConfirmDialog.css';
 
 export interface ConfirmDialogProps {
@@ -7,7 +9,8 @@ export interface ConfirmDialogProps {
   message: string;
   confirmText?: string;
   cancelText?: string;
-  variant?: 'danger' | 'warning' | 'info';
+  /** `brand` = teal product accent (preferred for non-destructive confirms like sign-out). */
+  variant?: 'danger' | 'warning' | 'info' | 'brand';
   isLoading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -24,28 +27,27 @@ export function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  if (!isOpen) return null;
+  useModalDismiss(isOpen && !isLoading, onCancel);
+  const confirmInFlightRef = useRef(false);
 
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    if (e.target === e.currentTarget && !isLoading) {
-      onCancel();
-    }
-  };
+  if (!isOpen) {
+    confirmInFlightRef.current = false;
+    return null;
+  }
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Escape' && !isLoading) {
-      onCancel();
-    }
+  const handleConfirm = () => {
+    if (isLoading || confirmInFlightRef.current) return;
+    confirmInFlightRef.current = true;
+    onConfirm();
   };
 
   const dialogContent = (
     <div
       className="confirm-dialog-backdrop"
-      onClick={handleBackdropClick}
-      onKeyDown={handleKeyDown}
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-dialog-title"
+      onMouseDown={(e) => handleBackdropClick(e, isLoading ? () => undefined : onCancel)}
     >
       <div className="confirm-dialog-container">
         <div className={`confirm-dialog-icon ${variant}`}>
@@ -70,6 +72,15 @@ export function ConfirmDialog({
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
           )}
+          {variant === 'brand' && (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M15.75 9V5.25A2.25 2.25 0 0013.5 3h-6a2.25 2.25 0 00-2.25 2.25v13.5A2.25 2.25 0 007.5 21h6a2.25 2.25 0 002.25-2.25V15m3 0l3-3m0 0l-3-3m3 3H9"
+              />
+            </svg>
+          )}
         </div>
 
         <div className="confirm-dialog-content">
@@ -91,7 +102,7 @@ export function ConfirmDialog({
           <button
             type="button"
             className={`confirm-dialog-btn confirm-btn ${variant}`}
-            onClick={onConfirm}
+            onClick={handleConfirm}
             disabled={isLoading}
           >
             {isLoading ? 'Processing...' : confirmText}
