@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { WorkspaceContext } from '../context/WorkspaceContext';
 import { DatasourceContext } from '../context/DatasourceContext';
+import { useChatSession } from '../context/ChatSessionContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
 import {
@@ -171,6 +172,7 @@ const DatasetsPage: React.FC = () => {
   const { user } = useAuth();
   const workspaceContext = useContext(WorkspaceContext);
   const datasourceContext = useContext(DatasourceContext);
+  const { refreshSessions } = useChatSession();
   const [showConnectionPanel, setShowConnectionPanel] = useState(false);
   const [connectPanelInitialView, setConnectPanelInitialView] = useState<'upload' | undefined>(
     undefined,
@@ -651,9 +653,7 @@ const DatasetsPage: React.FC = () => {
   useEffect(() => {
     if (selectedCatalogRow?.kind !== 'connector') return;
     if (selectedCatalogRow.connector.metadata_status === 'COMPLETED') {
-      setSchemaPollTimedOutId((prev) =>
-        prev === selectedCatalogRow.connector.id ? null : prev,
-      );
+      setSchemaPollTimedOutId((prev) => (prev === selectedCatalogRow.connector.id ? null : prev));
     }
   }, [selectedCatalogRow]);
 
@@ -933,6 +933,10 @@ const DatasetsPage: React.FC = () => {
       if (workspaceContext?.refreshWorkspaceUsage) {
         await workspaceContext.refreshWorkspaceUsage();
       }
+
+      // Deleting a datasource/connector cascades chat deletion server-side — refresh
+      // the sidebar so it drops those sessions instead of showing stale/broken chats.
+      await refreshSessions(workspaceId);
 
       if (datasourceContext?.selectedDatasourceId === deletedId) {
         const remainingSources =
@@ -1976,7 +1980,7 @@ const DatasetsPage: React.FC = () => {
       <ConfirmDialog
         isOpen={showDeleteConfirm}
         title={itemToDelete?.type === 'datasource' ? 'Delete Dataset?' : 'Delete Connector?'}
-        message="This action cannot be undone. All data associated with this source will be permanently removed from your workspace."
+        message="This action cannot be undone. All data associated with this source, including any chats built on it, will be permanently deleted."
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"

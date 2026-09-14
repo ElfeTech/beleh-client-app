@@ -1,9 +1,10 @@
 import type { LucideIcon } from 'lucide-react';
-import { Braces, Database, FileSpreadsheet, FileText, Layers, Table2 } from 'lucide-react';
+import { Braces, Cloud, Database, FileSpreadsheet, FileText, Layers, Table2 } from 'lucide-react';
 import type { ConnectorResponse, DataSourceResponse } from '../types/api';
 
 export function formatSourceType(ds: DataSourceResponse): string {
   const raw = (ds.type || ds.mime_type || 'DATA').toUpperCase();
+  if (raw.includes('GOOGLE_SHEETS') || raw.includes('GOOGLE SHEETS')) return 'GOOGLE SHEETS';
   if (raw.includes('POSTGRES') || raw === 'SQL') return 'POSTGRES';
   if (raw.includes('EXCEL') || raw.includes('SPREADSHEET') || raw === 'XLSX') return 'EXCEL';
   if (raw.includes('CSV')) return 'CSV';
@@ -17,8 +18,9 @@ export function getSourceTypeIcon(options: {
   mimeType?: string | null;
 }): LucideIcon {
   if (!options.kind || options.kind === 'general') return Layers;
-  if (options.kind === 'connector') return Database;
   const raw = `${options.type ?? ''} ${options.mimeType ?? ''}`.toUpperCase();
+  if (raw.includes('GOOGLE_SHEETS')) return Cloud;
+  if (options.kind === 'connector') return Database;
   if (raw.includes('POSTGRES') || raw.includes('SQL') || raw.includes('MONGO')) return Database;
   if (raw.includes('EXCEL') || raw.includes('SPREADSHEET') || raw.includes('XLSX')) {
     return FileSpreadsheet;

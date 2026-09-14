@@ -6,7 +6,12 @@ import { PostgresConnectorView } from './connector-panel/PostgresConnectorView';
 import { UploadConnectorView } from './connector-panel/UploadConnectorView';
 import { SupabaseOrgsView } from './connector-panel/SupabaseOrgsView';
 import { SupabaseProjectsView } from './connector-panel/SupabaseProjectsView';
-import { invalidateProviderProjectsCache } from '../../lib/providerCache';
+import { GoogleSheetsAccountsView } from './connector-panel/GoogleSheetsAccountsView';
+import { GoogleSheetsPickerView } from './connector-panel/GoogleSheetsPickerView';
+import {
+  invalidateProviderProjectsCache,
+  invalidateSheetsSpreadsheetsCache,
+} from '../../lib/providerCache';
 import type { ProviderConnection } from '../../types/provider';
 import type { ConnectorResponse } from '../../types/api';
 import './DatasourceConnectionPanel.css';
@@ -16,9 +21,11 @@ type PanelView =
   | { id: 'upload' }
   | { id: 'postgres' }
   | { id: 'supabase-orgs' }
-  | { id: 'supabase-projects'; connection: ProviderConnection };
+  | { id: 'supabase-projects'; connection: ProviderConnection }
+  | { id: 'google-sheets-accounts' }
+  | { id: 'google-sheets-picker'; connection: ProviderConnection };
 
-export type ConnectSuccessSource = 'upload' | 'postgres' | 'supabase';
+export type ConnectSuccessSource = 'upload' | 'postgres' | 'supabase' | 'google-sheets';
 
 export interface DatasourceConnectionPanelProps {
   workspaceId: string;
@@ -71,6 +78,18 @@ function viewTitle(view: PanelView): {
         title: view.connection.organization,
         subtitle: 'Select a project to bind to this workspace.',
       };
+    case 'google-sheets-accounts':
+      return {
+        eyebrow: 'Google Sheets',
+        title: 'Google accounts',
+        subtitle: 'Choose an account or connect a new one.',
+      };
+    case 'google-sheets-picker':
+      return {
+        eyebrow: 'Google Sheets',
+        title: view.connection.organization,
+        subtitle: 'Pick a spreadsheet and the tabs to import.',
+      };
     default:
       return { title: 'Connect' };
   }
@@ -88,6 +107,8 @@ export function DatasourceConnectionPanel({
   );
   const [orgsHasConnections, setOrgsHasConnections] = useState(false);
   const [orgsConnectKey, setOrgsConnectKey] = useState(0);
+  const [sheetsHasConnections, setSheetsHasConnections] = useState(false);
+  const [sheetsConnectKey, setSheetsConnectKey] = useState(0);
   const uploadBackHandlerRef = useRef<(() => boolean) | null>(null);
 
   const current = useMemo(() => stack[stack.length - 1] ?? ({ id: 'catalog' } as const), [stack]);
@@ -101,6 +122,10 @@ export function DatasourceConnectionPanel({
       // Reset so remounting orgs after visiting projects does not re-fire OAuth.
       setOrgsConnectKey(0);
     }
+    if (view.id !== 'google-sheets-accounts') {
+      setSheetsHasConnections(false);
+      setSheetsConnectKey(0);
+    }
   }, []);
 
   const pop = useCallback(() => {
@@ -110,6 +135,10 @@ export function DatasourceConnectionPanel({
       if (top?.id !== 'supabase-orgs') {
         setOrgsHasConnections(false);
         setOrgsConnectKey(0);
+      }
+      if (top?.id !== 'google-sheets-accounts') {
+        setSheetsHasConnections(false);
+        setSheetsConnectKey(0);
       }
       return next;
     });
@@ -126,21 +155,30 @@ export function DatasourceConnectionPanel({
     if (type === 'upload') push({ id: 'upload' });
     else if (type === 'postgres') push({ id: 'postgres' });
     else if (type === 'supabase') push({ id: 'supabase-orgs' });
+    else if (type === 'google-sheets') push({ id: 'google-sheets-accounts' });
   };
 
   const handleFlowSuccess = (created?: ConnectorResponse) => {
-    const source: ConnectSuccessSource =
-      current.id === 'supabase-projects' || current.id === 'supabase-orgs'
-        ? 'supabase'
-        : current.id === 'postgres'
-          ? 'postgres'
-          : 'upload';
+    let source: ConnectSuccessSource = 'upload';
+    if (current.id === 'supabase-projects' || current.id === 'supabase-orgs') {
+      source = 'supabase';
+    } else if (current.id === 'postgres') {
+      source = 'postgres';
+    } else if (current.id === 'google-sheets-picker' || current.id === 'google-sheets-accounts') {
+      source = 'google-sheets';
+    }
     onSuccess?.(created, source);
     onClose();
   };
 
-  const headerActions =
-    current.id === 'supabase-orgs' && orgsHasConnections ? (
+  const handleSheetsBound = () => {
+    onSuccess?.(undefined, 'google-sheets');
+    onClose();
+  };
+
+  let headerActions: React.ReactNode = null;
+  if (current.id === 'supabase-orgs' && orgsHasConnections) {
+    headerActions = (
       <button
         type="button"
         className="ds-conn-list__add-btn"
@@ -151,7 +189,21 @@ export function DatasourceConnectionPanel({
         <Plus size={18} strokeWidth={2} />
         <span className="label">Add new organization</span>
       </button>
-    ) : null;
+    );
+  } else if (current.id === 'google-sheets-accounts' && sheetsHasConnections) {
+    headerActions = (
+      <button
+        type="button"
+        className="ds-conn-list__add-btn"
+        onClick={() => setSheetsConnectKey((k) => k + 1)}
+        aria-label="Add new Google account"
+        title="Add new Google account"
+      >
+        <Plus size={18} strokeWidth={2} />
+        <span className="label">Add new account</span>
+      </button>
+    );
+  }
 
   return (
     <DatasourceConnectionPanelShell>
@@ -205,6 +257,25 @@ export function DatasourceConnectionPanel({
           workspaceId={workspaceId}
           connection={current.connection}
           onBound={handleFlowSuccess}
+        />
+      )}
+
+      {current.id === 'google-sheets-accounts' && (
+        <GoogleSheetsAccountsView
+          onSelectConnection={(connection) => {
+            invalidateSheetsSpreadsheetsCache(connection.id);
+            push({ id: 'google-sheets-picker', connection });
+          }}
+          onHasConnectionsChange={setSheetsHasConnections}
+          connectRequestKey={sheetsConnectKey}
+        />
+      )}
+
+      {current.id === 'google-sheets-picker' && (
+        <GoogleSheetsPickerView
+          workspaceId={workspaceId}
+          connection={current.connection}
+          onBound={handleSheetsBound}
         />
       )}
     </DatasourceConnectionPanelShell>

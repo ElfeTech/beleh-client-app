@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Search, FileSpreadsheet, Table2, Braces, Cloud, Database, Hexagon } from 'lucide-react';
 
-export type ConnectorPanelSelect = 'upload' | 'postgres' | 'supabase';
+export type ConnectorPanelSelect = 'upload' | 'postgres' | 'supabase' | 'google-sheets';
 
 type CatalogAction =
   | { kind: 'select'; value: ConnectorPanelSelect }
@@ -95,9 +95,8 @@ const SECTIONS: CatalogSection[] = [
         id: 'sheets',
         label: 'Google Sheets',
         description: 'Live cloud spreadsheets',
-        badge: 'Soon',
         Icon: Cloud,
-        action: { kind: 'toast', message: 'Google Sheets is on the roadmap.' },
+        action: { kind: 'select', value: 'google-sheets' },
       },
     ],
   },
@@ -149,7 +148,9 @@ export function CatalogView({ hideFileSources = false, onSelect }: CatalogViewPr
   const [query, setQuery] = useState('');
 
   const catalogSections = useMemo(() => {
-    const source = hideFileSources ? SECTIONS.filter((section) => section.id !== 'files') : SECTIONS;
+    const source = hideFileSources
+      ? SECTIONS.filter((section) => section.id !== 'files')
+      : SECTIONS;
     return partitionCatalog(source);
   }, [hideFileSources]);
 
