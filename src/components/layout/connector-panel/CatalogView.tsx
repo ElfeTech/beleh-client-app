@@ -2,7 +2,18 @@ import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { Search, FileSpreadsheet, Table2, Braces, Cloud, Database, Hexagon } from 'lucide-react';
 
-export type ConnectorPanelSelect = 'upload' | 'postgres' | 'supabase' | 'google-sheets';
+export type ConnectorPanelSelect =
+  | 'upload'
+  | 'postgres'
+  | 'supabase'
+  | 'google-sheets'
+  | 'google-sheets-link';
+
+/**
+ * The OAuth "connect a Google account" flow is hidden until our Google consent
+ * screen is approved. Views/wiring stay in place; flip this to bring it back.
+ */
+const ENABLE_GOOGLE_OAUTH_SHEETS = false;
 
 type CatalogAction =
   | { kind: 'select'; value: ConnectorPanelSelect }
@@ -91,12 +102,23 @@ const SECTIONS: CatalogSection[] = [
         Icon: Hexagon,
         action: { kind: 'select', value: 'supabase' },
       },
+      ...(ENABLE_GOOGLE_OAUTH_SHEETS
+        ? [
+            {
+              id: 'sheets',
+              label: 'Google Sheets (OAuth)',
+              description: 'Live cloud spreadsheets',
+              Icon: Cloud,
+              action: { kind: 'select', value: 'google-sheets' },
+            } as CatalogItem,
+          ]
+        : []),
       {
-        id: 'sheets',
+        id: 'sheets-link',
         label: 'Google Sheets',
-        description: 'Live cloud spreadsheets',
+        description: 'Share a sheet and paste its link',
         Icon: Cloud,
-        action: { kind: 'select', value: 'google-sheets' },
+        action: { kind: 'select', value: 'google-sheets-link' },
       },
     ],
   },

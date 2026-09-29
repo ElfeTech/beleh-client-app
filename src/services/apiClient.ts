@@ -83,6 +83,8 @@ import type {
 import type {
   SheetBinding,
   SheetBindingCreateRequest,
+  SheetLinkCreateRequest,
+  SheetsServiceAccountInfo,
   SheetSpreadsheetListResponse,
   SheetSyncResponse,
   SheetTab,
@@ -1732,6 +1734,29 @@ class APIClient {
     body: SheetBindingCreateRequest,
   ): Promise<SheetBinding> {
     return this.request<SheetBinding>(`/api/v1/workspaces/${workspaceId}/sheets/bindings`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async getSheetsServiceAccount(authToken: string): Promise<SheetsServiceAccountInfo> {
+    return this.request<SheetsServiceAccountInfo>('/api/v1/sheets/service-account', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async createSheetLinkBinding(
+    authToken: string,
+    workspaceId: string,
+    body: SheetLinkCreateRequest,
+  ): Promise<SheetBinding> {
+    return this.request<SheetBinding>(`/api/v1/workspaces/${workspaceId}/sheets/link-bindings`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${authToken}`,

@@ -36,6 +36,20 @@ export interface SheetBindingCreateRequest {
   refresh_interval_minutes?: number;
 }
 
+/** Link a sheet shared with the platform service account (no OAuth). */
+export interface SheetLinkCreateRequest {
+  spreadsheet_url: string;
+  description?: string | null;
+  selected_tabs?: string[] | null;
+  header_row_by_tab?: Record<string, number> | null;
+  refresh_interval_minutes?: number;
+}
+
+export interface SheetsServiceAccountInfo {
+  enabled: boolean;
+  email?: string | null;
+}
+
 export type SheetSyncStatus = 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED';
 
 export interface SheetBinding {
@@ -51,6 +65,7 @@ export interface SheetBinding {
   last_synced_at: string | null;
   sync_status: SheetSyncStatus;
   sync_error: string | null;
+  auth_mode?: 'oauth' | 'service_account';
   created_at: string;
 }
 

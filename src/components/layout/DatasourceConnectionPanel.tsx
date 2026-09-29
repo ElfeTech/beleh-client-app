@@ -7,6 +7,7 @@ import { UploadConnectorView } from './connector-panel/UploadConnectorView';
 import { SupabaseOrgsView } from './connector-panel/SupabaseOrgsView';
 import { SupabaseProjectsView } from './connector-panel/SupabaseProjectsView';
 import { GoogleSheetsAccountsView } from './connector-panel/GoogleSheetsAccountsView';
+import { GoogleSheetsLinkView } from './connector-panel/GoogleSheetsLinkView';
 import { GoogleSheetsPickerView } from './connector-panel/GoogleSheetsPickerView';
 import {
   invalidateProviderProjectsCache,
@@ -22,6 +23,7 @@ type PanelView =
   | { id: 'postgres' }
   | { id: 'supabase-orgs' }
   | { id: 'supabase-projects'; connection: ProviderConnection }
+  | { id: 'google-sheets-link' }
   | { id: 'google-sheets-accounts' }
   | { id: 'google-sheets-picker'; connection: ProviderConnection };
 
@@ -77,6 +79,12 @@ function viewTitle(view: PanelView): {
         eyebrow: 'Supabase',
         title: view.connection.organization,
         subtitle: 'Select a project to bind to this workspace.',
+      };
+    case 'google-sheets-link':
+      return {
+        eyebrow: 'Google Sheets',
+        title: 'Link your data source',
+        subtitle: 'Share a sheet with our service account and paste its URL.',
       };
     case 'google-sheets-accounts':
       return {
@@ -155,6 +163,7 @@ export function DatasourceConnectionPanel({
     if (type === 'upload') push({ id: 'upload' });
     else if (type === 'postgres') push({ id: 'postgres' });
     else if (type === 'supabase') push({ id: 'supabase-orgs' });
+    else if (type === 'google-sheets-link') push({ id: 'google-sheets-link' });
     else if (type === 'google-sheets') push({ id: 'google-sheets-accounts' });
   };
 
@@ -257,6 +266,14 @@ export function DatasourceConnectionPanel({
           workspaceId={workspaceId}
           connection={current.connection}
           onBound={handleFlowSuccess}
+        />
+      )}
+
+      {current.id === 'google-sheets-link' && (
+        <GoogleSheetsLinkView
+          workspaceId={workspaceId}
+          onCancel={pop}
+          onBound={handleSheetsBound}
         />
       )}
 
