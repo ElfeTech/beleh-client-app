@@ -4,6 +4,7 @@ import {
   signInWithPopup,
   type User,
 } from 'firebase/auth';
+import { FirebaseError } from 'firebase/app';
 import { auth, getGoogleProvider } from '../lib/firebase';
 import { apiClient } from './apiClient';
 import { apiCacheManager } from '../utils/apiCacheManager';
@@ -64,15 +65,43 @@ export async function establishSession(
   }
 }
 
+const POPUP_CLOSE_POLL_MS = 400;
+// Firebase closes its own popup on success just before the promise resolves, so give it time to win.
+const POPUP_CLOSE_GRACE_MS = 1500;
+
 export async function completeGoogleSignIn(intent: GoogleAuthIntent): Promise<void> {
   const provider = getGoogleProvider();
+  let popupWatcher: number | undefined;
+  let rejectClosed: ((error: Error) => void) | undefined;
+  const closedPromise = new Promise<never>((_, reject) => {
+    rejectClosed = reject;
+  });
+
   // Firebase signInWithPopup does not accept window features; patch window.open
   // briefly so the Google auth window opens centered on the current browser.
-  const restoreOpen = patchWindowOpenCentered(500, 600);
+  // We also watch the popup: Firebase only notices a manually closed popup after
+  // several seconds, which leaves the user stuck on the auth status screen.
+  const restoreOpen = patchWindowOpenCentered(500, 600, (popup) => {
+    popupWatcher = window.setInterval(() => {
+      if (!popup.closed) return;
+      window.clearInterval(popupWatcher);
+      window.setTimeout(() => {
+        rejectClosed?.(
+          new FirebaseError('auth/popup-closed-by-user', 'The sign-in window was closed.'),
+        );
+      }, POPUP_CLOSE_GRACE_MS);
+    }, POPUP_CLOSE_POLL_MS);
+  });
+
   try {
-    const cred = await signInWithPopup(auth, provider);
+    const popupSignIn = signInWithPopup(auth, provider);
+    popupSignIn.catch(() => {
+      /* surfaced via the race below; avoid unhandled rejection if the watcher wins */
+    });
+    const cred = await Promise.race([popupSignIn, closedPromise]);
     await establishSession(cred.user, { forceRefreshToken: false, backendIntent: intent });
   } finally {
+    window.clearInterval(popupWatcher);
     restoreOpen();
   }
 }
