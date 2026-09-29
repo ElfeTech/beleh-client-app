@@ -8,9 +8,17 @@ import { notifyProviderOAuthResult } from '../lib/providerOAuth';
  * Posts result to opener (and BroadcastChannel / localStorage fallbacks) then closes.
  * Do not fetch this URL with the API client.
  */
+const PROVIDER_LABELS: Record<string, string> = {
+  supabase: 'Supabase',
+  google_sheets: 'Google Sheets',
+};
+
 export function ProviderOAuthCallback() {
   const [params] = useSearchParams();
   const notified = useRef(false);
+
+  const providerSlug = params.get('provider') ?? 'supabase';
+  const providerLabel = PROVIDER_LABELS[providerSlug] ?? 'Provider';
 
   const payload = useMemo((): ProviderOAuthMessage => {
     const success = params.get('success') === 'true';
@@ -72,7 +80,7 @@ export function ProviderOAuthCallback() {
             color: 'var(--text-muted, #64748b)',
           }}
         >
-          Supabase
+          {providerLabel}
         </p>
         <h1 style={{ margin: '0 0 0.75rem', fontSize: '1.25rem', fontWeight: 800 }}>
           {isSuccess ? 'Connected' : 'Connection failed'}
