@@ -17,7 +17,7 @@ import {
   sortPlansByPrice,
   yearlySavingsPercent,
 } from '../../lib/billingCatalog';
-import { planFeatureList } from '../../lib/planFeatures';
+import { friendlyPlanDescription, planFeatureList } from '../../lib/planFeatures';
 import { trialDaysLeft } from '../../utils/workspaceAccess';
 import { SettingsSectionHeader } from './SettingsSectionHeader';
 import { BillingCycleToggle, type BillingCycle } from './BillingCycleToggle';
@@ -306,9 +306,10 @@ export function UsageSection() {
   );
   const planName = subscription?.plan?.name ?? activeCatalogPlan?.name ?? usagePlan?.name ?? 'Free';
   const planDescription =
-    activeCatalogPlan?.description ??
-    usagePlan?.description ??
-    subscription?.plan?.name ??
+    friendlyPlanDescription(
+      activeCatalogPlan?.description ?? usagePlan?.description ?? null,
+    ) ||
+    subscription?.plan?.name ||
     planName;
   const periodEnd = formatPeriodDate(
     subscription?.billing_cycle_end ?? currentUsage?.billing_cycle_end,

@@ -219,3 +219,50 @@ export async function reconnectProviderOrganization(
 
   return result;
 }
+
+/**
+ * Same OAuth popup flow as `reconnectProviderOrganization`, generalized to any
+ * slug-scoped provider (`/api/v1/providers/{slug}/...`). Used for Google Sheets,
+ * whose "organization" is the connected Google account's email address.
+ */
+export async function connectSlugProvider(
+  slug: string,
+  authToken: string,
+  options?: { connectionId?: string },
+): Promise<ProviderOAuthResult> {
+  const before = await apiClient.listSlugProviderConnections(slug, authToken).catch(() => []);
+  const beforeById = new Map(before.map((c) => [c.id, c]));
+
+  const { url } = await apiClient.getSlugProviderOAuthUrl(slug, authToken);
+  const result = await openProviderOAuthPopup(url);
+  if (result.ok) {
+    invalidateProviderOrgCaches(options?.connectionId);
+    return result;
+  }
+
+  const ambiguousClose = result.error === 'Authorization window was closed.';
+  if (!ambiguousClose) {
+    return result;
+  }
+
+  invalidateProviderOrgCaches(options?.connectionId);
+  try {
+    const after = await apiClient.listSlugProviderConnections(slug, authToken);
+    const added = after.find((c) => !beforeById.has(c.id));
+    if (added) {
+      return { ok: true, organization: added.organization };
+    }
+    const refreshed = after.find((c) => {
+      const prev = beforeById.get(c.id);
+      if (!prev) return false;
+      return prev.expires_at !== c.expires_at || prev.connected_at !== c.connected_at;
+    });
+    if (refreshed) {
+      return { ok: true, organization: refreshed.organization };
+    }
+  } catch {
+    /* fall through to original error */
+  }
+
+  return result;
+}

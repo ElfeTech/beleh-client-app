@@ -106,7 +106,7 @@ export function ConnectorTableDetail({
           </div>
         )
       ) : previewError && !previewLoading ? (
-        <div className="sc-empty-panel">
+        <div className="sc-empty-panel sc-empty-panel--tab-center">
           <h3>Could not load preview</h3>
           <p>{previewError}</p>
         </div>

@@ -80,6 +80,16 @@ import type {
   WorkspaceProviderCredentials,
   WorkspaceProviderUnbindResponse,
 } from '../types/provider';
+import type {
+  SheetBinding,
+  SheetBindingCreateRequest,
+  SheetLinkCreateRequest,
+  SheetsServiceAccountInfo,
+  SheetSpreadsheetListResponse,
+  SheetSyncResponse,
+  SheetTab,
+  SheetTabPreview,
+} from '../types/sheets';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 class APIClient {
@@ -240,9 +250,14 @@ class APIClient {
     }
   }
 
-  async registerUser(idToken: string, inviteToken?: string | null): Promise<UserResponse> {
+  async registerUser(
+    idToken: string,
+    inviteToken?: string | null,
+    attribution?: AuthTokenRequest['attribution'] | null,
+  ): Promise<UserResponse> {
     const payload: AuthTokenRequest = { token: idToken };
     if (inviteToken) payload.invite_token = inviteToken;
+    if (attribution) payload.attribution = attribution;
 
     return this.request<UserResponse>('/api/auth/register', {
       method: 'POST',
@@ -1623,6 +1638,163 @@ class APIClient {
         },
       },
     );
+  }
+
+  // Slug-scoped provider OAuth (Google Sheets today; any future non-Supabase provider
+  // reuses these instead of the legacy Supabase-only methods above).
+  async getSlugProviderOAuthUrl(
+    slug: string,
+    authToken: string,
+  ): Promise<ProviderOAuthUrlResponse> {
+    return this.request<ProviderOAuthUrlResponse>(`/api/v1/providers/${slug}/oauth/url`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async listSlugProviderConnections(
+    slug: string,
+    authToken: string,
+  ): Promise<ProviderConnection[]> {
+    return this.request<ProviderConnection[]>(`/api/v1/providers/${slug}/connections`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async deleteSlugProviderConnection(
+    slug: string,
+    authToken: string,
+    connectionId: string,
+  ): Promise<ProviderDisconnectResponse> {
+    return this.request<ProviderDisconnectResponse>(
+      `/api/v1/providers/${slug}/connections/${connectionId}`,
+      {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  // Google Sheets , /api/v1/sheets and /api/v1/workspaces/{id}/sheets
+  async listSpreadsheets(
+    authToken: string,
+    connectionId: string,
+    query?: string,
+  ): Promise<SheetSpreadsheetListResponse> {
+    const params = query ? `?query=${encodeURIComponent(query)}` : '';
+    return this.request<SheetSpreadsheetListResponse>(
+      `/api/v1/sheets/connections/${connectionId}/spreadsheets${params}`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async listSheetTabs(
+    authToken: string,
+    connectionId: string,
+    spreadsheetId: string,
+  ): Promise<SheetTab[]> {
+    return this.request<SheetTab[]>(
+      `/api/v1/sheets/connections/${connectionId}/spreadsheets/${spreadsheetId}/tabs`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async previewSheetTab(
+    authToken: string,
+    connectionId: string,
+    spreadsheetId: string,
+    tabTitle: string,
+  ): Promise<SheetTabPreview> {
+    return this.request<SheetTabPreview>(
+      `/api/v1/sheets/connections/${connectionId}/spreadsheets/${spreadsheetId}/tabs/${encodeURIComponent(tabTitle)}/preview`,
+      {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      },
+    );
+  }
+
+  async createSheetBinding(
+    authToken: string,
+    workspaceId: string,
+    body: SheetBindingCreateRequest,
+  ): Promise<SheetBinding> {
+    return this.request<SheetBinding>(`/api/v1/workspaces/${workspaceId}/sheets/bindings`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async getSheetsServiceAccount(authToken: string): Promise<SheetsServiceAccountInfo> {
+    return this.request<SheetsServiceAccountInfo>('/api/v1/sheets/service-account', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async createSheetLinkBinding(
+    authToken: string,
+    workspaceId: string,
+    body: SheetLinkCreateRequest,
+  ): Promise<SheetBinding> {
+    return this.request<SheetBinding>(`/api/v1/workspaces/${workspaceId}/sheets/link-bindings`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+      body: JSON.stringify(body),
+    });
+  }
+
+  async listSheetBindings(authToken: string, workspaceId: string): Promise<SheetBinding[]> {
+    return this.request<SheetBinding[]>(`/api/v1/workspaces/${workspaceId}/sheets/bindings`, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async syncSheetBinding(authToken: string, bindingId: string): Promise<SheetSyncResponse> {
+    return this.request<SheetSyncResponse>(`/api/v1/sheets/bindings/${bindingId}/sync`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
+  }
+
+  async deleteSheetBinding(authToken: string, bindingId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/sheets/bindings/${bindingId}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+      },
+    });
   }
 }
 

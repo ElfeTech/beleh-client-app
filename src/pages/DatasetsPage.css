@@ -156,6 +156,16 @@
   max-width: 100%;
 }
 
+.sc-col--detail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.sc-col--detail > .sc-panel--preview {
+  flex: 1;
+}
+
 .sc-panel {
   background: var(--panel-bg);
   border: 1px solid var(--border-primary);
@@ -781,6 +791,18 @@
   font-size: 1rem;
   color: var(--text-primary);
   margin: 0 0 var(--space-2);
+}
+
+.sc-empty-panel--tab-center {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  padding-block: 0;
+}
+
+.sc-empty-panel--tab-center p {
+  margin: 0;
+  max-width: 28rem;
 }
 
 .sc-empty-panel--guide {

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { WorkspaceContext } from '../context/WorkspaceContext';
 import { DatasourceContext } from '../context/DatasourceContext';
+import { useChatSession } from '../context/ChatSessionContext';
 import { useAuth } from '../context/useAuth';
 import { apiClient } from '../services/apiClient';
 import {
@@ -24,6 +25,7 @@ import {
   type ConnectSuccessSource,
 } from '../components/layout/DatasourceConnectionPanel';
 import { pollConnectorSyncUntilSettled } from '../utils/pollConnectorSync';
+import { isSchemaSyncInProgress } from '../lib/providerBind';
 import { loadUploadDraft, savePanelOpen, wasPanelOpen } from '../utils/uploadDraftStore';
 import MobileChatHeader from '../components/layout/MobileChatHeader';
 import WorkspaceSwitcher from '../components/layout/WorkspaceSwitcher';
@@ -170,6 +172,7 @@ const DatasetsPage: React.FC = () => {
   const { user } = useAuth();
   const workspaceContext = useContext(WorkspaceContext);
   const datasourceContext = useContext(DatasourceContext);
+  const { refreshSessions } = useChatSession();
   const [showConnectionPanel, setShowConnectionPanel] = useState(false);
   const [connectPanelInitialView, setConnectPanelInitialView] = useState<'upload' | undefined>(
     undefined,
@@ -238,8 +241,10 @@ const DatasetsPage: React.FC = () => {
   const appliedDrillKeyRef = useRef<string | null>(null);
   const skipCloseRefreshRef = useRef(false);
   const [retryingSyncId, setRetryingSyncId] = useState<string | null>(null);
+  const [schemaPollTimedOutId, setSchemaPollTimedOutId] = useState<string | null>(null);
   // Stops in-flight schema-sync polling when the page unmounts.
   const pollAbortRef = useRef(false);
+  const schemaPollIdsRef = useRef(new Set<string>());
   useEffect(() => {
     pollAbortRef.current = false;
     return () => {
@@ -511,12 +516,21 @@ const DatasetsPage: React.FC = () => {
 
     if (row.kind === 'connector') {
       const meta = row.connector.metadata_status;
-      if (meta === 'PENDING' || meta === 'PROCESSING' || meta === 'FAILED') {
+      if (meta === 'FAILED') {
         setCatalogTables([]);
         setSelectedTableName(null);
         setSelectedSchemaName(null);
         setBrowseLevel('schemas');
         setTablesLoading(false);
+        return;
+      }
+      if (isSchemaSyncInProgress(meta)) {
+        // Bind/link is not "schemas ready". Keep the spinner until COMPLETED.
+        setCatalogTables([]);
+        setSelectedTableName(null);
+        setSelectedSchemaName(null);
+        setBrowseLevel('schemas');
+        setTablesLoading(schemaPollTimedOutId !== row.connector.id);
         return;
       }
 
@@ -584,7 +598,36 @@ const DatasetsPage: React.FC = () => {
     };
     // applyCatalogDrill closes over selectedCatalogSource / pending refs — intentional on source change
     // eslint-disable-next-line react-hooks/exhaustive-deps -- restore drill when source/tables identity changes
-  }, [user, selectedCatalogSource, unifiedSources, workspaceId]);
+  }, [user, selectedCatalogSource, unifiedSources, workspaceId, schemaPollTimedOutId]);
+
+  useEffect(() => {
+    if (!workspaceContext?.refreshConnectors) return;
+    const pendingIds = unifiedSources
+      .filter(
+        (row): row is Extract<UnifiedRow, { kind: 'connector' }> =>
+          row.kind === 'connector' && isSchemaSyncInProgress(row.connector.metadata_status),
+      )
+      .map((row) => row.connector.id);
+    if (pendingIds.length === 0) return;
+
+    const refresh = workspaceContext.refreshConnectors;
+    for (const id of pendingIds) {
+      if (schemaPollIdsRef.current.has(id)) continue;
+      schemaPollIdsRef.current.add(id);
+      void pollConnectorSyncUntilSettled(refresh, {
+        connectorId: id,
+        isCancelled: () => pollAbortRef.current,
+      })
+        .then((outcome) => {
+          if (outcome === 'timeout') {
+            setSchemaPollTimedOutId((prev) => prev ?? id);
+          }
+        })
+        .finally(() => {
+          schemaPollIdsRef.current.delete(id);
+        });
+    }
+  }, [unifiedSources, workspaceContext]);
 
   const schemaGroups = useMemo(() => groupTablesBySchema(catalogTables), [catalogTables]);
 
@@ -606,6 +649,13 @@ const DatasetsPage: React.FC = () => {
       ) ?? null
     );
   }, [unifiedSources, selectedCatalogSource]);
+
+  useEffect(() => {
+    if (selectedCatalogRow?.kind !== 'connector') return;
+    if (selectedCatalogRow.connector.metadata_status === 'COMPLETED') {
+      setSchemaPollTimedOutId((prev) => (prev === selectedCatalogRow.connector.id ? null : prev));
+    }
+  }, [selectedCatalogRow]);
 
   const isConnectorSource = selectedCatalogRow?.kind === 'connector';
 
@@ -884,6 +934,10 @@ const DatasetsPage: React.FC = () => {
         await workspaceContext.refreshWorkspaceUsage();
       }
 
+      // Deleting a datasource/connector cascades chat deletion server-side — refresh
+      // the sidebar so it drops those sessions instead of showing stale/broken chats.
+      await refreshSessions(workspaceId);
+
       if (datasourceContext?.selectedDatasourceId === deletedId) {
         const remainingSources =
           deletedType === 'datasource'
@@ -943,6 +997,7 @@ const DatasetsPage: React.FC = () => {
       setSelectedCatalogSource({ kind: 'connector', id: created.id });
       setCatalogTables([]);
       setTablesLoading(true);
+      setSchemaPollTimedOutId((prev) => (prev === created.id ? null : prev));
     }
 
     const demoId = findDemoDatasource(datasources)?.id ?? null;
@@ -970,15 +1025,19 @@ const DatasetsPage: React.FC = () => {
     // Keep pills/tables honest: follow schema sync to a terminal state instead
     // of giving up after a few seconds and leaving a stale "Syncing" badge.
     if ((created?.id || source === 'supabase') && workspaceContext?.refreshConnectors) {
+      if (created?.id) schemaPollIdsRef.current.add(created.id);
       const outcome = await pollConnectorSyncUntilSettled(workspaceContext.refreshConnectors, {
         connectorId: created?.id,
+        waitForCompanion: source === 'supabase' && !created?.id,
         isCancelled: () => pollAbortRef.current,
       });
+      if (created?.id) schemaPollIdsRef.current.delete(created.id);
       if (outcome === 'completed') {
         toast.success('Schema sync complete — tables are ready.');
       } else if (outcome === 'failed') {
         toast.error('Schema sync failed. Open the connector to retry or reconnect.');
       } else if (outcome === 'timeout') {
+        if (created?.id) setSchemaPollTimedOutId(created.id);
         toast.message('Schema sync is still running — tables will appear once it finishes.');
       }
     }
@@ -1193,6 +1252,15 @@ const DatasetsPage: React.FC = () => {
   const hasContent = unifiedSources.length > 0;
   /** Avoid blanking the catalog on background refetch after connect/close. */
   const showCatalogLoading = loading && !hasContent;
+  let catalogProgressLabel = 'Loading tables from this source…';
+  if (
+    selectedCatalogRow?.kind === 'connector' &&
+    isSchemaSyncInProgress(selectedCatalogRow.connector.metadata_status)
+  ) {
+    catalogProgressLabel = 'Loading schemas…';
+  } else if (isConnectorSource && browseLevel === 'schemas') {
+    catalogProgressLabel = 'Loading schemas from this source…';
+  }
 
   const renderSourceIcon = (row: UnifiedRow) => {
     const iconProps = { size: 16, strokeWidth: 1.75 as const };
@@ -1591,23 +1659,19 @@ const DatasetsPage: React.FC = () => {
                       <div className="sc-catalog-progress__track">
                         <span className="sc-catalog-progress__bar" />
                       </div>
-                      <p className="sc-catalog-progress__label">
-                        {isConnectorSource && browseLevel === 'schemas'
-                          ? 'Loading schemas from this source…'
-                          : 'Loading tables from this source…'}
-                      </p>
+                      <p className="sc-catalog-progress__label">{catalogProgressLabel}</p>
                       <div className="sc-skeleton-row" />
                       <div className="sc-skeleton-row" />
                       <div className="sc-skeleton-row" />
                     </div>
                   ) : selectedCatalogRow?.kind === 'connector' &&
-                    (selectedCatalogRow.connector.metadata_status === 'PENDING' ||
-                      selectedCatalogRow.connector.metadata_status === 'PROCESSING') ? (
+                    isSchemaSyncInProgress(selectedCatalogRow.connector.metadata_status) ? (
                     <div className="sc-empty-panel">
-                      <h3>Schema sync pending</h3>
+                      <h3>Loading schemas…</h3>
                       <p>
-                        Schemas and tables for this database will appear once metadata sync
-                        completes.
+                        {schemaPollTimedOutId === selectedCatalogRow.connector.id
+                          ? 'Schema sync is still running — tables will appear once it finishes.'
+                          : 'This project is linked. Schemas appear when metadata sync completes.'}
                       </p>
                     </div>
                   ) : selectedCatalogRow?.kind === 'connector' &&
@@ -1615,8 +1679,8 @@ const DatasetsPage: React.FC = () => {
                     <div className="sc-empty-panel">
                       <h3>Schema sync failed</h3>
                       <p>
-                        Could not discover schemas for this database. Try reconnecting or syncing
-                        again.
+                        {selectedCatalogRow.connector.schema_sync_error ||
+                          'Could not discover schemas for this database. Try reconnecting or syncing again.'}
                       </p>
                       <button
                         type="button"
@@ -1730,17 +1794,23 @@ const DatasetsPage: React.FC = () => {
                   </button>
                 )}
                 {selectedCatalogRow?.kind === 'connector' &&
-                (selectedCatalogRow.connector.metadata_status === 'PENDING' ||
-                  selectedCatalogRow.connector.metadata_status === 'PROCESSING') ? (
+                isSchemaSyncInProgress(selectedCatalogRow.connector.metadata_status) ? (
                   <div className="sc-empty-panel">
-                    <h3>Schema sync pending</h3>
-                    <p>Table details will appear here once connector metadata sync completes.</p>
+                    <h3>Loading schemas…</h3>
+                    <p>
+                      {schemaPollTimedOutId === selectedCatalogRow.connector.id
+                        ? 'Schema sync is still running — table details will appear once it finishes.'
+                        : 'Table details appear here when metadata sync completes.'}
+                    </p>
                   </div>
                 ) : selectedCatalogRow?.kind === 'connector' &&
                   selectedCatalogRow.connector.metadata_status === 'FAILED' ? (
                   <div className="sc-empty-panel">
                     <h3>Schema sync failed</h3>
-                    <p>Could not load schema details for this database.</p>
+                    <p>
+                      {selectedCatalogRow.connector.schema_sync_error ||
+                        'Could not load schema details for this database.'}
+                    </p>
                     <button
                       type="button"
                       className="sc-empty-panel__cta"
@@ -1910,7 +1980,7 @@ const DatasetsPage: React.FC = () => {
       <ConfirmDialog
         isOpen={showDeleteConfirm}
         title={itemToDelete?.type === 'datasource' ? 'Delete Dataset?' : 'Delete Connector?'}
-        message="This action cannot be undone. All data associated with this source will be permanently removed from your workspace."
+        message="This action cannot be undone. All data associated with this source, including any chats built on it, will be permanently deleted."
         confirmText="Delete"
         cancelText="Cancel"
         variant="danger"

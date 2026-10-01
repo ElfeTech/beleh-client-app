@@ -176,7 +176,7 @@ docker build \
   --build-arg VITE_FIREBASE_STORAGE_BUCKET=your_project.appspot.com \
   --build-arg VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id \
   --build-arg VITE_FIREBASE_APP_ID=your_app_id \
-  --build-arg VITE_API_BASE_URL=https://api.yourdomain.com \
+  --build-arg VITE_API_BASE_URL=https://backend.yulona.co \
   -t beleh-frontend:latest .
 ```
 
