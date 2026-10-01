@@ -1,4 +1,4 @@
-/** Cookie / analytics consent — gates GA4, GTM, and Clarity. */
+/** Cookie / analytics consent — drives Google Consent Mode (GTM) and gates Clarity. */
 
 export const COOKIE_CONSENT_STORAGE_KEY = 'beleh.cookie-consent.v1';
 export const COOKIE_CONSENT_EVENT = 'beleh:cookie-consent-changed';
@@ -94,7 +94,9 @@ export function openCookiePreferences(): void {
   window.dispatchEvent(new CustomEvent(COOKIE_CONSENT_OPEN_EVENT));
 }
 
-export function subscribeCookieConsent(listener: (state: CookieConsentState | null) => void): () => void {
+export function subscribeCookieConsent(
+  listener: (state: CookieConsentState | null) => void,
+): () => void {
   const onChange = (e: Event) => {
     const detail = (e as CustomEvent<CookieConsentState>).detail;
     listener(detail ?? readCookieConsent());

@@ -13,6 +13,8 @@ import { clearUserNamespace } from '../lib/uiMemory';
 import { SESSION_CLEAR_LOCALSTORAGE_KEYS } from '../constants/clientStorageKeys';
 import { peekInviteToken } from '../lib/inviteToken';
 import { patchWindowOpenCentered } from '../lib/centeredPopup';
+import { flattenAttribution, getAttributionForSignup } from '../lib/attribution';
+import { trackEvent } from '../lib/googleAnalytics';
 
 const TOKEN_KEY = 'firebase_auth_token';
 const USER_KEY = 'firebase_user';
@@ -47,11 +49,14 @@ export async function establishSession(
 
   try {
     if (options.backendIntent === 'register') {
-      const backendUser = await apiClient.registerUser(token, inviteToken);
+      const attribution = getAttributionForSignup();
+      const backendUser = await apiClient.registerUser(token, inviteToken, attribution);
       persistBackendUser(backendUser);
+      trackEvent('sign_up', { method: 'google', ...flattenAttribution(attribution) });
     } else {
       const backendUser = await apiClient.loginUser(token, inviteToken);
       persistBackendUser(backendUser);
+      trackEvent('login', { method: 'google' });
     }
   } catch (backendError) {
     console.error('[Auth] Backend login/register failed:', backendError);

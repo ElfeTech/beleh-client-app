@@ -250,9 +250,14 @@ class APIClient {
     }
   }
 
-  async registerUser(idToken: string, inviteToken?: string | null): Promise<UserResponse> {
+  async registerUser(
+    idToken: string,
+    inviteToken?: string | null,
+    attribution?: AuthTokenRequest['attribution'] | null,
+  ): Promise<UserResponse> {
     const payload: AuthTokenRequest = { token: idToken };
     if (inviteToken) payload.invite_token = inviteToken;
+    if (attribution) payload.attribution = attribution;
 
     return this.request<UserResponse>('/api/auth/register', {
       method: 'POST',
