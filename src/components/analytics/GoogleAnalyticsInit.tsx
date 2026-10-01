@@ -1,57 +1,33 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { isProductionAnalytics } from '../../lib/analyticsEnvironment';
-import {
-  ensureGoogleConsentDefaults,
-  isAnalyticsConsentGranted,
-  readCookieConsent,
-  subscribeCookieConsent,
-} from '../../lib/cookieConsent';
-import {
-  initGoogleAnalytics,
-  initGoogleTagManager,
-  trackPageView,
-} from '../../lib/googleAnalytics';
+import { captureAttribution } from '../../lib/attribution';
+import { applyGoogleConsentMode, subscribeCookieConsent } from '../../lib/cookieConsent';
+import { initGoogleTagManager, pushDataLayer, trackPageView } from '../../lib/googleAnalytics';
 
 /**
- * Loads GA4 (gtag.js), optional GTM container, and tracks SPA route changes
- * only after the user grants analytics cookie consent (production builds).
+ * Loads Google Tag Manager on every visit (production builds) with Consent Mode v2
+ * defaults denied, forwards consent changes, captures UTM attribution, and pushes
+ * SPA route changes to the dataLayer. GA4 itself is configured inside GTM.
  */
 export function GoogleAnalyticsInit() {
   const { pathname, search } = useLocation();
   const enabled = isProductionAnalytics();
-  const [analyticsAllowed, setAnalyticsAllowed] = useState(() => isAnalyticsConsentGranted());
-  const [gaReady, setGaReady] = useState(false);
 
   useEffect(() => {
     if (!enabled) return;
-    ensureGoogleConsentDefaults();
-    setAnalyticsAllowed(isAnalyticsConsentGranted());
+    const attribution = captureAttribution();
+    initGoogleTagManager();
+    if (attribution) pushDataLayer({ event: 'utm_captured', ...attribution });
     return subscribeCookieConsent((state) => {
-      setAnalyticsAllowed(state?.categories.analytics === true);
+      applyGoogleConsentMode(state?.categories.analytics === true);
     });
   }, [enabled]);
 
   useEffect(() => {
-    if (!enabled || !analyticsAllowed) {
-      setGaReady(false);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      await initGoogleAnalytics();
-      initGoogleTagManager();
-      if (!cancelled) setGaReady(true);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [enabled, analyticsAllowed]);
-
-  useEffect(() => {
-    if (!gaReady || !readCookieConsent()?.categories.analytics) return;
+    if (!enabled) return;
     trackPageView(pathname + search);
-  }, [pathname, search, gaReady]);
+  }, [enabled, pathname, search]);
 
   return null;
 }
