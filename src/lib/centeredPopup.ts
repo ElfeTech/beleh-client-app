@@ -24,12 +24,18 @@ export function centeredPopupFeatures(
  * Useful for Firebase signInWithPopup which does not accept window features.
  * Always call the returned restore function (e.g. in finally).
  */
-export function patchWindowOpenCentered(width: number, height: number): () => void {
+export function patchWindowOpenCentered(
+  width: number,
+  height: number,
+  onOpen?: (popup: Window) => void,
+): () => void {
   const originalOpen = window.open.bind(window);
 
   window.open = ((url?: string | URL, target?: string, features?: string) => {
     const nextFeatures = mergeOrReplaceCenteredFeatures(features, width, height);
-    return originalOpen(url, target, nextFeatures);
+    const popup = originalOpen(url, target, nextFeatures);
+    if (popup) onOpen?.(popup);
+    return popup;
   }) as typeof window.open;
 
   return () => {

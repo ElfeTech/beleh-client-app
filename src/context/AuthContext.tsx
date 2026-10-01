@@ -23,7 +23,7 @@ function toAuthFlowError(error: unknown): Error {
         );
       case 'auth/popup-closed-by-user':
       case 'auth/cancelled-popup-request':
-        return new Error('Sign-in was cancelled.');
+        return new Error('The sign-in window was closed before you finished. Please try again.');
       default:
         return new Error(error.message || 'Authentication failed. Please try again.');
     }

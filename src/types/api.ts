@@ -4,6 +4,11 @@
 export interface AuthTokenRequest {
   token: string;
   invite_token?: string;
+  /** Marketing attribution (UTM/referrer), sent on register only when captured. */
+  attribution?: {
+    first_touch?: Record<string, string>;
+    last_touch?: Record<string, string>;
+  };
 }
 
 /** @deprecated Prefer AuthTokenRequest */
