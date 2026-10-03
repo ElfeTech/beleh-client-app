@@ -111,7 +111,12 @@ export function subscribeChatRun(
 }
 
 /**
- * Resolve an in-flight run for resume: prefer session key, fall back to workspace pointer.
+ * Resolve an in-flight run for resume.
+ *
+ * With a session open, only THAT session's own run counts. Falling back to the workspace
+ * pointer here made every other chat "resume" a different session's run, which switched the
+ * active session back and forth with the URL (and the datasource with it) until the stale
+ * entry was cleared. The pointer is only a boot-time hint for when no session is selected.
  */
 export function resolveInFlightChatRun(
   uid: string,
@@ -119,8 +124,7 @@ export function resolveInFlightChatRun(
   sessionId: string | null,
 ): PersistedChatRun | null {
   if (sessionId) {
-    const fromSession = getChatRun(uid, sessionId);
-    if (fromSession) return fromSession;
+    return getChatRun(uid, sessionId);
   }
   const pointer = getChatRunPointer(uid, workspaceId);
   if (!pointer) return null;

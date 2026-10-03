@@ -16,6 +16,11 @@ import { findDemoDatasource } from '../lib/workspaceDemo';
 interface DatasourceContextType {
   selectedDatasourceId: string | null;
   setSelectedDatasourceId: (id: string | null) => void;
+  /**
+   * Clear the selection only if it is still `id` at call time. Safe from async code whose
+   * closure may predate a newer selection (e.g. demo removal racing a freshly connected source).
+   */
+  clearSelectedIfEquals: (id: string) => void;
 }
 
 const DatasourceContext = createContext<DatasourceContextType | undefined>(undefined);
@@ -28,14 +33,30 @@ export function DatasourceProvider({ children }: { children: ReactNode }) {
   const [selectedDatasourceId, setSelectedDatasourceIdState] = useState<string | null>(null);
   const datasetHydratedForWorkspaceRef = useRef<string | null>(null);
 
+  /** Latest selection, readable from stale closures. */
+  const selectedRef = useRef<string | null>(null);
+  useEffect(() => {
+    selectedRef.current = selectedDatasourceId;
+  }, [selectedDatasourceId]);
+
   const setSelectedDatasourceId = useCallback(
     (id: string | null) => {
+      selectedRef.current = id;
       setSelectedDatasourceIdState(id);
       const wid = currentWorkspace?.id;
       const uid = user?.uid;
       writeSelectedDatasetId(uid, wid, id);
     },
     [user?.uid, currentWorkspace?.id],
+  );
+
+  const clearSelectedIfEquals = useCallback(
+    (id: string) => {
+      if (selectedRef.current === id) {
+        setSelectedDatasourceId(null);
+      }
+    },
+    [setSelectedDatasourceId],
   );
 
   // Hydrate selection for the current workspace once source lists are ready.
@@ -123,7 +144,9 @@ export function DatasourceProvider({ children }: { children: ReactNode }) {
   }, [currentWorkspace?.id]);
 
   return (
-    <DatasourceContext.Provider value={{ selectedDatasourceId, setSelectedDatasourceId }}>
+    <DatasourceContext.Provider
+      value={{ selectedDatasourceId, setSelectedDatasourceId, clearSelectedIfEquals }}
+    >
       {children}
     </DatasourceContext.Provider>
   );

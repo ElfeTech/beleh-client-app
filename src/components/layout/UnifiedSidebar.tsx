@@ -17,6 +17,11 @@ import {
 import { NavLink, useLocation, useParams, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
+import {
+  AUTO_OVERVIEW_ORIGIN,
+  markOverviewSessionSeen,
+  readSeenOverviewSessions,
+} from '../../lib/overviewSeen';
 import logoImage from '../../assets/logo.webp';
 import { ChatSessionContext, useChatSession } from '../../context/ChatSessionContext';
 import { useAuth } from '../../context/useAuth';
@@ -108,6 +113,14 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
 
   const sessions = chatContext?.sessions ?? [];
   const activeSessionId = chatContext?.activeSessionId ?? null;
+
+  const [seenOverviews, setSeenOverviews] = useState<Set<string>>(() => readSeenOverviewSessions());
+  const activeSessionOrigin = sessions.find((x) => x.id === activeSessionId)?.origin ?? null;
+  useEffect(() => {
+    if (activeSessionId && activeSessionOrigin === AUTO_OVERVIEW_ORIGIN) {
+      setSeenOverviews(markOverviewSessionSeen(activeSessionId));
+    }
+  }, [activeSessionId, activeSessionOrigin]);
 
   const [menuAnchorEl, setMenuAnchorEl] = useState<HTMLElement | null>(null);
   const [actionSessionId, setActionSessionId] = useState<string | null>(null);
@@ -449,6 +462,12 @@ export function UnifiedSidebar({ variant = 'rail' }: UnifiedSidebarProps) {
                               <span className="sidebar-session-title truncate">
                                 {session.title || `Chat ${session.id.slice(0, 8)}`}
                               </span>
+                              {session.origin === AUTO_OVERVIEW_ORIGIN &&
+                              !seenOverviews.has(session.id) ? (
+                                <span className="ml-2 shrink-0 rounded-full bg-primary/15 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary">
+                                  New
+                                </span>
+                              ) : null}
                             </button>
                             <button
                               type="button"

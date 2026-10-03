@@ -13,8 +13,14 @@ function deleteSessionSearchParam(prev: URLSearchParams): URLSearchParams {
 /** Keep active chat session in ?session= so hard refresh restores the thread. */
 export function useSessionInUrl(workspaceId: string | undefined) {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { activeSessionId, setActiveSessionId, sessions, isNewChatDraft, sessionsReady } =
-    useChatSession();
+  const {
+    activeSessionId,
+    setActiveSessionId,
+    sessions,
+    isNewChatDraft,
+    sessionsReady,
+    isSessionPinned,
+  } = useChatSession();
   const skipUrlWriteRef = useRef(false);
   const hydratedRef = useRef(false);
 
@@ -64,6 +70,8 @@ export function useSessionInUrl(workspaceId: string | undefined) {
     if (!sessionsReady) return;
 
     const exists = sessions.some((s) => s.id === fromUrl);
+    // A just-opened session (e.g. the auto-created overview) may lag the server list.
+    if (!exists && isSessionPinned(fromUrl)) return;
     if (!exists) {
       setSearchParams(deleteSessionSearchParam, { replace: true });
       if (activeSessionId === fromUrl) {
@@ -88,6 +96,7 @@ export function useSessionInUrl(workspaceId: string | undefined) {
     activeSessionId,
     setActiveSessionId,
     setSearchParams,
+    isSessionPinned,
   ]);
 
   // context → URL

@@ -72,6 +72,7 @@ interface WorkspaceContextType {
     workspaceId: string,
     datasetId?: string | null,
     sessionId?: string | null,
+    options?: { immediate?: boolean },
   ) => Promise<void>;
   invalidateContextCache: (workspaceId: string) => void;
 }
@@ -450,11 +451,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     // Critical path: context (session/dataset restore) in parallel with source catalogs.
     // Usage is peripheral (sidebar / soft lock) — never block restore on it.
-    void Promise.all([
-      refreshDatasources(),
-      refreshConnectors(),
-      loadWorkspaceContext(workspaceId),
-    ])
+    void Promise.all([refreshDatasources(), refreshConnectors(), loadWorkspaceContext(workspaceId)])
       .then(async ([, connectors]) => {
         if (cancelled || loadedWorkspaceRef.current !== workspaceId) return;
         const pending = (connectors ?? []).some((c) => isSchemaSyncInProgress(c.metadata_status));
@@ -512,6 +509,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       workspaceId: string,
       datasetId?: string | null,
       sessionId?: string | null,
+      options?: { immediate?: boolean },
     ): Promise<void> => {
       if (!user) return;
 
@@ -523,9 +521,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
           nextState.last_active_dataset_id = datasetId;
         }
         if (sessionId !== undefined) {
-          nextState.last_active_session_id = isValidSessionIdForState(sessionId)
-            ? sessionId
-            : null;
+          nextState.last_active_session_id = isValidSessionIdForState(sessionId) ? sessionId : null;
         }
         if (
           nextState.last_active_dataset_id === prev.state.last_active_dataset_id &&
@@ -549,49 +545,52 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }
 
       // Set up debounced save
-      stateSaveTimerRef.current = setTimeout(async () => {
-        const stateToSave = pendingStateRef.current;
-        if (!stateToSave) return;
+      stateSaveTimerRef.current = setTimeout(
+        async () => {
+          const stateToSave = pendingStateRef.current;
+          if (!stateToSave) return;
 
-        pendingStateRef.current = null;
+          pendingStateRef.current = null;
 
-        const dsList = datasourcesRef.current;
-        const connList = connectorsRef.current;
-        const listsEmpty = dsList.length === 0 && connList.length === 0;
+          const dsList = datasourcesRef.current;
+          const connList = connectorsRef.current;
+          const listsEmpty = dsList.length === 0 && connList.length === 0;
 
-        // Do not PATCH a dataset id until sources are loaded (prevents stale localStorage ids on hard refresh)
-        if (listsEmpty && stateToSave.datasetId) {
-          return;
-        }
-
-        const lastActiveDatasetId = resolveDatasetIdForStateEndpoint(
-          stateToSave.datasetId,
-          dsList,
-          connList,
-        );
-        const lastActiveSessionId = isValidSessionIdForState(stateToSave.sessionId)
-          ? stateToSave.sessionId!
-          : null;
-
-        try {
-          const token = await user.getIdToken();
-          await apiClient.updateWorkspaceState(token, stateToSave.workspaceId, {
-            last_active_dataset_id: lastActiveDatasetId,
-            last_active_session_id: lastActiveSessionId,
-          });
-
-          apiCacheManager.invalidate('workspace-context', [token, stateToSave.workspaceId]);
-        } catch (error) {
-          if (isDatasetStateError(error)) {
-            writeSelectedDatasetId(user.uid, stateToSave.workspaceId, null);
-            console.warn(
-              '[WorkspaceContext] Skipped invalid dataset in workspace state (cleared local selection)',
-            );
+          // Do not PATCH a dataset id until sources are loaded (prevents stale localStorage ids on hard refresh)
+          if (listsEmpty && stateToSave.datasetId) {
             return;
           }
-          console.error('[WorkspaceContext] Failed to save workspace state:', error);
-        }
-      }, STATE_SAVE_DEBOUNCE_MS);
+
+          const lastActiveDatasetId = resolveDatasetIdForStateEndpoint(
+            stateToSave.datasetId,
+            dsList,
+            connList,
+          );
+          const lastActiveSessionId = isValidSessionIdForState(stateToSave.sessionId)
+            ? stateToSave.sessionId!
+            : null;
+
+          try {
+            const token = await user.getIdToken();
+            await apiClient.updateWorkspaceState(token, stateToSave.workspaceId, {
+              last_active_dataset_id: lastActiveDatasetId,
+              last_active_session_id: lastActiveSessionId,
+            });
+
+            apiCacheManager.invalidate('workspace-context', [token, stateToSave.workspaceId]);
+          } catch (error) {
+            if (isDatasetStateError(error)) {
+              writeSelectedDatasetId(user.uid, stateToSave.workspaceId, null);
+              console.warn(
+                '[WorkspaceContext] Skipped invalid dataset in workspace state (cleared local selection)',
+              );
+              return;
+            }
+            console.error('[WorkspaceContext] Failed to save workspace state:', error);
+          }
+        },
+        options?.immediate ? 0 : STATE_SAVE_DEBOUNCE_MS,
+      );
     },
     [user],
   );
