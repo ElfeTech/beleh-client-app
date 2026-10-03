@@ -269,6 +269,8 @@ export interface DataSourceResponse {
   duckdb_storage_path: string;
   ingestion_error: string | null;
   metadata_json: DataSourceMetadataJson | null;
+  /** Auto-created first chat (overview) for this source, once ingestion finished. */
+  overview_session_id?: string | null;
   sheets?: ExcelSheet[];
   needs_user_input?: boolean;
   current_sheet_preview?: any[][];
@@ -508,6 +510,8 @@ export interface AssistantTurnMeta {
   validation_warnings?: string[];
   /** Optional viz remaps / notes; usually also covered in narrative text. Not shown in the UI. */
   viz_notes?: string[];
+  /** Follow-up questions the narrative offered. */
+  suggested_questions?: string[];
 }
 
 export interface AssistantTurnResponse {
@@ -606,9 +610,12 @@ export interface ChatSessionCreate {
 
 export interface ChatSessionRead {
   id: string;
-  dataset_id: string;
+  /** Null for connector-bound and general chats (see `connector_id`). */
+  dataset_id: string | null;
   connector_id?: string | null;
   title: string;
+  /** `auto_overview` for the system-created first chat of a datasource. */
+  origin?: string | null;
   created_at: string;
   updated_at: string;
   is_deleted: boolean;
@@ -618,6 +625,8 @@ export interface ChatSessionRead {
 export interface ChatMessageMetadata {
   artifacts?: UiArtifact[];
   meta?: AssistantTurnMeta;
+  /** Set on the auto-overview prompt (hidden) and its answer. */
+  auto_overview?: boolean;
 }
 
 export interface ChatMessageRead {
@@ -737,6 +746,8 @@ export interface ConnectorResponse {
   updated_at: string | null;
   /** Present when metadata_status is FAILED. */
   schema_sync_error?: string | null;
+  /** Auto-created first chat (overview) for this connector, once schema sync finished. */
+  overview_session_id?: string | null;
 }
 
 export interface ConnectionTestRequest extends PostgreSQLConfig {}

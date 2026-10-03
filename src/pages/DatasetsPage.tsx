@@ -1,6 +1,9 @@
 import React, { useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useConnectOrUpgrade } from '../hooks/useConnectOrUpgrade';
+import { useOverviewHandoff } from '../hooks/useOverviewHandoff';
+import { OverviewHandoffOverlay } from '../components/chat/OverviewHandoffOverlay';
 import {
   Plus,
   Search,
@@ -65,12 +68,8 @@ import {
   type DatasetsPageViewState,
 } from '../lib/uiMemory';
 import {
-  BILLING_UPGRADE_HREF,
   canEditOrDeleteResource,
-  canShowWorkspaceUpgradeCta,
-  isDatasourcesAtLimit,
   PLAN_MANAGED_BY_OWNER_COPY,
-  workspaceLimitUpgradeMessage,
   UPGRADE_TO_ADD_DATASOURCES_LABEL,
 } from '../utils/workspaceAccess';
 import { formatResourceDeleteError, isAbortError } from '../utils/apiErrorMessage';
@@ -416,21 +415,19 @@ const DatasetsPage: React.FC = () => {
   const connectors = workspaceContext?.connectors || [];
   const loading = workspaceContext?.loading || false;
   const currentRole = workspaceContext?.currentRole ?? null;
-  const datasourcesAtLimit = isDatasourcesAtLimit(workspaceContext?.workspaceUsage ?? null);
-  const canUpgrade = canShowWorkspaceUpgradeCta(currentRole);
   const setSelectedDatasourceId = datasourceContext?.setSelectedDatasourceId || (() => {});
 
-  const openConnectOrUpgrade = () => {
-    if (datasourcesAtLimit) {
-      if (canUpgrade) {
-        navigate(BILLING_UPGRADE_HREF);
-        return;
-      }
-      toast.error(workspaceLimitUpgradeMessage(currentRole, 'datasources'));
-      return;
-    }
+  const overviewHandoff = useOverviewHandoff(workspaceId);
+  const { arm: armOverviewHandoff } = overviewHandoff;
+
+  const {
+    blocked: datasourcesAtLimit,
+    canUpgrade,
+    onConnect: openConnectOrUpgrade,
+  } = useConnectOrUpgrade(() => {
+    armOverviewHandoff();
     setShowConnectionPanel(true);
-  };
+  });
 
   const canMutateSelected = (): boolean => {
     if (!selectedItemForMenu) return false;
@@ -987,6 +984,8 @@ const DatasetsPage: React.FC = () => {
     source?: ConnectSuccessSource,
   ) => {
     skipCloseRefreshRef.current = true;
+    // Land the user in the auto-created overview chat as soon as it exists.
+    void overviewHandoff.start({ connectorId: created?.id });
     if (created) {
       workspaceContext?.setConnectors([
         created,
@@ -1012,8 +1011,8 @@ const DatasetsPage: React.FC = () => {
         const token = await user.getIdToken();
         await ensureDemoRemovedAfterLiveSource(token, workspaceId, datasources);
         await workspaceContext?.refreshDatasources?.({ silent: true });
-        if (demoId && datasourceContext?.selectedDatasourceId === demoId) {
-          datasourceContext.setSelectedDatasourceId(null);
+        if (demoId) {
+          datasourceContext?.clearSelectedIfEquals(demoId);
         }
       } catch {
         /* best-effort */
@@ -1916,6 +1915,12 @@ const DatasetsPage: React.FC = () => {
           }}
         />
       )}
+
+      <OverviewHandoffOverlay
+        active={overviewHandoff.state.active}
+        phase={overviewHandoff.state.phase}
+        onSkip={overviewHandoff.cancel}
+      />
 
       {showWorkspaceSwitcher && (
         <WorkspaceSwitcher

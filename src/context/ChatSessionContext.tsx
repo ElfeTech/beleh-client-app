@@ -16,6 +16,9 @@ import { readActiveSessionId, writeActiveSessionId, migrateLegacyUiMemory } from
 import { INITIAL_PAGE, LIST_PAGE_SIZE } from '../constants/pagination';
 import { sortByUpdatedAtDesc } from '../utils/sortByUpdatedAt';
 
+/** How long an opened session stays in lists even if the server list lacks it. */
+const PINNED_SESSION_TTL_MS = 30_000;
+
 interface ChatSessionContextType {
   sessions: ChatSessionRead[];
   setSessions: (
@@ -32,12 +35,27 @@ interface ChatSessionContextType {
   /** Clear active session and suppress auto-restore from workspace state (sidebar New chat). */
   startNewChat: () => void;
   addSession: (session: ChatSessionRead) => ChatSessionRead;
+  /**
+   * Atomically open a session that may not be in the fetched list yet (e.g. the overview chat
+   * created by the backend): pins it, upserts it into the list, makes it active, persists the
+   * workspace pointer immediately and reconciles with the server in the background.
+   */
+  openSession: (
+    session: ChatSessionRead,
+    options: { workspaceId: string; sourceId?: string | null },
+  ) => void;
+  /** True while a session opened via `openSession` may still be missing from server lists. */
+  isSessionPinned: (sessionId: string) => boolean;
   /** Bump a session to the top after new activity (uses current time when API does not return updated_at). */
   touchSession: (sessionId: string) => void;
   removeSession: (sessionId: string) => void;
   deleteSession: (sessionId: string) => Promise<boolean>;
   renameSession: (sessionId: string, newTitle: string) => Promise<ChatSessionRead | null>;
-  loadWorkspaceSessions: (workspaceId: string, force?: boolean) => Promise<ChatSessionRead[]>;
+  loadWorkspaceSessions: (
+    workspaceId: string,
+    force?: boolean,
+    silent?: boolean,
+  ) => Promise<ChatSessionRead[]>;
   /** Load the next page of recent chats when available. */
   loadMoreSessions: () => Promise<ChatSessionRead[]>;
   sessionsHasMore: boolean;
@@ -91,6 +109,10 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
   const clearedStaleSessionRef = useRef<string | null>(null);
   /** Sessions removed intentionally — suppress GenerativeChat 404 toasts. */
   const intentionallyDeletedIdsRef = useRef<Set<string>>(new Set());
+  /** Sessions opened before the server list includes them (kept in lists for a short while). */
+  const pinnedSessionsRef = useRef<
+    Map<string, { session: ChatSessionRead; workspaceId: string; until: number }>
+  >(new Map());
   const workspaceContextRef = useRef(workspaceContext);
   workspaceContextRef.current = workspaceContext;
   const saveWorkspaceStateRef = useRef(saveWorkspaceState);
@@ -157,15 +179,18 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
    * Load sessions for a workspace using unified cache manager (first page).
    */
   const loadWorkspaceSessions = useCallback(
-    async (workspaceId: string, force = false) => {
+    async (workspaceId: string, force = false, silent = false) => {
       if (!user || !workspaceId || workspaceId === 'undefined') return [];
 
       const previousWorkspaceId = sessionsWorkspaceIdRef.current;
-      setIsLoading(true);
-      setSessionsLoadError(false);
-      setSessionsReadyForId(null);
-      setSessionsHasMore(false);
-      setSessionsPage(INITIAL_PAGE);
+      // Silent reloads reconcile with the server without flipping the UI back to a skeleton.
+      if (!silent) {
+        setIsLoading(true);
+        setSessionsLoadError(false);
+        setSessionsReadyForId(null);
+        setSessionsHasMore(false);
+        setSessionsPage(INITIAL_PAGE);
+      }
       sessionsWorkspaceIdRef.current = workspaceId;
 
       try {
@@ -183,12 +208,24 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
             };
           },
           [token, workspaceId],
-          force ? { ttl: 0 } : undefined,
+          force ? { force: true, ttl: 0 } : undefined,
         );
 
-        const items = sortByUpdatedAtDesc(Array.isArray(data) ? data : (data.items ?? [])).filter(
+        const fetched = (Array.isArray(data) ? data : (data.items ?? [])).filter(
           (s) => !intentionallyDeletedIdsRef.current.has(s.id),
         );
+        // Keep recently opened sessions the server list does not (yet) contain.
+        const now = Date.now();
+        const fetchedIds = new Set(fetched.map((s) => s.id));
+        const pinnedMissing: ChatSessionRead[] = [];
+        for (const [id, pin] of pinnedSessionsRef.current) {
+          if (fetchedIds.has(id) || pin.until <= now) {
+            pinnedSessionsRef.current.delete(id);
+          } else if (pin.workspaceId === workspaceId) {
+            pinnedMissing.push(pin.session);
+          }
+        }
+        const items = sortByUpdatedAtDesc([...pinnedMissing, ...fetched]);
         const hasNext = Array.isArray(data) ? false : Boolean(data.has_next);
 
         setSessions(items);
@@ -376,6 +413,32 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
     [currentWorkspace, invalidateWorkspaceSessions],
   );
 
+  const isSessionPinned = useCallback((sessionId: string) => {
+    const pin = pinnedSessionsRef.current.get(sessionId);
+    return Boolean(pin && pin.until > Date.now());
+  }, []);
+
+  const openSession = useCallback(
+    (session: ChatSessionRead, options: { workspaceId: string; sourceId?: string | null }) => {
+      const { workspaceId, sourceId } = options;
+      pinnedSessionsRef.current.set(session.id, {
+        session,
+        workspaceId,
+        until: Date.now() + PINNED_SESSION_TTL_MS,
+      });
+      intentionallyDeletedIdsRef.current.delete(session.id);
+      clearedStaleSessionRef.current = null;
+      addSession(session);
+      // Clears draft/suppress flags and persists the id locally.
+      setActiveSessionId(session.id);
+      // Server pointer must be correct before any workspace-context reload can read it.
+      void saveWorkspaceStateRef.current(workspaceId, sourceId, session.id, { immediate: true });
+      // Reconcile with the server in the background (no skeleton flash).
+      void loadWorkspaceSessions(workspaceId, true, true).catch(() => undefined);
+    },
+    [addSession, setActiveSessionId, loadWorkspaceSessions],
+  );
+
   const touchSession = useCallback((sessionId: string) => {
     const now = new Date().toISOString();
     setSessions((prev) =>
@@ -512,6 +575,8 @@ export function ChatSessionProvider({ children }: { children: ReactNode }) {
         sessionsLoadError,
         startNewChat,
         addSession,
+        openSession,
+        isSessionPinned,
         touchSession,
         removeSession,
         deleteSession,

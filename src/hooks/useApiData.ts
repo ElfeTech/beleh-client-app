@@ -72,14 +72,21 @@ export function useApiData<T>(
   const argsRef = useRef(args);
   argsRef.current = args;
 
+  // Monotonic id: only the most recent call may touch state or fire callbacks. Without it a
+  // slow response for the previous args (e.g. the session the user just left) lands after the
+  // new request started and overwrites the data / loading / error of the current one.
+  const latestRequestRef = useRef(0);
+
   const fetchData = useCallback(async (): Promise<T | null> => {
+    const requestId = ++latestRequestRef.current;
+    const isLatest = () => latestRequestRef.current === requestId;
     setLoading(true);
     setError(null);
 
     try {
       const result = await apiCacheManager.fetch(endpoint, fetchFn, argsRef.current, cacheConfig);
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isLatest()) {
         setData(result);
         setLoading(false);
         onSuccess?.(result);
@@ -89,7 +96,7 @@ export function useApiData<T>(
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
 
-      if (isMountedRef.current) {
+      if (isMountedRef.current && isLatest()) {
         setError(error);
         setLoading(false);
         onError?.(error);
@@ -167,6 +174,9 @@ export function useSessions(datasourceId: string | null) {
  * const { messages, loading, loadMore, hasMore } = useMessages(sessionId);
  * ```
  */
+/** Stable empty list so effects keyed on `messages` do not re-run every render. */
+const NO_MESSAGES: never[] = [];
+
 export function useMessages(sessionId: string | null, initialPage: number = 1) {
   const { user } = useAuth();
   const [page, setPage] = useState(initialPage);
@@ -176,6 +186,8 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
   const [settledSessionId, setSettledSessionId] = useState<string | null>(null);
   const pageRef = useRef(page);
   pageRef.current = page;
+  const sessionIdRef = useRef(sessionId);
+  sessionIdRef.current = sessionId;
 
   const canFetchMessages = !!sessionId && sessionId !== 'undefined' && sessionId !== '1';
 
@@ -210,6 +222,8 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
       immediate: canFetchMessages && !!user,
       dependencies: [sessionId, page, user],
       onSuccess: (response) => {
+        // A response for a session the user already left must never populate this thread.
+        if (sessionIdRef.current !== sessionId) return;
         setHasMore(response.has_next);
         if (pageRef.current === 1) {
           setAllMessages(response.items);
@@ -219,6 +233,7 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
         }
       },
       onError: () => {
+        if (sessionIdRef.current !== sessionId) return;
         if (canFetchMessages && sessionId) setSettledSessionId(sessionId);
       },
     },
@@ -247,7 +262,9 @@ export function useMessages(sessionId: string | null, initialPage: number = 1) {
   const historyPending = canFetchMessages && settledSessionId !== sessionId;
 
   return {
-    messages: allMessages,
+    // Never expose another session's rows while this one's first page is still loading
+    // (state is reset in an effect, so the first render after a switch still holds the old rows).
+    messages: historyPending ? NO_MESSAGES : allMessages,
     loading: loading || historyPending,
     error,
     hasMore,

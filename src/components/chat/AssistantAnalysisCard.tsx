@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
 import { Clock, Sparkles } from 'lucide-react';
 import type { AssistantTurnMeta, UiArtifact } from '../../types/api';
 import { findPanelViewArtifacts } from '../../utils/artifactAdapters';
@@ -19,6 +20,8 @@ interface AssistantAnalysisCardProps {
   timestamp: Date;
   onAsk?: (prompt: string) => void;
   disabled?: boolean;
+  /** Cascade sections in one after another (used for the first-run overview). */
+  staged?: boolean;
 }
 
 export function AssistantAnalysisCard({
@@ -28,6 +31,7 @@ export function AssistantAnalysisCard({
   timestamp,
   onAsk,
   disabled,
+  staged = false,
 }: Readonly<AssistantAnalysisCardProps>) {
   const availability = getResponseViewAvailability(artifacts);
   const panelCount = getPanelCount(meta);
@@ -60,6 +64,16 @@ export function AssistantAnalysisCard({
   const filters = peripheral.filter((a) => a.type === 'filter_bar');
   const kpis = peripheral.filter((a) => a.type === 'kpi');
   const afterViews = peripheral.filter((a) => a.type !== 'kpi' && a.type !== 'filter_bar');
+
+  /** Staggered fade/slide-in for the first-run overview; a no-op wrapper otherwise. */
+  const reveal = (step: number) =>
+    staged
+      ? {
+          initial: { opacity: 0, y: 14 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.5, delay: 0.2 + step * 0.35, ease: 'easeOut' as const },
+        }
+      : {};
 
   const context = {
     onAsk,
@@ -100,9 +114,9 @@ export function AssistantAnalysisCard({
       ) : null}
 
       {summaryText ? (
-        <div className="assistant-analysis-card__summary">
+        <motion.div className="assistant-analysis-card__summary" {...reveal(0)}>
           <MarkdownText>{summaryText}</MarkdownText>
-        </div>
+        </motion.div>
       ) : null}
 
       {filters.length > 0 ? (
@@ -114,22 +128,26 @@ export function AssistantAnalysisCard({
       ) : null}
 
       {isMultiPanel && panelViewArtifacts.length > 0 ? (
-        <ArtifactPanelGrid
-          artifacts={panelViewArtifacts}
-          multiColumn={panelCount > 1 || availability.charts.length > 1}
-        />
+        <motion.div {...reveal(1)}>
+          <ArtifactPanelGrid
+            artifacts={panelViewArtifacts}
+            multiColumn={panelCount > 1 || availability.charts.length > 1}
+          />
+        </motion.div>
       ) : null}
 
       {!isMultiPanel && hasDataViews ? (
-        <ResponseViewTabs artifacts={artifacts} filterValue={filterValue} />
+        <motion.div {...reveal(1)}>
+          <ResponseViewTabs artifacts={artifacts} filterValue={filterValue} />
+        </motion.div>
       ) : null}
 
       {kpis.length > 0 ? (
-        <div className="artifact-stack artifact-stack--kpis">
+        <motion.div className="artifact-stack artifact-stack--kpis" {...reveal(2)}>
           {kpis.map((a) => (
             <ArtifactRenderer key={a.id} artifact={a} context={context} />
           ))}
-        </div>
+        </motion.div>
       ) : null}
 
       {afterViews.length > 0 ? (

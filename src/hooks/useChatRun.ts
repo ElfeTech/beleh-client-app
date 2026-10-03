@@ -56,7 +56,10 @@ export type UseChatRunParams = {
   onComplete: (response: AssistantTurnResponse, prompt: string) => void;
   onFailure: (err: unknown, prompt: string) => void;
   refetchMessages: () => void | Promise<void>;
+  /** True once the session's message history has been loaded (gates server-side run discovery). */
   historyReady?: boolean;
+  /** Content of a persisted user message, used to rebuild run memory for a server-side run. */
+  resolveUserMessagePrompt?: (userMessageId: string) => string | null;
 };
 
 const POLL_INTERVAL_MS = 1500;
@@ -113,6 +116,8 @@ export function useChatRun(params: UseChatRunParams) {
     onComplete,
     onFailure,
     refetchMessages,
+    historyReady = true,
+    resolveUserMessagePrompt,
   } = params;
 
   const [isWaiting, setIsWaiting] = useState(false);
@@ -121,6 +126,10 @@ export function useChatRun(params: UseChatRunParams) {
   const [partialText, setPartialText] = useState('');
   const [pendingPrompt, setPendingPrompt] = useState<string | null>(null);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  /** Session for which the "is a run in flight on the server?" probe has settled. */
+  const [probedSessionId, setProbedSessionId] = useState<string | null>(null);
+  /** Bumped when discovery writes run memory so the hydrate/resume effects re-run. */
+  const [resumeNonce, setResumeNonce] = useState(0);
 
   const abortRef = useRef<AbortController | null>(null);
   const resumeGenerationRef = useRef(0);
@@ -133,6 +142,8 @@ export function useChatRun(params: UseChatRunParams) {
   const refetchRef = useRef(refetchMessages);
   const getTokenRef = useRef(getToken);
   const workspaceIdRef = useRef(workspaceId);
+  const resolvePromptRef = useRef(resolveUserMessagePrompt);
+  resolvePromptRef.current = resolveUserMessagePrompt;
   onCompleteRef.current = onComplete;
   onFailureRef.current = onFailure;
   ensureSessionRef.current = ensureSession;
@@ -566,7 +577,9 @@ export function useChatRun(params: UseChatRunParams) {
         await finishFailure(
           uidLocal,
           sid,
-          new Error('The connection was interrupted before the response finished. Please try again.'),
+          new Error(
+            'The connection was interrupted before the response finished. Please try again.',
+          ),
           prompt,
         );
         return;
@@ -738,7 +751,9 @@ export function useChatRun(params: UseChatRunParams) {
     const pointer = getChatRunPointer(uid, workspaceId);
     if (!pointer?.sessionId) return;
     if (sessionId === pointer.sessionId) return;
-    if (sessionId && getChatRun(uid, sessionId)) return;
+    // Never yank the user away from a session they opened on purpose; per-session
+    // discovery (below) finds runs for whichever session is open.
+    if (sessionId) return;
     restoreSessionIdRef.current?.(pointer.sessionId);
   }, [uid, workspaceId, sessionId]);
 
@@ -750,7 +765,60 @@ export function useChatRun(params: UseChatRunParams) {
     }
     const pending = resolveInFlightChatRun(uid, workspaceId, sessionId);
     applyPersisted(pending);
-  }, [uid, sessionId, workspaceId, applyPersisted]);
+  }, [uid, sessionId, workspaceId, applyPersisted, resumeNonce]);
+
+  // Server-driven discovery: a run can be in flight with no local memory (e.g. the overview
+  // the backend starts after an import). Ask the server once the history is loaded, rebuild
+  // the run memory from it and let the normal resume path attach to the stream.
+  useEffect(() => {
+    if (!uid || !workspaceId || !sessionId) return;
+    if (!historyReady) return;
+    if (probedSessionId === sessionId) return;
+    if (sendInFlightRef.current || resolveInFlightChatRun(uid, workspaceId, sessionId)) {
+      setProbedSessionId(sessionId);
+      return;
+    }
+
+    const ac = new AbortController();
+    void (async () => {
+      let discovered = false;
+      try {
+        const token = await getTokenRef.current();
+        const active = await getActiveRun(token, sessionId, ac.signal);
+        if (ac.signal.aborted || !active) return;
+        const prompt = resolvePromptRef.current?.(String(active.user_message_id)) ?? null;
+        if (!prompt) return;
+        setChatRun(
+          uid,
+          sessionId,
+          {
+            clientTurnId: String(active.client_turn_id),
+            runId: active.run_id,
+            sessionId,
+            prompt,
+            datasourceId: null,
+            status: active.status === 'queued' ? 'queued' : 'running',
+            phase: active.phase ?? null,
+            phaseLabel: null,
+            partialText: '',
+            lastSeq: -1,
+            startedAt: Date.parse(active.started_at ?? active.created_at) || Date.now(),
+            mode: 'stream',
+          },
+          workspaceId,
+        );
+        discovered = true;
+      } catch {
+        /* offline / transient: the next session open probes again */
+      } finally {
+        if (!ac.signal.aborted) {
+          setProbedSessionId(sessionId);
+          if (discovered) setResumeNonce((n) => n + 1);
+        }
+      }
+    })();
+    return () => ac.abort();
+  }, [uid, workspaceId, sessionId, historyReady, probedSessionId]);
 
   // Resume / reattach , deps are only uid/sessionId/workspaceId (helpers via refs)
   useEffect(() => {
@@ -974,7 +1042,7 @@ export function useChatRun(params: UseChatRunParams) {
         sendInFlightRef.current = false;
       }
     };
-  }, [uid, sessionId, workspaceId]);
+  }, [uid, sessionId, workspaceId, resumeNonce]);
 
   // Abort in-flight SSE when session is cleared; keep durable memory for reattach
   useEffect(() => {
@@ -990,6 +1058,8 @@ export function useChatRun(params: UseChatRunParams) {
     partialText,
     pendingPrompt,
     activeRunId,
+    /** True from opening a session until we know whether a run is in flight for it. */
+    resumeProbing: Boolean(sessionId) && probedSessionId !== sessionId,
     canCancel: isWaiting && Boolean(activeRunId),
     shimmerPhrases: phasePhrases(phase, phaseLabel),
     send,
