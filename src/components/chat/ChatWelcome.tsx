@@ -21,6 +21,8 @@ interface ChatWelcomeProps {
   hasDatasources?: boolean;
   sourcesLoading?: boolean;
   onConnectDatasource?: () => void;
+  /** Set when the plan blocks adding datasources: the connect CTA becomes an upgrade CTA. */
+  connectUpgradeLabel?: string | null;
   /** Free-trial empty workspace: show Explore sample data. */
   showDemoCta?: boolean;
   onStartDemo?: () => void;
@@ -41,6 +43,7 @@ export function ChatWelcome({
   hasDatasources = true,
   sourcesLoading = false,
   onConnectDatasource,
+  connectUpgradeLabel = null,
   showDemoCta = false,
   onStartDemo,
   demoConnecting = false,
@@ -155,7 +158,7 @@ export function ChatWelcome({
               onClick={onConnectDatasource}
             >
               <Database size={18} strokeWidth={2.25} aria-hidden />
-              Add your data
+              {connectUpgradeLabel ? 'Upgrade to add your data' : 'Add your data'}
             </button>
           ) : null}
         </div>
@@ -170,7 +173,7 @@ export function ChatWelcome({
             onClick={onConnectDatasource}
           >
             <Database size={18} strokeWidth={2.25} aria-hidden />
-            Add your data
+            {connectUpgradeLabel ? 'Upgrade to add your data' : 'Add your data'}
           </button>
         </div>
       ) : null}

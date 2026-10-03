@@ -1,8 +1,12 @@
+import { useConnectOrUpgrade } from '../../hooks/useConnectOrUpgrade';
+import { useOverviewHandoff } from '../../hooks/useOverviewHandoff';
+import { OverviewHandoffOverlay } from './OverviewHandoffOverlay';
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { Sparkles } from 'lucide-react';
 import { ConnectorWidget } from './ConnectorWidget';
 import { ChatComposer } from './ChatComposer';
 import { AssistantAnalysisCard } from './AssistantAnalysisCard';
@@ -88,6 +92,31 @@ interface Message {
   status?: 'sending' | 'sent' | 'error';
   failure?: WorkflowFailureInfo;
   retryPrompt?: string;
+}
+
+function isAutoOverviewMessage(m: Message): boolean {
+  return Boolean((m.metadata as ChatMessageMetadata | undefined)?.auto_overview);
+}
+
+/** How long a selected source may be absent from the lists before it is considered gone. */
+const SELECTION_STALE_GRACE_MS = 4000;
+
+/** Re-check for the stored overview reply while no stream is attached. */
+const OVERVIEW_POLL_MS = 3000;
+/** After this long without a reply, offer a retry instead of an endless spinner. */
+const OVERVIEW_GIVE_UP_MS = 90_000;
+const OVERVIEW_RETRY_PROMPT = 'Give me a high-level overview of this data.';
+
+const STAGED_REVEAL_WINDOW_MS = 2 * 60 * 1000;
+
+/** The answer to the auto-overview prompt, if it was produced just now (animate it in). */
+function isRecentOverviewAnswer(msg: Message, previous: Message | undefined): boolean {
+  return (
+    msg.role === 'assistant' &&
+    previous !== undefined &&
+    isAutoOverviewMessage(previous) &&
+    Date.now() - msg.timestamp.getTime() < STAGED_REVEAL_WINDOW_MS
+  );
 }
 
 function mapServerMessage(m: ChatMessageRead): Message {
@@ -184,7 +213,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     invalidateContextCache,
     loadWorkspaceContext,
   } = useWorkspace();
-  const { selectedDatasourceId, setSelectedDatasourceId } = useDatasource();
+  const { selectedDatasourceId, setSelectedDatasourceId, clearSelectedIfEquals } = useDatasource();
   const {
     activeSessionId,
     setActiveSessionId,
@@ -279,6 +308,12 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
   ]);
 
   const [showConnectionPanel, setShowConnectionPanel] = useState(false);
+  const overviewHandoff = useOverviewHandoff(workspaceId);
+  const { arm: armOverviewHandoff } = overviewHandoff;
+  const connectGate = useConnectOrUpgrade(() => {
+    armOverviewHandoff();
+    setShowConnectionPanel(true);
+  });
 
   const refreshDemoStatus = useCallback(async () => {
     if (!user || !workspaceId) {
@@ -461,8 +496,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       await Promise.all([refreshConnectors(silent), refreshDatasources(silent)]);
       if (hadDemo) {
         await leaveWorkspaceDemo(token, wid);
-        if (demoId && selectedDatasourceId === demoId) {
-          setSelectedDatasourceId(null);
+        if (demoId) {
+          clearSelectedIfEquals(demoId);
         }
       }
       await Promise.all([refreshDatasources(silent), refreshWorkspaceUsage(), refreshDemoStatus()]);
@@ -477,8 +512,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     workspaceId,
     demoStatus?.connected,
     datasources,
-    selectedDatasourceId,
-    setSelectedDatasourceId,
+    clearSelectedIfEquals,
     refreshDatasources,
     refreshConnectors,
     refreshWorkspaceUsage,
@@ -487,6 +521,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     loadWorkspaceContext,
   ]);
 
+  const overviewHeading = useMemo(
+    () => sessions.find((x) => x.id === activeSessionId)?.title || 'Overview',
+    [sessions, activeSessionId],
+  );
   const userInitial = useMemo(() => {
     const name = user?.displayName?.trim() || user?.email?.split('@')[0] || 'U';
     const parts = name.split(/\s+/).filter(Boolean);
@@ -521,10 +559,49 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     if (datasources.length === 0 && connectors.length === 0) return;
     const inDatasources = datasources.some((d) => d.id === selectedDatasourceId);
     const inConnectors = connectors.some((c) => c.id === selectedDatasourceId);
-    if (!inDatasources && !inConnectors) {
-      setSelectedDatasourceId(null);
+    if (inDatasources || inConnectors) return;
+    // A just-connected source can be selected a moment before the committed lists include
+    // it; give them time to catch up (the cleanup cancels this if they do).
+    const staleId = selectedDatasourceId;
+    const timer = setTimeout(() => clearSelectedIfEquals(staleId), SELECTION_STALE_GRACE_MS);
+    return () => clearTimeout(timer);
+  }, [datasources, connectors, selectedDatasourceId, clearSelectedIfEquals]);
+
+  // Follow the chat: opening a chat selects the datasource it belongs to. Manual changes made
+  // inside a chat are kept until the user switches chats; on first load (refresh / deep link)
+  // an existing persisted selection wins so it survives reloads.
+  const adoptedForSessionRef = useRef<string | null>(null);
+  const initialSessionSettledRef = useRef(false);
+  useEffect(() => {
+    if (!activeSessionId) {
+      adoptedForSessionRef.current = null;
+      return;
     }
-  }, [datasources, connectors, selectedDatasourceId, setSelectedDatasourceId]);
+    if (adoptedForSessionRef.current === activeSessionId) return;
+    const session = sessions.find((x) => x.id === activeSessionId);
+    if (!session) return; // list not loaded yet
+    if (workspaceLoading && datasources.length === 0 && connectors.length === 0) return;
+
+    adoptedForSessionRef.current = activeSessionId;
+    const isFirstSettle = !initialSessionSettledRef.current;
+    initialSessionSettledRef.current = true;
+
+    const sourceId = session.dataset_id || session.connector_id;
+    if (!sourceId) return; // general chat: leave the selection alone
+    const known =
+      datasources.some((d) => d.id === sourceId) || connectors.some((c) => c.id === sourceId);
+    if (!known || sourceId === selectedDatasourceId) return;
+    if (isFirstSettle && selectedDatasourceId) return;
+    setSelectedDatasourceId(sourceId);
+  }, [
+    activeSessionId,
+    sessions,
+    datasources,
+    connectors,
+    workspaceLoading,
+    selectedDatasourceId,
+    setSelectedDatasourceId,
+  ]);
 
   const [localMessages, setLocalMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -759,6 +836,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     pendingPrompt,
     partialText,
     shimmerPhrases,
+    resumeProbing,
     send: sendRun,
     cancel: cancelRun,
   } = useChatRun({
@@ -775,6 +853,9 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
       await refetchMessages();
     },
     historyReady: !loadingHistory,
+    resolveUserMessagePrompt: (userMessageId) =>
+      (apiMessages as ChatMessageRead[] | undefined)?.find((m) => m.id === userMessageId)
+        ?.content ?? null,
   });
   isWaitingRef.current = isWaiting;
 
@@ -952,7 +1033,6 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     activeSessionId !== 'undefined' &&
     activeSessionId !== '1' &&
     loadingHistory &&
-    !isWaiting &&
     !hasRealLocalThread;
 
   const chatBodyPending = sessionBootstrapPending || historyPending;
@@ -985,6 +1065,40 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
     if ((apiMessages?.length ?? 0) > 0) return false;
     return !hasRealLocalThread;
   }, [chatBodyPending, historyLoadFailed, isWaiting, apiMessages, hasRealLocalThread]);
+
+  // The backend starts the overview run on its own. If we are looking at its (hidden) prompt
+  // with no reply yet and nothing streaming, never leave the area blank: show progress, keep
+  // polling for the stored reply, and offer a retry if it never arrives.
+  const lastVisibleMessage = useMemo(() => {
+    for (let i = localMessages.length - 1; i >= 0; i--) {
+      if (localMessages[i].id !== 'welcome') return localMessages[i];
+    }
+    return null;
+  }, [localMessages]);
+  const lastIsOverviewPrompt =
+    lastVisibleMessage?.role === 'user' && isAutoOverviewMessage(lastVisibleMessage);
+  const awaitingOverviewReply = lastIsOverviewPrompt && !isWaiting && !chatBodyPending;
+  const [overviewTimedOutFor, setOverviewTimedOutFor] = useState<string | null>(null);
+  const overviewTimedOut = awaitingOverviewReply && overviewTimedOutFor === activeSessionId;
+
+  useEffect(() => {
+    if (!awaitingOverviewReply || resumeProbing || !activeSessionId) return;
+    const sessionId = activeSessionId;
+    const poll = setInterval(() => void refetchMessages(), OVERVIEW_POLL_MS);
+    const giveUp = setTimeout(() => setOverviewTimedOutFor(sessionId), OVERVIEW_GIVE_UP_MS);
+    return () => {
+      clearInterval(poll);
+      clearTimeout(giveUp);
+    };
+  }, [awaitingOverviewReply, resumeProbing, activeSessionId, refetchMessages]);
+
+  const overviewShimmerPhrases = useMemo(
+    () => [
+      'Writing your overview…',
+      ...shimmerPhrases.filter((p) => p !== 'Writing your overview…'),
+    ],
+    [shimmerPhrases],
+  );
 
   const hasDatasources = hasWorkspaceSources;
   // Avoid flashing the empty-state CTA before the first datasource/connector fetch settles.
@@ -1133,7 +1247,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
           connectors={connectors}
           selectedDatasourceId={selectedDatasourceId}
           onDatasourceChange={setSelectedDatasourceId}
-          onConnectDatasource={() => setShowConnectionPanel(true)}
+          onConnectDatasource={connectGate.onConnect}
+          connectUpgradeLabel={connectGate.upgradeLabel}
           onRemoveDemo={() => void handleRemoveDemo()}
         />
       ) : (
@@ -1161,7 +1276,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             disabled={isWaiting || demoConnecting}
             hasDatasources={hasDatasources}
             sourcesLoading={!sourcesReady || demoStatusLoading}
-            onConnectDatasource={() => setShowConnectionPanel(true)}
+            onConnectDatasource={connectGate.onConnect}
+            connectUpgradeLabel={connectGate.upgradeLabel}
             showDemoCta={showDemoCta}
             onStartDemo={() => void handleStartDemo()}
             demoConnecting={demoConnecting}
@@ -1171,7 +1287,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             preferDemoPrompts={selectedIsDemo}
             usedPrompts={usedDemoPrompts}
           />
-          <div data-tour="composer" className="chat-composer-dock chat-composer-dock--float relative z-30 w-full shrink-0 overflow-visible pt-4 md:pt-6">
+          <div
+            data-tour="composer"
+            className="chat-composer-dock chat-composer-dock--float relative z-30 w-full shrink-0 overflow-visible pt-4 md:pt-6"
+          >
             {composerPanel}
           </div>
         </div>
@@ -1200,7 +1319,7 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                   <AnimatePresence initial={false}>
                     {localMessages
                       .filter((msg) => msg.id !== 'welcome')
-                      .map((msg) => (
+                      .map((msg, msgIndex, visibleMessages) => (
                         <motion.div
                           key={msg.id}
                           initial={{ opacity: 0, y: 10 }}
@@ -1211,7 +1330,14 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                             msg.role === 'user' ? 'justify-end' : 'justify-start',
                           )}
                         >
-                          {msg.role === 'user' ? (
+                          {msg.role === 'user' && isAutoOverviewMessage(msg) ? (
+                            <div className="chat-message-width--assistant flex items-center gap-3 py-1 text-[11px] font-semibold uppercase tracking-widest text-[color:var(--text-muted)]">
+                              <span className="h-px flex-1 bg-[color:var(--border-primary)]" />
+                              <Sparkles className="h-3.5 w-3.5 text-primary" strokeWidth={2.25} />
+                              {overviewHeading}
+                              <span className="h-px flex-1 bg-[color:var(--border-primary)]" />
+                            </div>
+                          ) : msg.role === 'user' ? (
                             <div className="chat-message-width--user user-request">
                               <div className="user-request__body">
                                 <div className="user-request__bubble">
@@ -1288,6 +1414,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                                         timestamp={msg.timestamp}
                                         onAsk={(prompt) => void sendMessage(prompt)}
                                         disabled={isWaiting}
+                                        staged={isRecentOverviewAnswer(
+                                          msg,
+                                          visibleMessages[msgIndex - 1],
+                                        )}
                                       />
                                     );
                                   }
@@ -1367,9 +1497,36 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
                             <MarkdownText>{partialText}</MarkdownText>
                           </div>
                         ) : null}
-                        <ThinkingShimmer phrases={shimmerPhrases} />
+                        <ThinkingShimmer
+                          phrases={lastIsOverviewPrompt ? overviewShimmerPhrases : shimmerPhrases}
+                        />
                       </div>
                     </motion.div>
+                  )}
+                  {awaitingOverviewReply && !overviewTimedOut && (
+                    <motion.div
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="flex justify-start"
+                    >
+                      <div className="chat-message-width--assistant message-plain message-plain--assistant flex flex-col gap-2">
+                        <ThinkingShimmer phrases={overviewShimmerPhrases} />
+                      </div>
+                    </motion.div>
+                  )}
+                  {overviewTimedOut && (
+                    <div className="chat-message-width--assistant">
+                      <ChatFailureCard
+                        title="Your overview isn't ready yet"
+                        detail="It is taking longer than expected. You can try generating it again, or just ask a question."
+                        canRetry
+                        disabled={isWaiting}
+                        onRetry={() => {
+                          setOverviewTimedOutFor(null);
+                          void sendMessage(OVERVIEW_RETRY_PROMPT);
+                        }}
+                      />
+                    </div>
                   )}
                 </>
               )}
@@ -1377,7 +1534,10 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             </div>
           </div>
 
-          <div data-tour="composer" className="chat-composer-dock chat-composer-dock--float relative z-30 shrink-0 overflow-visible px-3 pb-3 pt-2 md:px-6 md:pb-4">
+          <div
+            data-tour="composer"
+            className="chat-composer-dock chat-composer-dock--float relative z-30 shrink-0 overflow-visible px-3 pb-3 pt-2 md:px-6 md:pb-4"
+          >
             {composerPanel}
           </div>
         </>
@@ -1394,6 +1554,8 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
             ]);
           }}
           onSuccess={async (created, source) => {
+            // Land the user in the auto-created overview chat as soon as it exists.
+            void overviewHandoff.start({ connectorId: created?.id });
             await handleLiveSourceConnected();
             // Supabase binds already toast "Connected {project}" in the flow.
             if (source !== 'supabase') {
@@ -1414,6 +1576,12 @@ export function GenerativeChat({ workspaceId: workspaceIdProp }: { workspaceId?:
           }}
         />
       )}
+
+      <OverviewHandoffOverlay
+        active={overviewHandoff.state.active}
+        phase={overviewHandoff.state.phase}
+        onSkip={overviewHandoff.cancel}
+      />
     </div>
   );
 }

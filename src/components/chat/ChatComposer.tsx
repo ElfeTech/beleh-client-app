@@ -14,7 +14,11 @@ import { Check, ChevronDown, Search, Database, Send, Square } from 'lucide-react
 import { cn } from '../../lib/utils';
 import type { DataSourceResponse, ConnectorResponse } from '../../types/api';
 import { BI_CHAT_MAX_CHARS } from '../../constants/chatLimits';
-import { formatSourceType, getSelectedSourceIcon, getSourceTypeIcon } from '../../utils/datasourceDisplay';
+import {
+  formatSourceType,
+  getSelectedSourceIcon,
+  getSourceTypeIcon,
+} from '../../utils/datasourceDisplay';
 
 export interface ChatComposerProps {
   workspaceId: string;
@@ -35,6 +39,8 @@ export interface ChatComposerProps {
   sourcePickerOpenRequest?: number;
   /** Open add-datasource / connect-DB flow from the composer toolbar. */
   onConnectDatasource?: () => void;
+  /** Set when the plan blocks adding datasources: connect entry points become upgrade CTAs. */
+  connectUpgradeLabel?: string | null;
   /** Remove Free-trial sample datasource (DELETE /demo). */
   onRemoveDemo?: () => void;
 }
@@ -86,6 +92,7 @@ export function ChatComposer({
   onDatasourceChange,
   sourcePickerOpenRequest = 0,
   onConnectDatasource,
+  connectUpgradeLabel = null,
   onRemoveDemo,
 }: ChatComposerProps) {
   const listId = useId();
@@ -306,13 +313,26 @@ export function ChatComposer({
           {datasources.length === 0 && connectors.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-[color:var(--text-muted)]">
               <p className="mb-2">No sources available.</p>
-              <Link
-                to={`/workspace/${workspaceId}/datasets`}
-                className="text-xs font-bold text-primary hover:underline uppercase tracking-wider"
-                onClick={() => setOpen(false)}
-              >
-                Add datasource
-              </Link>
+              {connectUpgradeLabel && onConnectDatasource ? (
+                <button
+                  type="button"
+                  className="text-xs font-bold text-primary hover:underline uppercase tracking-wider"
+                  onClick={() => {
+                    setOpen(false);
+                    onConnectDatasource();
+                  }}
+                >
+                  Upgrade
+                </button>
+              ) : (
+                <Link
+                  to={`/workspace/${workspaceId}/datasets`}
+                  className="text-xs font-bold text-primary hover:underline uppercase tracking-wider"
+                  onClick={() => setOpen(false)}
+                >
+                  Add datasource
+                </Link>
+              )}
             </div>
           ) : filtered.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-[color:var(--text-muted)]">
@@ -341,9 +361,7 @@ export function ChatComposer({
                 : (s as ConnectorResponse).type.toUpperCase();
               const RowIcon = getSourceTypeIcon({
                 kind: s.sourceKind,
-                type: isDatasource
-                  ? (s as DataSourceResponse).type
-                  : (s as ConnectorResponse).type,
+                type: isDatasource ? (s as DataSourceResponse).type : (s as ConnectorResponse).type,
                 mimeType: isDatasource ? (s as DataSourceResponse).mime_type : undefined,
               });
 
@@ -496,10 +514,10 @@ export function ChatComposer({
                 'transition-colors hover:border-primary/40 hover:text-primary',
               )}
               onClick={onConnectDatasource}
-              title="Connect a database"
+              title={connectUpgradeLabel ?? 'Connect a database'}
             >
               <Database className="h-3.5 w-3.5" strokeWidth={2.25} />
-              Connect DB
+              {connectUpgradeLabel ? 'Upgrade' : 'Connect DB'}
             </button>
           ) : null}
 
