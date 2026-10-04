@@ -524,8 +524,24 @@ function ThinkingBlock() {
   );
 }
 
+const DESIGN_W = 860;
+const DESIGN_H = 540;
+
 export function LandingPlatformEmulator() {
-  const rootRef = useRef<HTMLElement>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(0.6);
+
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const fit = () => setScale(Math.min(1, stage.clientWidth / DESIGN_W));
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(stage);
+    return () => ro.disconnect();
+  }, []);
+
+  const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const timersRef = useRef<number[]>([]);
   const runningRef = useRef(false);
@@ -795,210 +811,200 @@ export function LandingPlatformEmulator() {
   const composerDisplay = phase === 'composing' || phase === 'sending' ? composerText : '';
 
   return (
-    <section className="landing-section landing-emulator" id="demo" ref={rootRef}>
-      <div className="landing-wrap">
-        <div className="landing-section-head center landing-reveal">
-          <div className="landing-eyebrow on-light">
-            <span className="dot" />
-            <span>SEE IT IN ACTION</span>
-          </div>
-          <h2>Ask once. Get the number, the chart, and the why.</h2>
-          <p>
-            Watch Beleh turn a plain-English question into execution stats, visuals, and a clear
-            answer — the same flow you get inside the product.
-          </p>
-        </div>
-      </div>
-
-      <div
-        className="lpe-browser landing-reveal"
-        aria-label="Beleh workspace running in a browser window"
-      >
-        <div className="lpe-chrome" aria-hidden>
-          <div className="lpe-traffic">
-            <span className="close" />
-            <span className="min" />
-            <span className="max" />
-          </div>
-          <div className="lpe-urlbar">
-            <LockIcon />
-            <span className="lpe-urlbar-text">
-              <em>https://</em>
-              {EMULATOR_DEMO_URL}
-            </span>
-          </div>
-          <div className="lpe-chrome-actions">
-            <span />
-            <span />
-            <span />
-          </div>
-        </div>
-
-        <div className="lpe-app">
-          <aside className="lpe-sidebar" aria-hidden>
-            <div className="lpe-side-brand">
-              <div className="lpe-side-brand-row">
-                <img src={logoImage} alt="" className="lpe-side-logo" />
-                <span className="lpe-side-pill">Workspace</span>
+    <div className="lpe-fit" ref={rootRef}>
+      <div className="lpe-fit__stage" ref={stageRef} style={{ height: DESIGN_H * scale }}>
+        <div
+          className="lpe-fit__inner"
+          style={{ width: DESIGN_W, height: DESIGN_H, transform: `scale(${scale})` }}
+        >
+          <div className="lpe-browser" aria-label="Beleh workspace running in a browser window">
+            <div className="lpe-chrome" aria-hidden>
+              <div className="lpe-traffic">
+                <span className="close" />
+                <span className="min" />
+                <span className="max" />
               </div>
-              <p className="lpe-side-tagline">Ask. Analyze. Decide.</p>
-            </div>
-
-            <div className="lpe-side-region">
-              <div className="lpe-side-region-label">Active region</div>
-              <div className="lpe-side-region-value">
-                My Workspace
-                <ChevronIcon />
-              </div>
-            </div>
-
-            <div className="lpe-side-nav">
-              <div className="lpe-side-nav-item active">
-                <ChatNavIcon />
-                Chat
-              </div>
-              <div className="lpe-side-nav-item">
-                <DatasetNavIcon />
-                Data sources
-              </div>
-            </div>
-
-            <div className="lpe-side-sessions">
-              <div className="lpe-side-sessions-label">Recent chats</div>
-              {sidebarSessions.map((session) => (
-                <div
-                  key={session.id}
-                  className={`lpe-side-session${session.active ? ' active' : ''}${
-                    session.active && sessionPulse ? ' pulse' : ''
-                  }`}
-                >
-                  {session.title}
-                </div>
-              ))}
-            </div>
-
-            <div className="lpe-side-foot">
-              <div className="lpe-side-settings">
-                <SettingsIcon />
-                Settings
-              </div>
-              <div className="lpe-side-user">
-                <div className="lpe-side-user-avatar">JD</div>
-                <div className="lpe-side-user-meta">
-                  <div className="lpe-side-user-name">Jone Deo</div>
-                  <div className="lpe-side-user-email">jone@yulona.co</div>
-                </div>
-                <span className="lpe-side-plan">STANDARD</span>
-              </div>
-            </div>
-          </aside>
-
-          <div className="lpe-main">
-            <div className="lpe-topbar" aria-hidden>
-              <div className="lpe-topbar-left">
-                <span className="lpe-topbar-source">
-                  <DbIcon />
-                  All sources
-                  <ChevronIcon />
-                </span>
-                <span className="lpe-topbar-status">
-                  No datasource selected · analyzing all workspace sources
+              <div className="lpe-urlbar">
+                <LockIcon />
+                <span className="lpe-urlbar-text">
+                  <em>https://</em>
+                  {EMULATOR_DEMO_URL}
                 </span>
               </div>
-              <div className="lpe-topbar-right">
-                <div className="lpe-cluster">
-                  Cluster status
-                  <br />
-                  <strong>Standby // All sources</strong>
-                </div>
-                <div className={`lpe-topbar-icon${headerRefreshing ? ' spinning' : ''}`}>
-                  <RefreshIcon />
-                </div>
+              <div className="lpe-chrome-actions">
+                <span />
+                <span />
+                <span />
               </div>
             </div>
 
-            <div className="lpe-scroll" ref={scrollRef}>
-              {completed.map((item) => (
-                <div key={item.turn.id} className="lpe-turn">
-                  <div className="lpe-user-row">
-                    <div className="lpe-user-meta">
-                      <div className="lpe-user-bubble">{item.prompt}</div>
-                      <span className="lpe-user-time">{item.turn.userTime}</span>
-                    </div>
-                    <div className="lpe-avatar user" aria-hidden>
-                      {item.turn.userInitials}
-                    </div>
+            <div className="lpe-app">
+              <aside className="lpe-sidebar" aria-hidden>
+                <div className="lpe-side-brand">
+                  <div className="lpe-side-brand-row">
+                    <img src={logoImage} alt="" className="lpe-side-logo" />
+                    <span className="lpe-side-pill">Workspace</span>
                   </div>
-                  <AssistantBlock
-                    turn={item.turn}
-                    showMeta
-                    showCharts
-                    summaryText={item.summary}
-                    streaming={false}
-                  />
+                  <p className="lpe-side-tagline">Ask. Analyze. Decide.</p>
                 </div>
-              ))}
 
-              {showActiveUser && activeTurn ? (
-                <div className="lpe-user-row lpe-fade-in">
-                  <div className="lpe-user-meta">
-                    <div className="lpe-user-bubble">{activePrompt}</div>
-                    <span className="lpe-user-time">{activeTurn.userTime}</span>
-                  </div>
-                  <div className="lpe-avatar user" aria-hidden>
-                    {activeTurn.userInitials}
-                  </div>
-                </div>
-              ) : null}
-
-              {showThinking ? <ThinkingBlock /> : null}
-
-              {showActiveAssistant && activeTurn ? (
-                <AssistantBlock
-                  turn={activeTurn}
-                  showMeta={phase === 'meta' || phase === 'charts' || phase === 'streaming'}
-                  showCharts={phase === 'charts' || phase === 'streaming'}
-                  summaryText={streamedSummary}
-                  streaming={phase === 'streaming'}
-                />
-              ) : null}
-            </div>
-
-            <div className="lpe-tip">TIP: SELECT A DATABASE FOR DEEP ANALYSIS</div>
-
-            <div className={`lpe-composer${phase === 'sending' ? ' sending' : ''}`} aria-hidden>
-              <div className={`lpe-composer-placeholder${composerDisplay ? ' has-text' : ''}`}>
-                {composerDisplay || 'Ask about revenue, customers, trends, or performance...'}
-                {phase === 'composing' ? <span className="lpe-cursor" aria-hidden /> : null}
-              </div>
-              <div className="lpe-composer-bar">
-                <div className="lpe-composer-left">
-                  <span className="lpe-chip">
-                    <DbIcon />
-                    All sources
+                <div className="lpe-side-region">
+                  <div className="lpe-side-region-label">Active region</div>
+                  <div className="lpe-side-region-value">
+                    My Workspace
                     <ChevronIcon />
-                  </span>
-                  <span className="lpe-chip">
-                    <DbIcon />
-                    CONNECT DB
-                  </span>
+                  </div>
                 </div>
-                <div className={`lpe-send${phase === 'sending' ? ' active' : ''}`}>
-                  <SendIcon />
+
+                <div className="lpe-side-nav">
+                  <div className="lpe-side-nav-item active">
+                    <ChatNavIcon />
+                    Chat
+                  </div>
+                  <div className="lpe-side-nav-item">
+                    <DatasetNavIcon />
+                    Data sources
+                  </div>
+                </div>
+
+                <div className="lpe-side-sessions">
+                  <div className="lpe-side-sessions-label">Recent chats</div>
+                  {sidebarSessions.map((session) => (
+                    <div
+                      key={session.id}
+                      className={`lpe-side-session${session.active ? ' active' : ''}${
+                        session.active && sessionPulse ? ' pulse' : ''
+                      }`}
+                    >
+                      {session.title}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="lpe-side-foot">
+                  <div className="lpe-side-settings">
+                    <SettingsIcon />
+                    Settings
+                  </div>
+                  <div className="lpe-side-user">
+                    <div className="lpe-side-user-avatar">JD</div>
+                    <div className="lpe-side-user-meta">
+                      <div className="lpe-side-user-name">Jone Deo</div>
+                      <div className="lpe-side-user-email">jone@yulona.co</div>
+                    </div>
+                    <span className="lpe-side-plan">STANDARD</span>
+                  </div>
+                </div>
+              </aside>
+
+              <div className="lpe-main">
+                <div className="lpe-topbar" aria-hidden>
+                  <div className="lpe-topbar-left">
+                    <span className="lpe-topbar-source">
+                      <DbIcon />
+                      All sources
+                      <ChevronIcon />
+                    </span>
+                    <span className="lpe-topbar-status">
+                      No datasource selected · analyzing all workspace sources
+                    </span>
+                  </div>
+                  <div className="lpe-topbar-right">
+                    <div className="lpe-cluster">
+                      Cluster status
+                      <br />
+                      <strong>Standby // All sources</strong>
+                    </div>
+                    <div className={`lpe-topbar-icon${headerRefreshing ? ' spinning' : ''}`}>
+                      <RefreshIcon />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lpe-scroll" ref={scrollRef}>
+                  {completed.map((item) => (
+                    <div key={item.turn.id} className="lpe-turn">
+                      <div className="lpe-user-row">
+                        <div className="lpe-user-meta">
+                          <div className="lpe-user-bubble">{item.prompt}</div>
+                          <span className="lpe-user-time">{item.turn.userTime}</span>
+                        </div>
+                        <div className="lpe-avatar user" aria-hidden>
+                          {item.turn.userInitials}
+                        </div>
+                      </div>
+                      <AssistantBlock
+                        turn={item.turn}
+                        showMeta
+                        showCharts
+                        summaryText={item.summary}
+                        streaming={false}
+                      />
+                    </div>
+                  ))}
+
+                  {showActiveUser && activeTurn ? (
+                    <div className="lpe-user-row lpe-fade-in">
+                      <div className="lpe-user-meta">
+                        <div className="lpe-user-bubble">{activePrompt}</div>
+                        <span className="lpe-user-time">{activeTurn.userTime}</span>
+                      </div>
+                      <div className="lpe-avatar user" aria-hidden>
+                        {activeTurn.userInitials}
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {showThinking ? <ThinkingBlock /> : null}
+
+                  {showActiveAssistant && activeTurn ? (
+                    <AssistantBlock
+                      turn={activeTurn}
+                      showMeta={phase === 'meta' || phase === 'charts' || phase === 'streaming'}
+                      showCharts={phase === 'charts' || phase === 'streaming'}
+                      summaryText={streamedSummary}
+                      streaming={phase === 'streaming'}
+                    />
+                  ) : null}
+                </div>
+
+                <div className="lpe-tip">TIP: SELECT A DATABASE FOR DEEP ANALYSIS</div>
+
+                <div className={`lpe-composer${phase === 'sending' ? ' sending' : ''}`} aria-hidden>
+                  <div className={`lpe-composer-placeholder${composerDisplay ? ' has-text' : ''}`}>
+                    {composerDisplay || 'Ask about revenue, customers, trends, or performance...'}
+                    {phase === 'composing' ? <span className="lpe-cursor" aria-hidden /> : null}
+                  </div>
+                  <div className="lpe-composer-bar">
+                    <div className="lpe-composer-left">
+                      <span className="lpe-chip">
+                        <DbIcon />
+                        All sources
+                        <ChevronIcon />
+                      </span>
+                      <span className="lpe-chip">
+                        <DbIcon />
+                        CONNECT DB
+                      </span>
+                    </div>
+                    <div className={`lpe-send${phase === 'sending' ? ' active' : ''}`}>
+                      <SendIcon />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="lpe-footer">
+                  Powered by Beleh Analytical Engine v0.1.0 // compliance guidelines applied.
+                </div>
+
+                <div className="lpe-help-fab" aria-hidden>
+                  ?
                 </div>
               </div>
-            </div>
-
-            <div className="lpe-footer">
-              Powered by Beleh Analytical Engine v0.1.0 // compliance guidelines applied.
-            </div>
-
-            <div className="lpe-help-fab" aria-hidden>
-              ?
             </div>
           </div>
         </div>
       </div>
-    </section>
+    </div>
   );
 }

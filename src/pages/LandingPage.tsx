@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { LandingNav, useLandingTheme } from '../components/landing/LandingNav';
+import { LandingNav } from '../components/landing/LandingNav';
 import { LandingHero } from '../components/landing/LandingHero';
 import { LandingProblem } from '../components/landing/LandingProblem';
 import { LandingHow } from '../components/landing/LandingHow';
-import { LandingPlatformEmulator } from '../components/landing/LandingPlatformEmulator';
 import { LandingFeatures } from '../components/landing/LandingFeatures';
-import { LandingSavings } from '../components/landing/LandingSavings';
-import { LandingProof } from '../components/landing/LandingProof';
+import { LandingUseCases } from '../components/landing/LandingUseCases';
+import { LandingTeam } from '../components/landing/LandingTeam';
 import { LandingPricing } from '../components/landing/LandingPricing';
+import { LandingFaq } from '../components/landing/LandingFaq';
 import { LandingFinalCta } from '../components/landing/LandingFinalCta';
 import { LandingFooter } from '../components/landing/LandingFooter';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
@@ -15,7 +15,6 @@ import './landing/landing.css';
 
 export default function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const { isLight, toggleTheme } = useLandingTheme();
   useDocumentMeta({ path: '/' });
 
   useEffect(() => {
@@ -27,53 +26,26 @@ export default function LandingPage() {
   }, []);
 
   useEffect(() => {
-    const onScroll = () => setIsScrolled(window.scrollY > 40);
+    const onScroll = () => setIsScrolled(window.scrollY > 24);
     onScroll();
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => {
-    const root = document.querySelector('.landing-page');
-    if (!root) return;
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add('in');
-            io.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.15 },
-    );
-
-    const observeAll = () => {
-      root.querySelectorAll('.landing-reveal:not(.in)').forEach((el) => io.observe(el));
-    };
-    observeAll();
-
-    const mo = new MutationObserver(observeAll);
-    mo.observe(root, { childList: true, subtree: true });
-    return () => {
-      io.disconnect();
-      mo.disconnect();
-    };
-  }, []);
-
   return (
     <div className="landing-page">
-      <LandingNav isScrolled={isScrolled} isLight={isLight} onToggleTheme={toggleTheme} />
-      <LandingHero />
-      <LandingProblem />
-      <LandingHow />
-      <LandingPlatformEmulator />
-      <LandingFeatures />
-      <LandingSavings />
-      <LandingProof />
-      <LandingPricing />
-      <LandingFinalCta />
+      <LandingNav isScrolled={isScrolled} />
+      <main>
+        <LandingHero />
+        <LandingProblem />
+        <LandingHow />
+        <LandingFeatures />
+        <LandingUseCases />
+        <LandingTeam />
+        <LandingPricing />
+        <LandingFaq />
+        <LandingFinalCta />
+      </main>
       <LandingFooter />
     </div>
   );

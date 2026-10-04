@@ -107,7 +107,6 @@ Understand Beleh, start a trial, sign in, estimate savings, see how chat works.
 - No credit card required
 - Cancel anytime
 - 7-day free trial
-- SOC 2 ready
 
 ### Theme
 

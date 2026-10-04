@@ -314,7 +314,7 @@ export function AuthGoogleSplitPage({
         <footer className="auth2-panel__footer">
           <span className="auth2-panel__security">
             <Lock size={14} strokeWidth={2} aria-hidden />
-            SOC 2 Type II · Beleh AI Security
+            Secure sign-in · Beleh AI
           </span>
           <span className="auth2-panel__legal">
             <Link to="/legal/privacy">Privacy</Link>

@@ -4,10 +4,10 @@ export const SITE_URL = 'https://beleh.yulona.co';
 export const SITE_NAME = 'Beleh AI';
 export const SITE_NAME_AMHARIC = 'ብልህ';
 
-export const SITE_TITLE = 'Beleh (ብልህ) — AI Business Intelligence | Ask Your Data in Plain English';
+export const SITE_TITLE = 'AI Business Intelligence & Analytics Software | Beleh (ብልህ)';
 
 export const SITE_DESCRIPTION =
-  'Beleh turns your spreadsheets and databases into instant answers and charts. Ask questions in plain English — no SQL, no waiting on analysts. Free 7-day trial.';
+  'Beleh is AI business intelligence and analytics software. Connect spreadsheets or databases, ask questions in plain English and get charts and answers in seconds. No SQL. Free 7-day trial.';
 
 export const SITE_OG_IMAGE = `${SITE_URL}/og-image.jpg`;
 

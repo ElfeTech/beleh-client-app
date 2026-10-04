@@ -1,79 +1,66 @@
-import { useLayoutEffect } from 'react';
+import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { useTheme, type Theme } from '../../context/ThemeContext';
+import { Menu, X } from 'lucide-react';
 import logo from '../../assets/logo.webp';
 
 interface LandingNavProps {
   readonly isScrolled: boolean;
-  readonly isLight: boolean;
-  readonly onToggleTheme: () => void;
 }
 
-const NAV_SECTIONS = [
+const NAV_LINKS = [
   { section: 'how', label: 'How it works' },
-  { section: 'savings', label: 'Your savings' },
-  { section: 'proof', label: 'Results' },
-  { section: 'pricing', label: 'Pricing', isPricing: true },
+  { section: 'features', label: 'Features' },
+  { section: 'use-cases', label: 'Use cases' },
+  { section: 'pricing', label: 'Pricing', isPage: true },
+  { section: 'faq', label: 'FAQ' },
 ] as const;
 
-function SunIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M12 3v2M12 19v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M3 12H1M23 12h-2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-      />
-      <circle cx="12" cy="12" r="4.5" stroke="currentColor" strokeWidth="1.8" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-      <path
-        d="M20 14.5A8.5 8.5 0 1 1 9.5 4a7 7 0 0 0 10.5 10.5z"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function NavSectionLink({
+function NavLink({
   section,
   label,
-  isPricing,
+  isPage,
   onPricingPage,
+  onNavigate,
 }: Readonly<{
   section: string;
   label: string;
-  isPricing?: boolean;
+  isPage?: boolean;
   onPricingPage: boolean;
+  onNavigate: () => void;
 }>) {
-  if (isPricing) {
-    if (onPricingPage) {
-      return <a href="/pricing">{label}</a>;
-    }
-    return <Link to="/pricing">{label}</Link>;
+  if (isPage) {
+    return onPricingPage ? (
+      <a href="/pricing" onClick={onNavigate}>
+        {label}
+      </a>
+    ) : (
+      <Link to="/pricing" onClick={onNavigate}>
+        {label}
+      </Link>
+    );
   }
-
   if (onPricingPage) {
-    return <Link to={{ pathname: '/', hash: section }}>{label}</Link>;
+    return (
+      <Link to={{ pathname: '/', hash: section }} onClick={onNavigate}>
+        {label}
+      </Link>
+    );
   }
-
-  return <a href={`#${section}`}>{label}</a>;
+  return (
+    <a href={`#${section}`} onClick={onNavigate}>
+      {label}
+    </a>
+  );
 }
 
-export function LandingNav({ isScrolled, isLight, onToggleTheme }: LandingNavProps) {
+export function LandingNav({ isScrolled }: LandingNavProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [open, setOpen] = useState(false);
   const onPricingPage = location.pathname === '/pricing';
 
   const handleBrandClick = () => {
+    setOpen(false);
     if (onPricingPage) {
       navigate('/');
       return;
@@ -82,7 +69,7 @@ export function LandingNav({ isScrolled, isLight, onToggleTheme }: LandingNavPro
   };
 
   return (
-    <header className={`landing-header ${isScrolled ? 'scrolled' : ''}`}>
+    <header className={`landing-header${isScrolled ? ' scrolled' : ''}${open ? ' open' : ''}`}>
       <div className="landing-wrap">
         <nav className="landing-nav" aria-label="Primary">
           <button
@@ -91,19 +78,27 @@ export function LandingNav({ isScrolled, isLight, onToggleTheme }: LandingNavPro
             onClick={handleBrandClick}
             aria-label="Beleh home"
           >
-            <img src={logo} alt="Beleh" className="landing-brand__logo" />
+            <img src={logo} alt="Beleh — Ask. Analyze. Decide." className="landing-brand__logo" />
           </button>
 
-          <div className="landing-nav-links">
-            {NAV_SECTIONS.map((link) => (
-              <NavSectionLink
+          <div className="landing-nav-links" id="landing-nav-links">
+            {NAV_LINKS.map((link) => (
+              <NavLink
                 key={link.section}
                 section={link.section}
                 label={link.label}
-                isPricing={'isPricing' in link ? link.isPricing : false}
+                isPage={'isPage' in link ? link.isPage : false}
                 onPricingPage={onPricingPage}
+                onNavigate={() => setOpen(false)}
               />
             ))}
+            <button
+              type="button"
+              className="landing-nav-links__signin"
+              onClick={() => navigate('/signin')}
+            >
+              Sign in
+            </button>
           </div>
 
           <div className="landing-nav-cta">
@@ -112,53 +107,24 @@ export function LandingNav({ isScrolled, isLight, onToggleTheme }: LandingNavPro
             </button>
             <button
               type="button"
-              className="landing-theme-toggle"
-              onClick={onToggleTheme}
-              aria-label="Toggle light and dark mode"
-              title="Toggle light / dark"
-            >
-              {isLight ? <MoonIcon /> : <SunIcon />}
-            </button>
-            <button
-              type="button"
               className="landing-btn landing-btn-primary"
               onClick={() => navigate('/signup')}
             >
               Start free trial
+            </button>
+            <button
+              type="button"
+              className="landing-menu-toggle"
+              aria-label={open ? 'Close menu' : 'Open menu'}
+              aria-expanded={open}
+              aria-controls="landing-nav-links"
+              onClick={() => setOpen((v) => !v)}
+            >
+              {open ? <X size={20} /> : <Menu size={20} />}
             </button>
           </div>
         </nav>
       </div>
     </header>
   );
-}
-
-function applyLandingThemeAttr(theme: Theme) {
-  if (theme === 'light') {
-    document.documentElement.dataset.landingTheme = 'light';
-  } else {
-    delete document.documentElement.dataset.landingTheme;
-  }
-}
-
-/**
- * Landing theme follows the shared app preference:
- * - default / stored `system` → OS light/dark
- * - user toggle → persist explicit `light` or `dark` in localStorage
- */
-export function useLandingTheme() {
-  const { theme, setThemePreference } = useTheme();
-  const isLight = theme === 'light';
-
-  useLayoutEffect(() => {
-    applyLandingThemeAttr(theme);
-    return () => {
-      delete document.documentElement.dataset.landingTheme;
-    };
-  }, [theme]);
-
-  return {
-    isLight,
-    toggleTheme: () => setThemePreference(isLight ? 'dark' : 'light'),
-  };
 }
