@@ -1,70 +1,100 @@
+import { AskSpot, ConnectSpot, DecideSpot } from './illustrations';
+
+const STEPS = [
+  {
+    title: 'Connect your data',
+    text: 'Upload a CSV or Excel file, link Google Sheets or connect a database. Beleh reads the structure and opens an overview for you.',
+    Art: ConnectSpot,
+    alt: 'A person connecting spreadsheet files to a database',
+    from: '#0592ee',
+    to: '#00b2cc',
+  },
+  {
+    title: 'Ask a question',
+    text: 'Type what you want to know, the way you would ask a colleague. Beleh writes the query, runs it and draws the chart.',
+    Art: AskSpot,
+    alt: 'A person typing a question into a laptop and getting a chat reply',
+    from: '#00b2cc',
+    to: '#52c65a',
+  },
+  {
+    title: 'Decide with confidence',
+    text: 'Share the chart with your team, ask the next question and move on the numbers instead of a hunch.',
+    Art: DecideSpot,
+    alt: 'Two colleagues pointing at a rising bar chart with a green check mark',
+    from: '#52c65a',
+    to: '#52c65a',
+  },
+] as const;
+
+/** Curved, animated hand-off arrow drawn between two cards. */
+function Connector({ id, from, to }: { id: string; from: string; to: string }) {
+  return (
+    <>
+      <svg className="landing-link landing-link--h" viewBox="0 0 96 72" fill="none" aria-hidden>
+        <defs>
+          <linearGradient id={`${id}-h`} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stopColor={from} />
+            <stop offset="1" stopColor={to} />
+          </linearGradient>
+        </defs>
+        <path
+          className="landing-link__path"
+          d="M6 52 C 28 52, 30 14, 52 14 S 76 36, 84 36"
+          stroke={`url(#${id}-h)`}
+        />
+        <path d="M76 26 L88 36 L76 46" stroke={to} className="landing-link__head" />
+        <circle className="landing-link__dot landing-link__dot--h" r="5.5" fill={to} />
+        <circle cx="6" cy="52" r="5" fill="#fff" stroke={from} strokeWidth="3" />
+      </svg>
+      <svg className="landing-link landing-link--v" viewBox="0 0 72 96" fill="none" aria-hidden>
+        <defs>
+          <linearGradient id={`${id}-v`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stopColor={from} />
+            <stop offset="1" stopColor={to} />
+          </linearGradient>
+        </defs>
+        <path
+          className="landing-link__path"
+          d="M36 6 C 36 30, 12 32, 12 54 S 36 62, 36 82"
+          stroke={`url(#${id}-v)`}
+        />
+        <path d="M24 74 L36 86 L48 74" stroke={to} className="landing-link__head" />
+        <circle className="landing-link__dot landing-link__dot--v" r="5.5" fill={to} />
+        <circle cx="36" cy="6" r="5" fill="#fff" stroke={from} strokeWidth="3" />
+      </svg>
+    </>
+  );
+}
+
 export function LandingHow() {
   return (
-    <section className="landing-section landing-how" id="how">
+    <section className="landing-section landing-how" id="how" aria-labelledby="how-title">
       <div className="landing-wrap">
-        <div className="landing-section-head landing-reveal">
-          <div className="landing-eyebrow on-light">
-            <span className="dot" />
-            HOW IT WORKS
-          </div>
-          <h2>From question to decision in one conversation.</h2>
-          <p>No pipelines to build, no SQL to learn, no ticket to file with the analytics team.</p>
-        </div>
-        <div className="landing-how-steps landing-reveal">
-          <div className="landing-step-card">
-            <div className="icon">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path
-                  d="M4 7a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H9l-5 4V7z"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-              </svg>
-            </div>
-            <div className="step-idx">STEP 01 · CONNECT</div>
-            <h3>Link your sources</h3>
-            <p>
-              Databases, spreadsheets, product analytics, payment logs , connect once and Beleh
-              reads the shape of your business automatically.
-            </p>
-          </div>
-          <div className="landing-step-card">
-            <div className="icon">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path
-                  d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l3 3M18 18l-3-3M6 18l3-3M18 6l-3 3"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-            <div className="step-idx">STEP 02 · ASK</div>
-            <h3>Ask in plain English</h3>
-            <p>
-              &quot;Which region churned the most last quarter?&quot; Type it like you&apos;d ask a
-              colleague. No SQL required, ever.
-            </p>
-          </div>
-          <div className="landing-step-card">
-            <div className="icon">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden>
-                <path
-                  d="M4 19V9m6 10V5m6 14v-7"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-            <div className="step-idx">STEP 03 · DECIDE</div>
-            <h3>Get an answer, not a chart to decode</h3>
-            <p>
-              Beleh replies with the number, the reasoning, and a visual , in seconds, so you can
-              act while it&apos;s still relevant.
-            </p>
-          </div>
-        </div>
+        <header className="landing-section__head">
+          <h2 id="how-title">From raw data to a decision in three steps</h2>
+          <p className="landing-lede">
+            No modelling, no dashboard builds, no training. If you can write a sentence, you can run
+            your own business analytics.
+          </p>
+        </header>
+        <ol className="landing-steps">
+          {STEPS.map(({ title, text, Art, alt, from, to }, i) => (
+            <li
+              key={title}
+              className="landing-step"
+              style={{ ['--step' as string]: from, ['--step-next' as string]: to }}
+            >
+              <span className="landing-step__num" aria-hidden>
+                {i + 1}
+              </span>
+              <Art className="landing-step__art" title={alt} />
+              <h3>{title}</h3>
+              <p>{text}</p>
+              {i < STEPS.length - 1 ? <Connector id={`lk${i}`} from={from} to={to} /> : null}
+            </li>
+          ))}
+        </ol>
       </div>
     </section>
   );

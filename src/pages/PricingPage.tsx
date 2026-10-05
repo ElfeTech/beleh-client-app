@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { LandingNav, useLandingTheme } from '../components/landing/LandingNav';
+import { LandingNav } from '../components/landing/LandingNav';
 import { LandingPricing } from '../components/landing/LandingPricing';
 import { LandingFooter } from '../components/landing/LandingFooter';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
@@ -12,7 +12,6 @@ export default function PricingPage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [isScrolled, setIsScrolled] = useState(false);
-  const { isLight, toggleTheme } = useLandingTheme();
 
   useDocumentMeta({
     title: `Pricing | ${SITE_NAME}`,
@@ -39,7 +38,7 @@ export default function PricingPage() {
 
   return (
     <div className="landing-page landing-page--pricing">
-      <LandingNav isScrolled={isScrolled} isLight={isLight} onToggleTheme={toggleTheme} />
+      <LandingNav isScrolled={isScrolled} />
       <main>
         <LandingPricing standalone />
       </main>

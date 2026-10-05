@@ -92,3 +92,8 @@ yarn-error.log*
 # package-lock.json
 # pnpm-lock.yaml
 # bun.lockb
+
+# Agent skills installed locally (third-party)
+.agents/
+.claude/skills/
+skills-lock.json

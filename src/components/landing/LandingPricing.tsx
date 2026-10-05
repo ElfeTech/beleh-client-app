@@ -16,10 +16,7 @@ import {
   yearlySavingsPercent,
 } from '../../lib/billingCatalog';
 import { friendlyPlanDescription, planFeatureList } from '../../lib/planFeatures';
-import {
-  parsePricingIntent,
-  signUpPathWithPricingIntent,
-} from '../../lib/pricingIntent';
+import { parsePricingIntent, signUpPathWithPricingIntent } from '../../lib/pricingIntent';
 import { SUPPORT_EMAIL } from '../../constants/site';
 import { ApiRequestError, formatBillingErrorToast } from '../../utils/apiErrorMessage';
 
@@ -422,14 +419,10 @@ export function LandingPricing({ standalone = false }: LandingPricingProps) {
       id={standalone ? undefined : 'pricing'}
     >
       <div className="landing-wrap">
-        <div className="landing-pricing__header landing-reveal">
-          <div className="landing-eyebrow" style={{ justifyContent: 'center' }}>
-            <span className="dot" />
-            <span>PRICING</span>
-          </div>
+        <div className="landing-pricing__header">
           <h2>Simple plans that scale with your team</h2>
           <p>
-            Start with a free 7-day trial , upgrade as soon as you see the value, often in less than
+            Start with a free 7-day trial, upgrade as soon as you see the value, often in less than
             a week.
           </p>
 
